@@ -1,0 +1,56 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net472</TargetFramework>
+        <LangVersion>latest</LangVersion>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <AssemblyName>Wyrdrasil.Registry</AssemblyName>
+        <RootNamespace>Wyrdrasil.Registry</RootNamespace>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <Reference Include="BepInEx">
+            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\BepInEx\core\BepInEx.dll</HintPath>
+        </Reference>
+
+        <Reference Include="0Harmony">
+            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\BepInEx\core\0Harmony.dll</HintPath>
+        </Reference>
+
+        <Reference Include="UnityEngine">
+            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\UnityEngine.dll</HintPath>
+        </Reference>
+
+        <Reference Include="UnityEngine.CoreModule">
+            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
+        </Reference>
+
+        <Reference Include="UnityEngine.InputLegacyModule">
+            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
+        </Reference>
+
+        <Reference Include="assembly_valheim">
+            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\assembly_valheim.dll</HintPath>
+        </Reference>
+    </ItemGroup>
+
+    <PropertyGroup>
+        <ValheimDir>C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimDir>
+        <PluginDeployDir>$(ValheimDir)\BepInEx\plugins\Wyrdrasil.Registry</PluginDeployDir>
+    </PropertyGroup>
+
+    <Target Name="DeployToValheim" AfterTargets="Build">
+        <MakeDir Directories="$(PluginDeployDir)" />
+        <Copy
+                SourceFiles="$(TargetPath)"
+                DestinationFolder="$(PluginDeployDir)"
+                SkipUnchangedFiles="true" />
+        <Copy
+                SourceFiles="$(TargetDir)$(AssemblyName).pdb"
+                DestinationFolder="$(PluginDeployDir)"
+                SkipUnchangedFiles="true"
+                Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+    </Target>
+
+</Project>
