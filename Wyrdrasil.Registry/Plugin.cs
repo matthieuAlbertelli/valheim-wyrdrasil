@@ -1,6 +1,9 @@
-﻿using BepInEx;
-using BepInEx.Logging;
-using UnityEngine;
+using BepInEx;
+using Wyrdrasil.Registry.Actions;
+using Wyrdrasil.Registry.Controllers;
+using Wyrdrasil.Registry.Services;
+using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Registry.UI;
 
 namespace Wyrdrasil.Registry;
 
@@ -11,35 +14,67 @@ public class Plugin : BaseUnityPlugin
     public const string PluginName = "Wyrdrasil.Registry";
     public const string PluginVersion = "0.1.0";
 
-    internal static ManualLogSource Log = null!;
-
-    private bool _isRegistryModeEnabled;
+    private RegistryToolController _registryToolController = null!;
 
     private void Awake()
     {
-        Log = Logger;
-        Log.LogInfo($"{PluginName} {PluginVersion} loaded.");
+        var modeService = new RegistryModeService(Logger);
+        var zoneService = new RegistryZoneService(Logger, modeService);
+        var waypointService = new RegistryWaypointService(Logger, modeService, zoneService);
+        var slotService = new RegistrySlotService(Logger, modeService, zoneService);
+        var seatService = new RegistrySeatService(Logger, modeService, zoneService);
+        var spawnService = new RegistrySpawnService(Logger);
+        var navigationService = new RegistryNpcNavigationService(Logger);
+        var residentRuntimeService = new RegistryResidentRuntimeService(Logger, navigationService, waypointService);
+        var residentService = new RegistryResidentService(Logger, modeService, slotService, seatService, residentRuntimeService);
+        var diagnosticsService = new RegistryDiagnosticsService(Logger);
+        var deletionService = new RegistryDeletionService(Logger, zoneService, slotService, seatService, waypointService, residentService);
+
+        var selectionService = new RegistrySelectionService(modeService.State);
+        var actionRegistry = BuildActionRegistry();
+        var context = new RegistryContext(Logger, zoneService, waypointService, slotService, seatService, spawnService, residentService, diagnosticsService, deletionService);
+        var hudRenderer = new RegistryHudRenderer();
+
+        _registryToolController = new RegistryToolController(
+            modeService,
+            selectionService,
+            actionRegistry,
+            context,
+            hudRenderer);
+
+        Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
+    }
+
+    private static RegistryActionRegistry BuildActionRegistry()
+    {
+        var registry = new RegistryActionRegistry();
+
+        registry.Register(new CreateTavernZoneAction());
+        registry.Register(new CreateTavernWaypointAction());
+        registry.Register(new ConnectNavigationWaypointsAction());
+        registry.Register(new DeleteNavigationWaypointAction());
+        registry.Register(new DeleteZoneAction());
+        registry.Register(new CreateInnkeeperSlotAction());
+        registry.Register(new DesignateSeatFurnitureAction());
+        registry.Register(new DeleteSlotAction());
+        registry.Register(new DeleteDesignatedSeatAction());
+        registry.Register(new SpawnTestVikingAction());
+        registry.Register(new RegisterNpcAction());
+        registry.Register(new AssignInnkeeperRoleAction());
+        registry.Register(new AssignSeatAction());
+        registry.Register(new InspectTargetNpcAiAction());
+        registry.Register(new LoggingRegistryAction(RegistryActionType.None));
+
+        return registry;
     }
 
     private void Update()
     {
-        if (Input.GetKeyDown(KeyCode.F8))
-        {
-            ToggleRegistryMode();
-        }
+        _registryToolController.Update();
     }
 
-    private void ToggleRegistryMode()
+    private void OnGUI()
     {
-        _isRegistryModeEnabled = !_isRegistryModeEnabled;
-
-        if (_isRegistryModeEnabled)
-        {
-            Log.LogInfo("Registry mode enabled.");
-        }
-        else
-        {
-            Log.LogInfo("Registry mode disabled.");
-        }
+        _registryToolController.OnGUI();
     }
 }

@@ -1,56 +1,84 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
-    <PropertyGroup>
-        <TargetFramework>net472</TargetFramework>
-        <LangVersion>latest</LangVersion>
-        <Nullable>enable</Nullable>
-        <ImplicitUsings>disable</ImplicitUsings>
-        <AssemblyName>Wyrdrasil.Registry</AssemblyName>
-        <RootNamespace>Wyrdrasil.Registry</RootNamespace>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>Wyrdrasil.Registry</AssemblyName>
+    <RootNamespace>Wyrdrasil.Registry</RootNamespace>
 
-    <ItemGroup>
-        <Reference Include="BepInEx">
-            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\BepInEx\core\BepInEx.dll</HintPath>
-        </Reference>
+    <ValheimDir>C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimDir>
+    <ManagedDir>$(ValheimDir)\valheim_Data\Managed</ManagedDir>
+    <BepInExCoreDir>$(ValheimDir)\BepInEx\core</BepInExCoreDir>
+    <PluginDeployDir>$(ValheimDir)\BepInEx\plugins\Wyrdrasil.Registry</PluginDeployDir>
+  </PropertyGroup>
 
-        <Reference Include="0Harmony">
-            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\BepInEx\core\0Harmony.dll</HintPath>
-        </Reference>
+  <ItemGroup>
+    <Reference Include="BepInEx">
+      <HintPath>$(BepInExCoreDir)\BepInEx.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
-        <Reference Include="UnityEngine">
-            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\UnityEngine.dll</HintPath>
-        </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(BepInExCoreDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
-        <Reference Include="UnityEngine.CoreModule">
-            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\UnityEngine.CoreModule.dll</HintPath>
-        </Reference>
+    <Reference Include="UnityEngine">
+      <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
-        <Reference Include="UnityEngine.InputLegacyModule">
-            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\UnityEngine.InputLegacyModule.dll</HintPath>
-        </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
-        <Reference Include="assembly_valheim">
-            <HintPath>C:\Program Files (x86)\Steam\steamapps\common\Valheim\valheim_Data\Managed\assembly_valheim.dll</HintPath>
-        </Reference>
-    </ItemGroup>
+    <Reference Include="UnityEngine.InputLegacyModule">
+      <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
-    <PropertyGroup>
-        <ValheimDir>C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimDir>
-        <PluginDeployDir>$(ValheimDir)\BepInEx\plugins\Wyrdrasil.Registry</PluginDeployDir>
-    </PropertyGroup>
+    <Reference Include="UnityEngine.IMGUIModule">
+      <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
 
-    <Target Name="DeployToValheim" AfterTargets="Build">
-        <MakeDir Directories="$(PluginDeployDir)" />
-        <Copy
-                SourceFiles="$(TargetPath)"
-                DestinationFolder="$(PluginDeployDir)"
-                SkipUnchangedFiles="true" />
-        <Copy
-                SourceFiles="$(TargetDir)$(AssemblyName).pdb"
-                DestinationFolder="$(PluginDeployDir)"
-                SkipUnchangedFiles="true"
-                Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
-    </Target>
+    <Reference Include="UnityEngine.TextRenderingModule">
+      <HintPath>$(ManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.PhysicsModule">
+      <HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="assembly_valheim">
+      <HintPath>$(ManagedDir)\assembly_valheim.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="UnityEngine.AnimationModule">
+      <HintPath>$(ManagedDir)\UnityEngine.AnimationModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="DeployToValheim" AfterTargets="Build">
+    <MakeDir Directories="$(PluginDeployDir)" />
+
+    <Copy
+      SourceFiles="$(TargetPath)"
+      DestinationFolder="$(PluginDeployDir)"
+      SkipUnchangedFiles="true" />
+
+    <Copy
+      SourceFiles="$(TargetDir)$(AssemblyName).pdb"
+      DestinationFolder="$(PluginDeployDir)"
+      SkipUnchangedFiles="true"
+      Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+  </Target>
 
 </Project>
