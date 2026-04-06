@@ -1,5 +1,6 @@
 using HarmonyLib;
 using Wyrdrasil.Registry.Components;
+using Wyrdrasil.Registry.Diagnostics;
 
 namespace Wyrdrasil.Registry.Patches;
 
@@ -13,14 +14,18 @@ public static class WyrdrasilChairInteractPatch
             return true;
         }
 
+        WyrdrasilSeatDebug.Log(__instance, $"Chair.Interact prefix for viking={viking.name} attachPoint={(__instance.m_attachPoint != null ? __instance.m_attachPoint.name : "null")}");
+
         if (__instance.m_attachPoint == null)
         {
             __result = false;
+            WyrdrasilSeatDebug.Log(__instance, "Chair.Interact aborted because attachPoint is null");
             return false;
         }
 
         viking.AttachToChair(__instance);
         __result = true;
+        WyrdrasilSeatDebug.Log(__instance, $"Chair.Interact completed attached={viking.IsAttached()}");
         return false;
     }
 }

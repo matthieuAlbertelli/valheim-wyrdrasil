@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using BepInEx.Logging;
 using Wyrdrasil.Registry.Components;
+using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Registry.Tool;
 
 namespace Wyrdrasil.Registry.Services;
@@ -19,8 +20,9 @@ public sealed class RegistryNpcNavigationService
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyController(character);
-            vikingAi.NavigateAlongRoute(routePoints, slotPosition, 0.3f, slotPosition - character.transform.position);
+            ReleaseLegacyControllers(character);
+            var routeFollower = EnsureRouteFollower(character);
+            routeFollower.ConfigureRouteToPosition(routePoints, slotPosition, 0.3f, slotPosition - character.transform.position);
             _log.LogInfo($"Assigned registry viking configured for waypoint route navigation with {routePoints.Count} waypoint(s).");
             return;
         }
@@ -35,8 +37,8 @@ public sealed class RegistryNpcNavigationService
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyController(character);
-            vikingAi.NavigateDirectly(slotPosition, 0.3f, slotPosition - character.transform.position);
+            ReleaseLegacyControllers(character);
+            vikingAi.SetSteeringTarget(slotPosition, 0.3f, slotPosition - character.transform.position);
             _log.LogInfo("Assigned registry viking configured for direct movement fallback.");
             return;
         }
@@ -48,57 +50,55 @@ public sealed class RegistryNpcNavigationService
 
     public void NavigateAlongRouteToSeat(Character character, IReadOnlyList<UnityEngine.Vector3> routePoints, RegisteredSeatData seat)
     {
+        WyrdrasilSeatDebug.Log(character, $"NavigateAlongRouteToSeat seatId={seat.Id} routeCount={routePoints.Count}");
+
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyController(character);
-            vikingAi.NavigateAlongRouteToSeat(routePoints, seat, 0.25f);
+            ReleaseLegacyControllers(character);
+            var routeFollower = EnsureRouteFollower(character);
+            routeFollower.ConfigureRouteToSeat(routePoints, seat);
             _log.LogInfo($"Assigned registry viking configured for designated seat navigation with {routePoints.Count} waypoint(s).");
             return;
         }
 
         var controller = EnsureAssignedSlotController(character);
-        controller.ConfigureForSeatRoute(
-            routePoints,
-            seat.ApproachPosition,
-            seat.SeatPosition,
-            seat.SeatForward,
-            seat.ChairComponent,
-            1.8f,
-            0.25f);
-
+        controller.ConfigureForSeatRoute(routePoints, seat.ApproachPosition, seat.SeatPosition, seat.SeatForward, seat.ChairComponent, 1.8f, 0.25f);
         _log.LogInfo($"Assigned resident configured for designated seat navigation with {routePoints.Count} waypoint(s).");
     }
 
     public void NavigateDirectlyToSeat(Character character, RegisteredSeatData seat)
     {
+        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToSeat seatId={seat.Id} approach={seat.ApproachPosition} seat={seat.SeatPosition}");
+
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyController(character);
-            vikingAi.NavigateDirectlyToSeat(seat, 0.25f);
+            ReleaseLegacyControllers(character);
+            vikingAi.StartSeatApproach(seat, false);
             _log.LogInfo("Assigned registry viking configured for direct designated seat fallback.");
             return;
         }
 
         var controller = EnsureAssignedSlotController(character);
-        controller.ConfigureForDirectSeatMovement(
-            seat.ApproachPosition,
-            seat.SeatPosition,
-            seat.SeatForward,
-            seat.ChairComponent,
-            1.8f,
-            0.25f);
-
+        controller.ConfigureForDirectSeatMovement(seat.ApproachPosition, seat.SeatPosition, seat.SeatForward, seat.ChairComponent, 1.8f, 0.25f);
         _log.LogInfo("Assigned resident configured for direct designated seat fallback.");
     }
 
-    private static void ReleaseLegacyController(Character character)
+    private static void ReleaseLegacyControllers(Character character)
     {
-        var controller = character.GetComponent<WyrdrasilAssignedSlotController>();
-        if (controller != null)
+        var slotController = character.GetComponent<WyrdrasilAssignedSlotController>();
+        if (slotController != null)
         {
-            controller.ReleaseControl();
+            slotController.ReleaseControl();
+            WyrdrasilSeatDebug.Log(character, "Released WyrdrasilAssignedSlotController");
+        }
+
+        var routeFollower = character.GetComponent<WyrdrasilVikingRouteFollower>();
+        if (routeFollower != null)
+        {
+            routeFollower.ReleaseControl();
+            WyrdrasilSeatDebug.Log(character, "Released WyrdrasilVikingRouteFollower");
         }
     }
 
@@ -111,5 +111,16 @@ public sealed class RegistryNpcNavigationService
         }
 
         return controller;
+    }
+
+    private static WyrdrasilVikingRouteFollower EnsureRouteFollower(Character character)
+    {
+        var follower = character.GetComponent<WyrdrasilVikingRouteFollower>();
+        if (!follower)
+        {
+            follower = character.gameObject.AddComponent<WyrdrasilVikingRouteFollower>();
+        }
+
+        return follower;
     }
 }

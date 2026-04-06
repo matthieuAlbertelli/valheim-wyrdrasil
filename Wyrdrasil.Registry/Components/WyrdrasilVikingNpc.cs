@@ -1,12 +1,8 @@
 using UnityEngine;
+using Wyrdrasil.Registry.Diagnostics;
 
 namespace Wyrdrasil.Registry.Components;
 
-/// <summary>
-/// Player-rig registry NPC derived from the Valheim Player prefab.
-/// This is intentionally closer to VikingNPC's construction model than the earlier minimal wrapper:
-/// we keep the original player rig/runtime components and only replace the Player-specific logic.
-/// </summary>
 public sealed class WyrdrasilVikingNpc : Humanoid
 {
     private Chair? _attachedChair;
@@ -16,6 +12,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
     private Vector3 _detachOffset;
     private string _attachAnimation = string.Empty;
     private Collider[]? _attachColliders;
+    private bool _loggedAttachedTick;
 
     public void InitializeFromTemplate(Player template, string displayName)
     {
@@ -33,7 +30,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         m_jumpForceForward = template.m_jumpForceForward;
         m_jumpForceTiredFactor = template.m_jumpForceTiredFactor;
         m_airControl = template.m_airControl;
-
         m_canSwim = true;
         m_swimDepth = template.m_swimDepth;
         m_swimSpeed = template.m_swimSpeed;
@@ -45,11 +41,9 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         m_tolerateWater = true;
         m_staggerWhenBlocked = template.m_staggerWhenBlocked;
         m_staggerDamageFactor = template.m_staggerDamageFactor;
-
         m_unarmedWeapon = template.m_unarmedWeapon;
         m_health = template.m_health;
         m_damageModifiers = template.m_damageModifiers;
-
         m_hitEffects = template.m_hitEffects;
         m_critHitEffects = template.m_critHitEffects;
         m_backstabHitEffects = template.m_backstabHitEffects;
@@ -62,7 +56,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         m_slideEffects = template.m_slideEffects;
         m_jumpEffects = template.m_jumpEffects;
         m_flyingContinuousEffect = template.m_flyingContinuousEffect;
-
         m_eye = FindChildRecursive(transform, "EyePos");
     }
 
@@ -76,7 +69,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
     protected override void Awake()
     {
         base.Awake();
-
         if (m_visEquipment != null)
         {
             m_visEquipment.m_isPlayer = true;
@@ -86,36 +78,48 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         {
             m_eye = FindChildRecursive(transform, "EyePos");
         }
+
+        WyrdrasilSeatDebug.Log(this, "Npc Awake");
     }
 
     protected override void Start()
     {
         base.Start();
+        WyrdrasilSeatDebug.Log(this, "Npc Start");
     }
 
     public override void CustomFixedUpdate(float fixedDeltaTime)
     {
         base.CustomFixedUpdate(fixedDeltaTime);
         UpdateAttachedState();
+
+        if (_attached && !_loggedAttachedTick)
+        {
+            _loggedAttachedTick = true;
+            WyrdrasilSeatDebug.Log(this,
+                $"CustomFixedUpdate attached=true chair={_attachedChair?.name ?? "null"} attachPoint={_attachPoint?.name ?? "null"}");
+        }
+
+        if (!_attached)
+        {
+            _loggedAttachedTick = false;
+        }
     }
 
     public void AttachToChair(Chair chair)
     {
         if (chair == null || chair.m_attachPoint == null)
         {
+            WyrdrasilSeatDebug.Log(this, "AttachToChair aborted: chair or attachPoint null");
             return;
         }
 
+        WyrdrasilSeatDebug.Log(this,
+            $"AttachToChair chair={chair.name} attachPoint={chair.m_attachPoint.name} inShip={chair.m_inShip} anim={chair.m_attachAnimation}");
+
         _attachedChair = chair;
-        AttachStart(
-            chair.m_attachPoint,
-            null,
-            false,
-            false,
-            chair.m_inShip,
-            chair.m_attachAnimation,
-            chair.m_detachOffset,
-            null);
+        AttachStart(chair.m_attachPoint, null, false, false, chair.m_inShip, chair.m_attachAnimation, chair.m_detachOffset, null);
+        WyrdrasilSeatDebug.Log(this, $"AttachToChair after AttachStart IsAttached={IsAttached()}");
     }
 
     public bool IsAttachedToChair(Chair chair)
@@ -123,18 +127,14 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         return _attachedChair == chair && IsAttached();
     }
 
-    public override void AttachStart(
-        Transform attachPoint,
-        GameObject? colliderRoot,
-        bool hideWeapons,
-        bool isBed,
-        bool onShip,
-        string attachAnimation,
-        Vector3 detachOffset,
-        Transform? cameraPos = null)
+    public override void AttachStart(Transform attachPoint, GameObject? colliderRoot, bool hideWeapons, bool isBed, bool onShip, string attachAnimation, Vector3 detachOffset, Transform? cameraPos = null)
     {
+        WyrdrasilSeatDebug.Log(this,
+            $"AttachStart enter alreadyAttached={_attached} attachPoint={(attachPoint != null ? attachPoint.name : "null")} anim={attachAnimation}");
+
         if (_attached)
         {
+            WyrdrasilSeatDebug.Log(this, "AttachStart early return because _attached is already true");
             return;
         }
 
@@ -171,6 +171,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         UpdateAttachedState();
         ResetCloth();
+        WyrdrasilSeatDebug.Log(this, $"AttachStart exit IsAttached={IsAttached()} attachPoint={_attachPoint?.name ?? "null"}");
     }
 
     public override bool IsAttached()
@@ -185,6 +186,8 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
     public override void AttachStop()
     {
+        WyrdrasilSeatDebug.Log(this, $"AttachStop enter attached={_attached} chair={_attachedChair?.name ?? "null"}");
+
         if (!_attached)
         {
             return;
@@ -224,6 +227,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         _attachedChair = null;
         ResetCloth();
+        WyrdrasilSeatDebug.Log(this, "AttachStop exit");
     }
 
     private void UpdateAttachedState()
@@ -235,6 +239,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         if (_attachPoint == null)
         {
+            WyrdrasilSeatDebug.Log(this, "UpdateAttachedState detected null attachPoint -> AttachStop");
             AttachStop();
             return;
         }
@@ -246,8 +251,10 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         {
             var parentBody = _attachPoint.GetComponentInParent<Rigidbody>();
             m_body.useGravity = false;
+#pragma warning disable CS0618
             m_body.velocity = parentBody != null ? parentBody.GetPointVelocity(transform.position) : Vector3.zero;
             m_body.angularVelocity = Vector3.zero;
+#pragma warning restore CS0618
         }
 
         m_maxAirAltitude = transform.position.y;

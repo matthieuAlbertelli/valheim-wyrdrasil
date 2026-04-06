@@ -9,6 +9,8 @@ namespace Wyrdrasil.Registry.Services;
 
 public sealed class RegistryWaypointService
 {
+    private const float DuplicateWaypointDistance = 0.25f;
+
     private readonly ManualLogSource _log;
     private readonly RegistryZoneService _zoneService;
     private readonly List<NavigationWaypointData> _waypoints = new();
@@ -91,6 +93,7 @@ public sealed class RegistryWaypointService
     public bool TryBuildRoute(Vector3 startPosition, Vector3 endPosition, out List<Vector3> routePoints)
     {
         routePoints = new List<Vector3>();
+
         if (_waypoints.Count == 0)
         {
             return false;
@@ -103,10 +106,11 @@ public sealed class RegistryWaypointService
             return false;
         }
 
+        // Si les deux positions tombent sur le même noeud, il n'y a pas de "vrai" trajet waypoint.
+        // On laisse alors le système appelant utiliser son fallback direct.
         if (startWaypoint.Id == endWaypoint.Id)
         {
-            routePoints.Add(endWaypoint.Position);
-            return true;
+            return false;
         }
 
         if (!TryFindShortestPath(startWaypoint.Id, endWaypoint.Id, out var waypointPath))
@@ -114,16 +118,46 @@ public sealed class RegistryWaypointService
             return false;
         }
 
-        foreach (var waypointId in waypointPath)
+        if (waypointPath.Count == 0)
         {
+            return false;
+        }
+
+        // Très important :
+        // on NE retourne PAS le premier noeud du chemin, car c'est le noeud de départ,
+        // celui sur lequel le PNJ est déjà logiquement "posé".
+        // Le renvoyer force le PNJ à converger vers le centre exact du premier waypoint,
+        // ce qui provoque précisément le symptôme observé.
+        for (var i = 1; i < waypointPath.Count; i++)
+        {
+            var waypointId = waypointPath[i];
             var waypoint = _waypoints.FirstOrDefault(candidate => candidate.Id == waypointId);
-            if (waypoint != null)
+            if (waypoint == null)
             {
-                routePoints.Add(waypoint.Position);
+                continue;
             }
+
+            AddWaypointPositionIfMeaningful(routePoints, waypoint.Position);
         }
 
         return routePoints.Count > 0;
+    }
+
+    private static void AddWaypointPositionIfMeaningful(List<Vector3> routePoints, Vector3 candidatePosition)
+    {
+        if (routePoints.Count == 0)
+        {
+            routePoints.Add(candidatePosition);
+            return;
+        }
+
+        var previous = routePoints[routePoints.Count - 1];
+        if (Vector3.Distance(previous, candidatePosition) <= DuplicateWaypointDistance)
+        {
+            return;
+        }
+
+        routePoints.Add(candidatePosition);
     }
 
     private void DeleteWaypoint(int waypointId)
@@ -151,6 +185,7 @@ public sealed class RegistryWaypointService
                 {
                     Object.Destroy(lineRenderer.gameObject);
                 }
+
                 _linkRenderers.Remove(linkKey);
             }
         }
@@ -160,6 +195,7 @@ public sealed class RegistryWaypointService
         {
             PendingLinkStartWaypointId = null;
         }
+
         UpdateWaypointSelectionVisuals();
     }
 
@@ -186,6 +222,7 @@ public sealed class RegistryWaypointService
     private bool TryFindShortestPath(int startWaypointId, int endWaypointId, out List<int> path)
     {
         path = new List<int>();
+
         var unvisited = new HashSet<int>(_waypoints.Select(waypoint => waypoint.Id));
         var distances = new Dictionary<int, float>();
         var previous = new Dictionary<int, int?>();
@@ -195,6 +232,7 @@ public sealed class RegistryWaypointService
             distances[waypointId] = float.MaxValue;
             previous[waypointId] = null;
         }
+
         distances[startWaypointId] = 0f;
 
         while (unvisited.Count > 0)
@@ -204,10 +242,12 @@ public sealed class RegistryWaypointService
             {
                 break;
             }
+
             if (currentId == endWaypointId)
             {
                 break;
             }
+
             unvisited.Remove(currentId);
 
             if (!_links.TryGetValue(currentId, out var neighbors))
@@ -226,6 +266,7 @@ public sealed class RegistryWaypointService
                 var neighborWaypoint = _waypoints.First(waypoint => waypoint.Id == neighborId);
                 var edgeCost = Vector3.Distance(currentWaypoint.Position, neighborWaypoint.Position);
                 var alternativeDistance = distances[currentId] + edgeCost;
+
                 if (alternativeDistance < distances[neighborId])
                 {
                     distances[neighborId] = alternativeDistance;
@@ -242,11 +283,13 @@ public sealed class RegistryWaypointService
         var pathStack = new Stack<int>();
         var cursor = endWaypointId;
         pathStack.Push(cursor);
+
         while (previous[cursor].HasValue)
         {
             cursor = previous[cursor]!.Value;
             pathStack.Push(cursor);
         }
+
         path = pathStack.ToList();
         return path.Count > 0;
     }
@@ -255,6 +298,7 @@ public sealed class RegistryWaypointService
     {
         NavigationWaypointData? nearest = null;
         var bestDistance = float.MaxValue;
+
         foreach (var waypoint in _waypoints)
         {
             var distance = Vector3.Distance(position, waypoint.Position);
@@ -264,6 +308,7 @@ public sealed class RegistryWaypointService
                 nearest = waypoint;
             }
         }
+
         return nearest;
     }
 
@@ -278,10 +323,12 @@ public sealed class RegistryWaypointService
     private void OnRegistryModeChanged(bool isEnabled)
     {
         _visualsVisible = isEnabled;
+
         foreach (var marker in _markers.Values)
         {
             marker.SetVisualizationVisible(isEnabled);
         }
+
         foreach (var lineRenderer in _linkRenderers.Values)
         {
             if (lineRenderer != null)
@@ -359,11 +406,13 @@ public sealed class RegistryWaypointService
                 renderer.material = material;
             }
         }
+
         marker.RegisterRenderer(renderer);
 
         var label = new GameObject("WaypointLabel");
         label.transform.SetParent(root.transform, false);
         label.transform.localPosition = new Vector3(0f, 0.65f, 0f);
+
         var textMesh = label.AddComponent<TextMesh>();
         textMesh.text = waypointData.Id.ToString();
         textMesh.characterSize = 0.14f;
@@ -380,6 +429,7 @@ public sealed class RegistryWaypointService
                 textRenderer.material = material;
             }
         }
+
         marker.RegisterRenderer(textRenderer);
         marker.SetVisualizationVisible(_visualsVisible);
         _markers[waypointData.Id] = marker;
@@ -390,6 +440,7 @@ public sealed class RegistryWaypointService
         var waypointA = _waypoints.First(waypoint => waypoint.Id == waypointAId);
         var waypointB = _waypoints.First(waypoint => waypoint.Id == waypointBId);
         var linkKey = GetLinkKey(waypointAId, waypointBId);
+
         var root = new GameObject($"Wyrdrasil_WaypointLink_{linkKey}");
         var lineRenderer = root.AddComponent<LineRenderer>();
         lineRenderer.positionCount = 2;
@@ -404,10 +455,16 @@ public sealed class RegistryWaypointService
         lineRenderer.SetPosition(0, waypointA.Position + new Vector3(0f, 0.08f, 0f));
         lineRenderer.SetPosition(1, waypointB.Position + new Vector3(0f, 0.08f, 0f));
         lineRenderer.enabled = _visualsVisible;
+
         _linkRenderers[linkKey] = lineRenderer;
     }
 
-    private static string GetLinkKey(int waypointAId, int waypointBId) => waypointAId < waypointBId ? $"{waypointAId}-{waypointBId}" : $"{waypointBId}-{waypointAId}";
+    private static string GetLinkKey(int waypointAId, int waypointBId)
+    {
+        return waypointAId < waypointBId
+            ? $"{waypointAId}-{waypointBId}"
+            : $"{waypointBId}-{waypointAId}";
+    }
 
     private static Material? CreateWaypointMaterial(bool isSelected)
     {
@@ -416,11 +473,19 @@ public sealed class RegistryWaypointService
         {
             shader = Shader.Find("Unlit/Color");
         }
+
         if (!shader)
         {
             return null;
         }
-        var material = new Material(shader) { color = isSelected ? new Color(0.2f, 1f, 0.65f, 1f) : new Color(1f, 0.45f, 0.2f, 1f) };
+
+        var material = new Material(shader)
+        {
+            color = isSelected
+                ? new Color(0.2f, 1f, 0.65f, 1f)
+                : new Color(1f, 0.45f, 0.2f, 1f)
+        };
+
         return material;
     }
 
@@ -431,6 +496,7 @@ public sealed class RegistryWaypointService
         {
             shader = Shader.Find("Unlit/Color");
         }
+
         return new Material(shader);
     }
 }

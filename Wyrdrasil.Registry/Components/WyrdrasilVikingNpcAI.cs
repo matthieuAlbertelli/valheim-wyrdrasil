@@ -1,127 +1,92 @@
-using System.Collections.Generic;
 using UnityEngine;
+using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Registry.Tool;
 
 namespace Wyrdrasil.Registry.Components;
 
 public sealed class WyrdrasilVikingNpcAI : MonsterAI
 {
-    private const float IntermediateWaypointRadius = 1.0f;
-    private const float SeatAlignDistance = 0.35f;
-    private const float SeatAlignAngle = 6f;
+    private const float SeatApproachRadius = 0.95f;
+    private const float SeatRetryInterval = 0.25f;
+    private const float SeatApproachProgressEpsilon = 0.10f;
+    private const float SeatApproachTimeoutDirect = 1.35f;
+    private const float SeatApproachTimeoutFromRoute = 0.75f;
+    private const float SeatApproachStuckTimeoutDirect = 0.90f;
+    private const float SeatApproachStuckTimeoutFromRoute = 0.50f;
 
-    private enum NavigationState
+    private enum NavigationMode
     {
         Idle,
-        Travelling,
-        AligningToSeat,
-        AttachingToSeat,
+        Steering,
+        SeatApproach,
+        SeatAttempt,
         Seated
     }
-
-    private readonly List<Vector3> _routePoints = new();
 
     private WyrdrasilVikingNpc? _viking;
     private Rigidbody? _rigidbody;
 
+    private Vector3 _steeringTarget;
+    private float _steeringStopDistance;
+    private Vector3 _steeringFacingDirection;
+    private bool _hasSteeringTarget;
+
     private RegisteredSeatData? _seatTarget;
-    private Vector3 _finalFacingDirection;
-    private float _finalStopDistance;
-    private int _currentRouteIndex;
-    private NavigationState _state = NavigationState.Idle;
+    private Vector3 _seatApproachPoint;
+    private float _seatApproachElapsed;
+    private float _seatApproachTimeout;
+    private float _seatApproachStuckTimer;
+    private float _seatApproachStuckTimeout;
+    private float _bestSeatApproachDistance;
+    private float _nextSeatAttemptTime;
+    private NavigationMode _mode = NavigationMode.Idle;
 
     protected override void Awake()
     {
         base.Awake();
-
         _viking = GetComponent<WyrdrasilVikingNpc>();
         _rigidbody = GetComponent<Rigidbody>();
     }
 
-    public void NavigateDirectly(Vector3 destination, float stopDistance, Vector3 finalFacingDirection)
+    public void SetSteeringTarget(Vector3 targetPosition, float stopDistance, Vector3 facingDirection)
     {
-        _routePoints.Clear();
-        _routePoints.Add(destination);
+        _steeringTarget = targetPosition;
+        _steeringStopDistance = stopDistance;
+        _steeringFacingDirection = facingDirection.sqrMagnitude > 0.0001f
+            ? facingDirection.normalized
+            : transform.forward;
 
         _seatTarget = null;
-        _finalStopDistance = stopDistance;
-        _finalFacingDirection = finalFacingDirection.sqrMagnitude > 0.0001f
-            ? finalFacingDirection.normalized
-            : transform.forward;
-
-        _currentRouteIndex = 0;
-        _state = NavigationState.Travelling;
+        _hasSteeringTarget = true;
+        _mode = NavigationMode.Steering;
         enabled = true;
     }
 
-    public void NavigateAlongRoute(IReadOnlyList<Vector3> routePoints, Vector3 finalDestination, float stopDistance, Vector3 finalFacingDirection)
+    public void ClearSteering()
     {
-        _routePoints.Clear();
-
-        foreach (var routePoint in routePoints)
-        {
-            _routePoints.Add(routePoint);
-        }
-
-        _routePoints.Add(finalDestination);
-
+        _hasSteeringTarget = false;
         _seatTarget = null;
-        _finalStopDistance = stopDistance;
-        _finalFacingDirection = finalFacingDirection.sqrMagnitude > 0.0001f
-            ? finalFacingDirection.normalized
-            : transform.forward;
-
-        _currentRouteIndex = 0;
-        _state = NavigationState.Travelling;
-        enabled = true;
-    }
-
-    public void NavigateDirectlyToSeat(RegisteredSeatData seat, float stopDistance)
-    {
-        _routePoints.Clear();
-        _routePoints.Add(seat.ApproachPosition);
-
-        _seatTarget = seat;
-        _finalStopDistance = stopDistance;
-        _finalFacingDirection = seat.SeatForward.sqrMagnitude > 0.0001f
-            ? seat.SeatForward.normalized
-            : transform.forward;
-
-        _currentRouteIndex = 0;
-        _state = NavigationState.Travelling;
-        enabled = true;
-    }
-
-    public void NavigateAlongRouteToSeat(IReadOnlyList<Vector3> routePoints, RegisteredSeatData seat, float stopDistance)
-    {
-        _routePoints.Clear();
-
-        foreach (var routePoint in routePoints)
-        {
-            _routePoints.Add(routePoint);
-        }
-
-        _routePoints.Add(seat.ApproachPosition);
-
-        _seatTarget = seat;
-        _finalStopDistance = stopDistance;
-        _finalFacingDirection = seat.SeatForward.sqrMagnitude > 0.0001f
-            ? seat.SeatForward.normalized
-            : transform.forward;
-
-        _currentRouteIndex = 0;
-        _state = NavigationState.Travelling;
-        enabled = true;
-    }
-
-    public void ClearNavigation()
-    {
-        _routePoints.Clear();
-        _seatTarget = null;
-        _currentRouteIndex = 0;
-        _state = NavigationState.Idle;
+        _mode = _viking != null && _viking.IsAttached() ? NavigationMode.Seated : NavigationMode.Idle;
         StopMoving();
         ZeroVelocity();
+    }
+
+    public void StartSeatApproach(RegisteredSeatData seat, bool arrivedFromWaypointRoute = false)
+    {
+        _seatTarget = seat;
+        _seatApproachPoint = seat.ApproachPosition;
+        _seatApproachElapsed = 0f;
+        _seatApproachTimeout = arrivedFromWaypointRoute ? SeatApproachTimeoutFromRoute : SeatApproachTimeoutDirect;
+        _seatApproachStuckTimeout = arrivedFromWaypointRoute ? SeatApproachStuckTimeoutFromRoute : SeatApproachStuckTimeoutDirect;
+        _seatApproachStuckTimer = 0f;
+        _bestSeatApproachDistance = float.MaxValue;
+        _nextSeatAttemptTime = 0f;
+        _hasSteeringTarget = false;
+        _mode = NavigationMode.SeatApproach;
+        enabled = true;
+
+        WyrdrasilSeatDebug.Log(this,
+            $"StartSeatApproach seatId={seat.Id} route={(arrivedFromWaypointRoute ? "yes" : "no")} approach={_seatApproachPoint} timeout={_seatApproachTimeout:0.00}");
     }
 
     public override bool UpdateAI(float dt)
@@ -133,32 +98,32 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
 
         if (_viking.IsAttached())
         {
-            _state = NavigationState.Seated;
+            _mode = NavigationMode.Seated;
             StopMoving();
             ZeroVelocity();
             return true;
         }
 
-        switch (_state)
+        switch (_mode)
         {
-            case NavigationState.Travelling:
-                UpdateTravelling(dt);
+            case NavigationMode.Steering:
+                UpdateSteering(dt);
                 break;
 
-            case NavigationState.AligningToSeat:
-                UpdateAligningToSeat();
+            case NavigationMode.SeatApproach:
+                UpdateSeatApproach(dt);
                 break;
 
-            case NavigationState.AttachingToSeat:
-                UpdateAttachingToSeat();
+            case NavigationMode.SeatAttempt:
+                UpdateSeatAttempt(dt);
                 break;
 
-            case NavigationState.Seated:
+            case NavigationMode.Seated:
                 StopMoving();
                 ZeroVelocity();
                 break;
 
-            case NavigationState.Idle:
+            case NavigationMode.Idle:
             default:
                 StopMoving();
                 ZeroVelocity();
@@ -168,111 +133,119 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         return true;
     }
 
-    private void UpdateTravelling(float dt)
+    private void UpdateSteering(float dt)
     {
-        if (_currentRouteIndex >= _routePoints.Count)
+        if (!_hasSteeringTarget)
         {
-            FinishTravel();
+            _mode = NavigationMode.Idle;
+            StopMoving();
+            ZeroVelocity();
             return;
         }
 
-        var targetPoint = _routePoints[_currentRouteIndex];
-        var reachRadius = _currentRouteIndex == _routePoints.Count - 1
-            ? _finalStopDistance
-            : IntermediateWaypointRadius;
-
-        if (HasReachedHorizontally(targetPoint, reachRadius))
+        if (HasReachedHorizontally(_steeringTarget, _steeringStopDistance))
         {
-            _currentRouteIndex++;
-
-            if (_currentRouteIndex >= _routePoints.Count)
-            {
-                FinishTravel();
-            }
-
+            StopMoving();
+            ZeroVelocity();
+            RotateTowards(_steeringFacingDirection, dt);
             return;
         }
 
-        RotateBodyTowards(targetPoint, dt);
-        MoveTo(dt, targetPoint, reachRadius, false);
+        RotateBodyTowards(_steeringTarget, dt);
+        MoveTo(dt, _steeringTarget, _steeringStopDistance, false);
     }
 
-    private void FinishTravel()
-    {
-        StopMoving();
-        ZeroVelocity();
-
-        if (_seatTarget != null)
-        {
-            _state = NavigationState.AligningToSeat;
-            return;
-        }
-
-        _state = NavigationState.Idle;
-    }
-
-    private void UpdateAligningToSeat()
+    private void UpdateSeatApproach(float dt)
     {
         if (_seatTarget == null)
         {
-            _state = NavigationState.Idle;
+            _mode = NavigationMode.Idle;
             return;
         }
 
-        StopMoving();
-        ZeroVelocity();
-
-        var approachPosition = _seatTarget.ApproachPosition;
-        var seatForward = _seatTarget.SeatForward.sqrMagnitude > 0.0001f
-            ? _seatTarget.SeatForward.normalized
-            : transform.forward;
-
-        transform.position = approachPosition;
-
-        var targetRotation = Quaternion.LookRotation(seatForward, Vector3.up);
-        transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, 720f * Time.deltaTime);
-
-        var remainingAngle = Quaternion.Angle(transform.rotation, targetRotation);
-        var remainingDistance = GetHorizontalDistanceToPoint(approachPosition);
-
-        if (remainingDistance <= SeatAlignDistance && remainingAngle <= SeatAlignAngle)
+        if (HasReachedHorizontally(_seatApproachPoint, SeatApproachRadius))
         {
-            _state = NavigationState.AttachingToSeat;
+            WyrdrasilSeatDebug.Log(this,
+                $"Reached seat approach zone seatId={_seatTarget.Id} dist={HorizontalDistanceTo(_seatApproachPoint):0.00}");
+            EnterSeatAttemptMode();
+            return;
         }
+
+        RotateBodyTowards(_seatApproachPoint, dt);
+        MoveTo(dt, _seatApproachPoint, SeatApproachRadius, false);
+
+        _seatApproachElapsed += dt;
+        UpdateSeatApproachProgress(dt);
     }
 
-    private void UpdateAttachingToSeat()
+    private void UpdateSeatAttempt(float dt)
     {
         if (_seatTarget == null || _viking == null || _seatTarget.ChairComponent == null)
         {
-            _state = NavigationState.Idle;
+            _mode = NavigationMode.Idle;
             return;
         }
 
         StopMoving();
         ZeroVelocity();
+        RotateTowards(_seatTarget.SeatForward, dt);
 
-        transform.position = _seatTarget.ApproachPosition;
-        transform.rotation = Quaternion.LookRotation(_finalFacingDirection, Vector3.up);
-
-        _viking.AttachToChair(_seatTarget.ChairComponent);
-
-        if (_viking.IsAttached())
+        if (Time.time < _nextSeatAttemptTime)
         {
-            _state = NavigationState.Seated;
             return;
         }
 
-        // Fallback plus agressif : on force le snap exact sur le point du siège,
-        // puis on retente immédiatement l'attache native.
-        transform.position = _seatTarget.SeatPosition;
-        transform.rotation = Quaternion.LookRotation(_finalFacingDirection, Vector3.up);
+        _nextSeatAttemptTime = Time.time + SeatRetryInterval;
+        WyrdrasilSeatDebug.Log(this,
+            $"SeatAttempt try seatId={_seatTarget.Id} approachDist={HorizontalDistanceTo(_seatApproachPoint):0.00} seatDist={HorizontalDistanceTo(_seatTarget.SeatPosition):0.00}");
 
-        _viking.AttachToChair(_seatTarget.ChairComponent);
+        _seatTarget.ChairComponent.Interact(_viking, false, false);
 
-        _state = _viking.IsAttached()
-            ? NavigationState.Seated
-            : NavigationState.Idle;
+        if (_viking.IsAttached())
+        {
+            _mode = NavigationMode.Seated;
+            WyrdrasilSeatDebug.Log(this, $"SeatAttempt success seatId={_seatTarget.Id}");
+            return;
+        }
+
+        WyrdrasilSeatDebug.Log(this, $"SeatAttempt failed -> terminal retry seatId={_seatTarget.Id}");
+    }
+
+    private void UpdateSeatApproachProgress(float dt)
+    {
+        var currentDistance = HorizontalDistanceTo(_seatApproachPoint);
+        if (currentDistance < _bestSeatApproachDistance - SeatApproachProgressEpsilon)
+        {
+            _bestSeatApproachDistance = currentDistance;
+            _seatApproachStuckTimer = 0f;
+        }
+        else
+        {
+            _seatApproachStuckTimer += dt;
+        }
+
+        if (_seatApproachElapsed >= _seatApproachTimeout)
+        {
+            WyrdrasilSeatDebug.Log(this,
+                $"SeatApproach timeout -> forcing terminal seat attempt seatId={_seatTarget?.Id ?? 0} elapsed={_seatApproachElapsed:0.00}");
+            EnterSeatAttemptMode();
+            return;
+        }
+
+        if (_seatApproachStuckTimer >= _seatApproachStuckTimeout)
+        {
+            WyrdrasilSeatDebug.Log(this,
+                $"SeatApproach stuck -> forcing terminal seat attempt seatId={_seatTarget?.Id ?? 0} seatDist={(_seatTarget != null ? HorizontalDistanceTo(_seatTarget.SeatPosition) : 0f):0.00}");
+            EnterSeatAttemptMode();
+        }
+    }
+
+    private void EnterSeatAttemptMode()
+    {
+        StopMoving();
+        ZeroVelocity();
+        _nextSeatAttemptTime = 0f;
+        _mode = NavigationMode.SeatAttempt;
     }
 
     private void RotateBodyTowards(Vector3 targetPoint, float dt)
@@ -289,12 +262,26 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, 360f * dt);
     }
 
-    private bool HasReachedHorizontally(Vector3 targetPoint, float radius)
+    private void RotateTowards(Vector3 facingDirection, float dt)
     {
-        return GetHorizontalDistanceToPoint(targetPoint) <= radius;
+        var flatDirection = facingDirection;
+        flatDirection.y = 0f;
+
+        if (flatDirection.sqrMagnitude <= 0.0001f)
+        {
+            return;
+        }
+
+        var targetRotation = Quaternion.LookRotation(flatDirection.normalized, Vector3.up);
+        transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, 360f * dt);
     }
 
-    private float GetHorizontalDistanceToPoint(Vector3 targetPoint)
+    private bool HasReachedHorizontally(Vector3 targetPoint, float radius)
+    {
+        return HorizontalDistanceTo(targetPoint) <= radius;
+    }
+
+    private float HorizontalDistanceTo(Vector3 targetPoint)
     {
         var delta = targetPoint - transform.position;
         delta.y = 0f;
