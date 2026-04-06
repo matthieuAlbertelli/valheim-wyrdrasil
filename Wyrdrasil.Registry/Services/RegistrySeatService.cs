@@ -8,20 +8,12 @@ namespace Wyrdrasil.Registry.Services;
 
 public sealed class RegistrySeatService
 {
-    private static readonly string[] EligibleSeatNameTokens =
-    {
-        "chair",
-        "bench",
-        "stool",
-        "seat",
-        "throne"
-    };
-
     private readonly ManualLogSource _log;
     private readonly RegistryZoneService _zoneService;
     private readonly List<RegisteredSeatData> _seats = new();
     private readonly Dictionary<int, WyrdrasilRegisteredSeatMarker> _markers = new();
     private readonly Dictionary<int, GameObject> _seatRoots = new();
+
     private int _nextSeatId = 1;
     private bool _visualsVisible;
 
@@ -37,9 +29,9 @@ public sealed class RegistrySeatService
 
     public void DesignateSeatAtCrosshair()
     {
-        if (!TryGetEligibleSeatFurnitureAtCrosshair(out var furnitureRoot))
+        if (!TryGetChairAtCrosshair(out var furnitureRoot, out var chairComponent))
         {
-            _log.LogWarning("Cannot designate seat: no eligible seat furniture was found under the crosshair.");
+            _log.LogWarning("Cannot designate seat: the targeted object is not a valid Valheim chair piece.");
             return;
         }
 
@@ -56,12 +48,12 @@ public sealed class RegistrySeatService
             return;
         }
 
-        var seatData = new RegisteredSeatData(_nextSeatId++, tavernZone.Id, furnitureRoot.name, furnitureRoot);
+        var seatData = new RegisteredSeatData(_nextSeatId++, tavernZone.Id, furnitureRoot.name, furnitureRoot, chairComponent);
         _seats.Add(seatData);
         _seatRoots[seatData.Id] = furnitureRoot;
         EnsureMarker(seatData);
 
-        _log.LogInfo($"Designated seat #{seatData.Id} on furniture '{seatData.DisplayName}' in Tavern zone #{seatData.ZoneId}.");
+        _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in Tavern zone #{seatData.ZoneId}.");
     }
 
     public bool TryAssignSeat(int registeredNpcId, out RegisteredSeatData? seatData)
@@ -101,7 +93,7 @@ public sealed class RegistrySeatService
     {
         seatId = 0;
 
-        if (!TryGetEligibleSeatFurnitureAtCrosshair(out var furnitureRoot))
+        if (!TryGetChairAtCrosshair(out var furnitureRoot, out _))
         {
             return false;
         }
@@ -115,7 +107,6 @@ public sealed class RegistrySeatService
         seatId = existingSeat.Id;
         return DeleteSeat(existingSeat.Id);
     }
-
 
     public IReadOnlyList<int> DeleteSeatsInZone(int zoneId)
     {
@@ -199,7 +190,7 @@ public sealed class RegistrySeatService
         return null;
     }
 
-    private static bool TryGetEligibleSeatFurnitureAtCrosshair(out GameObject furnitureRoot)
+    private static bool TryGetChairAtCrosshair(out GameObject furnitureRoot, out Chair chairComponent)
     {
         var activeCamera = Camera.main;
         if (activeCamera != null)
@@ -207,35 +198,18 @@ public sealed class RegistrySeatService
             var ray = new Ray(activeCamera.transform.position, activeCamera.transform.forward);
             if (Physics.Raycast(ray, out var hitInfo, 100f, ~0, QueryTriggerInteraction.Ignore))
             {
-                var candidate = ResolveSeatFurnitureRoot(hitInfo.collider.gameObject);
-                if (candidate != null)
+                var chair = hitInfo.collider.GetComponentInParent<Chair>();
+                if (chair != null)
                 {
-                    furnitureRoot = candidate;
+                    furnitureRoot = chair.gameObject;
+                    chairComponent = chair;
                     return true;
                 }
             }
         }
 
         furnitureRoot = null!;
+        chairComponent = null!;
         return false;
-    }
-
-    private static GameObject? ResolveSeatFurnitureRoot(GameObject hitObject)
-    {
-        var current = hitObject.transform;
-        while (current != null)
-        {
-            var name = current.name.ToLowerInvariant();
-            foreach (var token in EligibleSeatNameTokens)
-            {
-                if (name.Contains(token))
-                {
-                    return current.gameObject;
-                }
-            }
-            current = current.parent;
-        }
-
-        return null;
     }
 }

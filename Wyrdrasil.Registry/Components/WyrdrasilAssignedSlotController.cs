@@ -14,6 +14,8 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
     private BaseAI? _baseAi;
     private MonsterAI? _monsterAi;
     private Animator? _animator;
+    private Humanoid? _humanoid;
+
     private readonly List<Vector3> _routePoints = new();
 
     private float _moveSpeed;
@@ -21,7 +23,12 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
     private int _currentRouteIndex;
     private bool _isConfigured;
     private bool _shouldAttemptSeatInteraction;
+    private bool _useNativeChairInteraction;
+    private bool _seatFallbackPoseActive;
     private Vector3 _finalFacingDirection;
+    private Vector3 _seatApproachPosition;
+    private Vector3 _seatSnapPosition;
+    private Chair? _targetChair;
 
     private AssignedSlotOccupationPhase _phase = AssignedSlotOccupationPhase.None;
 
@@ -31,15 +38,48 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
         _baseAi = GetComponent<BaseAI>();
         _monsterAi = GetComponent<MonsterAI>();
         _animator = GetComponentInChildren<Animator>();
+        _humanoid = GetComponent<Humanoid>();
     }
 
-    public void ConfigureForRoute(IReadOnlyList<Vector3> waypointPositions, Vector3 slotPosition, float moveSpeed, float horizontalStopDistance)
+    public void ReleaseControl()
     {
+        _routePoints.Clear();
+        _currentRouteIndex = 0;
+        _isConfigured = false;
+        _shouldAttemptSeatInteraction = false;
+        _useNativeChairInteraction = false;
+        _seatFallbackPoseActive = false;
+        _seatApproachPosition = Vector3.zero;
+        _seatSnapPosition = Vector3.zero;
+        _targetChair = null;
+        _phase = AssignedSlotOccupationPhase.None;
+
+        if (_baseAi != null)
+        {
+            _baseAi.enabled = true;
+        }
+
+        enabled = false;
+    }
+
+    public void ConfigureForRoute(
+        IReadOnlyList<Vector3> waypointPositions,
+        Vector3 slotPosition,
+        float moveSpeed,
+        float horizontalStopDistance)
+    {
+        enabled = true;
+        DetachIfNeeded();
+        ClearSeatTarget();
         ConfigureInternal(waypointPositions, slotPosition, moveSpeed, horizontalStopDistance, false, transform.forward);
     }
 
     public void ConfigureForDirectMovement(Vector3 slotPosition, float moveSpeed, float horizontalStopDistance)
     {
+        enabled = true;
+        DetachIfNeeded();
+        ClearSeatTarget();
+
         _routePoints.Clear();
         _routePoints.Add(slotPosition);
         _moveSpeed = moveSpeed;
@@ -49,19 +89,40 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
         _finalFacingDirection = transform.forward;
         _phase = AssignedSlotOccupationPhase.DirectFallback;
         _isConfigured = true;
+        _seatFallbackPoseActive = false;
 
         StopNativeControllers();
     }
 
-    public void ConfigureForSeatRoute(IReadOnlyList<Vector3> waypointPositions, Vector3 seatPosition, Vector3 seatForward, float moveSpeed, float horizontalStopDistance)
+    public void ConfigureForSeatRoute(
+        IReadOnlyList<Vector3> waypointPositions,
+        Vector3 approachPosition,
+        Vector3 seatSnapPosition,
+        Vector3 seatForward,
+        Chair? chair,
+        float moveSpeed,
+        float horizontalStopDistance)
     {
-        ConfigureInternal(waypointPositions, seatPosition, moveSpeed, horizontalStopDistance, true, seatForward);
+        enabled = true;
+        DetachIfNeeded();
+        ConfigureSeatTarget(approachPosition, seatSnapPosition, seatForward, chair);
+        ConfigureInternal(waypointPositions, approachPosition, moveSpeed, horizontalStopDistance, true, seatForward);
     }
 
-    public void ConfigureForDirectSeatMovement(Vector3 seatPosition, Vector3 seatForward, float moveSpeed, float horizontalStopDistance)
+    public void ConfigureForDirectSeatMovement(
+        Vector3 approachPosition,
+        Vector3 seatSnapPosition,
+        Vector3 seatForward,
+        Chair? chair,
+        float moveSpeed,
+        float horizontalStopDistance)
     {
+        enabled = true;
+        DetachIfNeeded();
+        ConfigureSeatTarget(approachPosition, seatSnapPosition, seatForward, chair);
+
         _routePoints.Clear();
-        _routePoints.Add(seatPosition);
+        _routePoints.Add(approachPosition);
         _moveSpeed = moveSpeed;
         _horizontalStopDistance = horizontalStopDistance;
         _currentRouteIndex = 0;
@@ -69,11 +130,37 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
         _finalFacingDirection = seatForward.sqrMagnitude > 0.0001f ? seatForward.normalized : transform.forward;
         _phase = AssignedSlotOccupationPhase.DirectFallback;
         _isConfigured = true;
+        _seatFallbackPoseActive = false;
 
         StopNativeControllers();
     }
 
-    private void ConfigureInternal(IReadOnlyList<Vector3> waypointPositions, Vector3 finalPosition, float moveSpeed, float horizontalStopDistance, bool shouldAttemptSeatInteraction, Vector3 finalFacingDirection)
+    private void ConfigureSeatTarget(Vector3 approachPosition, Vector3 seatSnapPosition, Vector3 seatForward, Chair? chair)
+    {
+        _seatApproachPosition = approachPosition;
+        _seatSnapPosition = seatSnapPosition;
+        _finalFacingDirection = seatForward.sqrMagnitude > 0.0001f ? seatForward.normalized : transform.forward;
+        _targetChair = chair;
+        _useNativeChairInteraction = chair != null && chair.m_attachPoint != null && _humanoid != null;
+        _seatFallbackPoseActive = false;
+    }
+
+    private void ClearSeatTarget()
+    {
+        _seatApproachPosition = Vector3.zero;
+        _seatSnapPosition = Vector3.zero;
+        _targetChair = null;
+        _useNativeChairInteraction = false;
+        _seatFallbackPoseActive = false;
+    }
+
+    private void ConfigureInternal(
+        IReadOnlyList<Vector3> waypointPositions,
+        Vector3 finalPosition,
+        float moveSpeed,
+        float horizontalStopDistance,
+        bool shouldAttemptSeatInteraction,
+        Vector3 finalFacingDirection)
     {
         _routePoints.Clear();
         foreach (var waypointPosition in waypointPositions)
@@ -89,6 +176,7 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
         _finalFacingDirection = finalFacingDirection.sqrMagnitude > 0.0001f ? finalFacingDirection.normalized : transform.forward;
         _phase = AssignedSlotOccupationPhase.TraverseRoute;
         _isConfigured = true;
+        _seatFallbackPoseActive = false;
 
         StopNativeControllers();
     }
@@ -121,7 +209,9 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
     {
         if (_currentRouteIndex >= _routePoints.Count)
         {
-            _phase = _shouldAttemptSeatInteraction ? AssignedSlotOccupationPhase.Settle : AssignedSlotOccupationPhase.Hold;
+            _phase = _shouldAttemptSeatInteraction
+                ? AssignedSlotOccupationPhase.Settle
+                : AssignedSlotOccupationPhase.Hold;
             return;
         }
 
@@ -129,22 +219,25 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
         if (MoveTowardsPoint(targetPoint, allowRotationTowardsTarget: true))
         {
             _currentRouteIndex++;
+
             if (_currentRouteIndex >= _routePoints.Count)
             {
-                _phase = _shouldAttemptSeatInteraction ? AssignedSlotOccupationPhase.Settle : AssignedSlotOccupationPhase.Hold;
+                _phase = _shouldAttemptSeatInteraction
+                    ? AssignedSlotOccupationPhase.Settle
+                    : AssignedSlotOccupationPhase.Hold;
             }
         }
     }
 
     private void UpdateSettle()
     {
-        if (_routePoints.Count == 0)
-        {
-            return;
-        }
+        var targetPoint = _seatApproachPosition != Vector3.zero
+            ? _seatApproachPosition
+            : _routePoints.Count > 0
+                ? _routePoints[_routePoints.Count - 1]
+                : transform.position;
 
-        var seatPosition = _routePoints[_routePoints.Count - 1];
-        var arrived = MoveTowardsPoint(seatPosition, allowRotationTowardsTarget: false);
+        var arrived = MoveTowardsPoint(targetPoint, allowRotationTowardsTarget: false);
         RotateTowardsFinalFacing();
 
         if (!arrived)
@@ -152,14 +245,40 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
             return;
         }
 
-        SetWorldPosition(seatPosition);
+        SetWorldPosition(targetPoint);
+        RotateTowardsFinalFacing(forceSnap: true);
+
+        if (TryEnterNativeChair())
+        {
+            _seatFallbackPoseActive = false;
+            _phase = AssignedSlotOccupationPhase.Hold;
+            return;
+        }
+
+        if (_seatSnapPosition != Vector3.zero)
+        {
+            SnapSeatFallbackPosition();
+        }
+
         RotateTowardsFinalFacing(forceSnap: true);
         TryEnterSeatPose();
+        _seatFallbackPoseActive = true;
         _phase = AssignedSlotOccupationPhase.Hold;
     }
 
     private void UpdateHold()
     {
+        if (_humanoid != null && _humanoid.IsAttached())
+        {
+            return;
+        }
+
+        if (_seatFallbackPoseActive || _shouldAttemptSeatInteraction)
+        {
+            SnapSeatFallbackPosition();
+            return;
+        }
+
         if (_routePoints.Count == 0)
         {
             return;
@@ -178,8 +297,37 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
         }
     }
 
+    private bool TryEnterNativeChair()
+    {
+        if (!_useNativeChairInteraction || _targetChair == null || _humanoid == null)
+        {
+            return false;
+        }
+
+        if (_seatSnapPosition != Vector3.zero)
+        {
+            SnapSeatFallbackPosition();
+        }
+
+        RotateTowardsFinalFacing(forceSnap: true);
+
+        if (_humanoid is WyrdrasilVikingNpc viking)
+        {
+            viking.AttachToChair(_targetChair);
+            return viking.IsAttached();
+        }
+
+        _targetChair.Interact(_humanoid, false, false);
+        return _humanoid.IsAttached();
+    }
+
     private bool MoveTowardsPoint(Vector3 targetPoint, bool allowRotationTowardsTarget)
     {
+        if (_humanoid != null && _humanoid.IsAttached())
+        {
+            return true;
+        }
+
         var currentPosition = transform.position;
         var toTarget = targetPoint - currentPosition;
         var horizontalDirection = new Vector3(toTarget.x, 0f, toTarget.z);
@@ -235,13 +383,11 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
 
         if (!attempted)
         {
-            var playedState =
+            _ =
                 TryPlayAnimatorState("sit") ||
                 TryPlayAnimatorState("Sit") ||
                 TryPlayAnimatorState("sitting") ||
                 TryPlayAnimatorState("Sitting");
-
-            _ = playedState;
         }
     }
 
@@ -296,13 +442,29 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
 
     private void SetWorldPosition(Vector3 worldPosition)
     {
-        if (_rigidbody != null && !_rigidbody.isKinematic)
+        transform.position = worldPosition;
+
+        if (_rigidbody != null)
         {
-            _rigidbody.MovePosition(worldPosition);
+            _rigidbody.linearVelocity = Vector3.zero;
+            _rigidbody.angularVelocity = Vector3.zero;
         }
-        else
+    }
+
+    private void SnapSeatFallbackPosition()
+    {
+        if (_seatSnapPosition == Vector3.zero)
         {
-            transform.position = worldPosition;
+            return;
+        }
+
+        transform.position = _seatSnapPosition;
+        RotateTowardsFinalFacing(forceSnap: true);
+
+        if (_rigidbody != null)
+        {
+            _rigidbody.linearVelocity = Vector3.zero;
+            _rigidbody.angularVelocity = Vector3.zero;
         }
     }
 
@@ -329,5 +491,15 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
         {
             _baseAi.enabled = false;
         }
+    }
+
+    private void DetachIfNeeded()
+    {
+        if (_humanoid == null || !_humanoid.IsAttached())
+        {
+            return;
+        }
+
+        _humanoid.AttachStop();
     }
 }

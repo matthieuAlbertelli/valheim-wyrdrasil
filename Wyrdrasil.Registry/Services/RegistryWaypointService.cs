@@ -297,20 +297,27 @@ public sealed class RegistryWaypointService
         if (activeCamera != null)
         {
             var ray = new Ray(activeCamera.transform.position, activeCamera.transform.forward);
-            if (Physics.Raycast(ray, out var hitInfo, 100f, ~0, QueryTriggerInteraction.Ignore))
+            var hits = Physics.RaycastAll(ray, 100f, ~0, QueryTriggerInteraction.Collide)
+                .OrderBy(hit => hit.distance)
+                .ToArray();
+
+            foreach (var hitInfo in hits)
             {
                 var marker = hitInfo.collider.GetComponentInParent<WyrdrasilNavigationWaypointMarker>();
-                if (marker != null)
+                if (marker == null)
                 {
-                    var waypoint = _waypoints.FirstOrDefault(candidate => candidate.Id == marker.WaypointId);
-                    if (waypoint != null)
-                    {
-                        targetWaypoint = waypoint;
-                        return true;
-                    }
+                    continue;
+                }
+
+                var waypoint = _waypoints.FirstOrDefault(candidate => candidate.Id == marker.WaypointId);
+                if (waypoint != null)
+                {
+                    targetWaypoint = waypoint;
+                    return true;
                 }
             }
         }
+
         targetWaypoint = null!;
         return false;
     }
@@ -324,11 +331,24 @@ public sealed class RegistryWaypointService
         var marker = root.AddComponent<WyrdrasilNavigationWaypointMarker>();
         marker.Initialize(waypointData.Id);
 
+        var interactionCollider = root.AddComponent<SphereCollider>();
+        interactionCollider.isTrigger = true;
+        interactionCollider.radius = 0.55f;
+        interactionCollider.center = Vector3.zero;
+        marker.RegisterCollider(interactionCollider);
+
         var visual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         visual.name = "WaypointVisual";
         visual.transform.SetParent(root.transform, false);
         visual.transform.localPosition = Vector3.zero;
         visual.transform.localScale = new Vector3(0.35f, 0.15f, 0.35f);
+
+        var visualCollider = visual.GetComponent<Collider>();
+        if (visualCollider != null)
+        {
+            visualCollider.isTrigger = true;
+            marker.RegisterCollider(visualCollider);
+        }
 
         var renderer = visual.GetComponent<Renderer>();
         if (renderer != null)

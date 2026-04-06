@@ -5,20 +5,33 @@ namespace Wyrdrasil.Registry.Components;
 
 public sealed class WyrdrasilRegisteredSeatMarker : MonoBehaviour
 {
-    private readonly List<Renderer> _renderers = new();
-    private readonly Dictionary<Renderer, Color> _originalColors = new();
+    private sealed class MaterialState
+    {
+        public Renderer Renderer = null!;
+        public Material[] Materials = null!;
+        public Color[] OriginalBaseColors = null!;
+        public Color[] OriginalEmissionColors = null!;
+    }
 
-    public int SeatId { get; private set; }
+    private readonly List<MaterialState> _states = new();
+
+    private bool _isVisible;
+    private bool _isAssigned;
+    private int _seatId;
 
     public void Initialize(int seatId)
     {
-        SeatId = seatId;
+        _seatId = seatId;
     }
 
-    public void RegisterRenderers(IEnumerable<Renderer> renderers)
+    public void RegisterRenderers(Renderer[] renderers)
     {
-        _renderers.Clear();
-        _originalColors.Clear();
+        _states.Clear();
+
+        if (renderers == null)
+        {
+            return;
+        }
 
         foreach (var renderer in renderers)
         {
@@ -27,33 +40,106 @@ public sealed class WyrdrasilRegisteredSeatMarker : MonoBehaviour
                 continue;
             }
 
-            _renderers.Add(renderer);
-            if (renderer.material != null)
+            var materials = renderer.materials;
+            var baseColors = new Color[materials.Length];
+            var emissionColors = new Color[materials.Length];
+
+            for (var i = 0; i < materials.Length; i++)
             {
-                _originalColors[renderer] = renderer.material.color;
+                var material = materials[i];
+
+                if (material.HasProperty("_Color"))
+                {
+                    baseColors[i] = material.color;
+                }
+                else
+                {
+                    baseColors[i] = Color.white;
+                }
+
+                if (material.HasProperty("_EmissionColor"))
+                {
+                    emissionColors[i] = material.GetColor("_EmissionColor");
+                }
+                else
+                {
+                    emissionColors[i] = Color.black;
+                }
+            }
+
+            _states.Add(new MaterialState
+            {
+                Renderer = renderer,
+                Materials = materials,
+                OriginalBaseColors = baseColors,
+                OriginalEmissionColors = emissionColors
+            });
+        }
+
+        ApplyVisualization();
+    }
+
+    public void SetVisualizationVisible(bool isVisible, bool isAssigned)
+    {
+        _isVisible = isVisible;
+        _isAssigned = isAssigned;
+        ApplyVisualization();
+    }
+
+    private void ApplyVisualization()
+    {
+        foreach (var state in _states)
+        {
+            for (var i = 0; i < state.Materials.Length; i++)
+            {
+                var material = state.Materials[i];
+                if (material == null)
+                {
+                    continue;
+                }
+
+                if (!_isVisible)
+                {
+                    RestoreMaterial(material, state, i);
+                    continue;
+                }
+
+                var glowColor = _isAssigned
+                    ? new Color(0.25f, 1f, 0.35f, 1f)
+                    : new Color(0.2f, 0.95f, 1f, 1f);
+
+                if (material.HasProperty("_Color"))
+                {
+                    material.color = Color.Lerp(state.OriginalBaseColors[i], glowColor, 0.18f);
+                }
+
+                if (material.HasProperty("_EmissionColor"))
+                {
+                    material.EnableKeyword("_EMISSION");
+                    material.SetColor("_EmissionColor", glowColor * 1.35f);
+                    DynamicGI.SetEmissive(state.Renderer, glowColor * 1.35f);
+                }
             }
         }
     }
 
-    public void SetVisualizationVisible(bool isVisible, bool isOccupied)
+    private static void RestoreMaterial(Material material, MaterialState state, int index)
     {
-        foreach (var renderer in _renderers)
+        if (material.HasProperty("_Color"))
         {
-            if (renderer == null || renderer.material == null)
+            material.color = state.OriginalBaseColors[index];
+        }
+
+        if (material.HasProperty("_EmissionColor"))
+        {
+            material.SetColor("_EmissionColor", state.OriginalEmissionColors[index]);
+
+            if (state.OriginalEmissionColors[index].maxColorComponent <= 0.0001f)
             {
-                continue;
+                material.DisableKeyword("_EMISSION");
             }
 
-            if (isVisible)
-            {
-                renderer.material.color = isOccupied
-                    ? new Color(0.35f, 1f, 0.35f, 1f)
-                    : new Color(1f, 0.9f, 0.25f, 1f);
-            }
-            else if (_originalColors.TryGetValue(renderer, out var originalColor))
-            {
-                renderer.material.color = originalColor;
-            }
+            DynamicGI.SetEmissive(state.Renderer, state.OriginalEmissionColors[index]);
         }
     }
 }

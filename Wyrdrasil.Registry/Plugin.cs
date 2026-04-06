@@ -1,4 +1,5 @@
 using BepInEx;
+using HarmonyLib;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.Services;
@@ -15,15 +16,20 @@ public class Plugin : BaseUnityPlugin
     public const string PluginVersion = "0.1.0";
 
     private RegistryToolController _registryToolController = null!;
+    private Harmony? _harmony;
 
     private void Awake()
     {
+        _harmony = new Harmony(PluginGuid);
+        _harmony.PatchAll();
+
         var modeService = new RegistryModeService(Logger);
         var zoneService = new RegistryZoneService(Logger, modeService);
         var waypointService = new RegistryWaypointService(Logger, modeService, zoneService);
         var slotService = new RegistrySlotService(Logger, modeService, zoneService);
         var seatService = new RegistrySeatService(Logger, modeService, zoneService);
-        var spawnService = new RegistrySpawnService(Logger);
+        var vikingPrefabFactory = new RegistryVikingPrefabFactory(Logger);
+        var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory);
         var navigationService = new RegistryNpcNavigationService(Logger);
         var residentRuntimeService = new RegistryResidentRuntimeService(Logger, navigationService, waypointService);
         var residentService = new RegistryResidentService(Logger, modeService, slotService, seatService, residentRuntimeService);
@@ -76,5 +82,10 @@ public class Plugin : BaseUnityPlugin
     private void OnGUI()
     {
         _registryToolController.OnGUI();
+    }
+
+    private void OnDestroy()
+    {
+        _harmony?.UnpatchSelf();
     }
 }

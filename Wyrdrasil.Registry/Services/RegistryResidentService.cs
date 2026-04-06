@@ -82,6 +82,7 @@ public sealed class RegistryResidentService
             return;
         }
 
+        DetachIfAttached(targetCharacter);
         _slotService.ClearAssignmentForResident(data.Id);
         _seatService.ClearAssignmentForResident(data.Id);
         data.ClearAssignedSeat();
@@ -120,6 +121,7 @@ public sealed class RegistryResidentService
             return;
         }
 
+        DetachIfAttached(targetCharacter);
         _seatService.ClearAssignmentForResident(data.Id);
         data.ClearAssignedSeat();
 
@@ -161,6 +163,7 @@ public sealed class RegistryResidentService
                 continue;
             }
 
+            DetachIfAttached(resident.Character);
             resident.ClearAssignedSeat();
             UpdateMarker(resident);
             _log.LogInfo($"Cleared resident seat assignment for NPC #{resident.Id} because seat #{seatId} was deleted.");
@@ -226,6 +229,14 @@ public sealed class RegistryResidentService
         if (_markers.TryGetValue(data.Id, out var marker))
         {
             marker.UpdateRole(data.Role);
+        }
+    }
+
+    private static void DetachIfAttached(Character character)
+    {
+        if (character is Humanoid humanoid && humanoid.IsAttached())
+        {
+            humanoid.AttachStop();
         }
     }
 }

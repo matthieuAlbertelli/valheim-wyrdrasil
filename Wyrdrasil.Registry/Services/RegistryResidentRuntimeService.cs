@@ -34,14 +34,14 @@ public sealed class RegistryResidentRuntimeService
             return;
         }
 
-        if (_waypointService.TryBuildRoute(character.transform.position, seat.SeatPosition, out var routePoints) && routePoints.Count > 0)
+        if (_waypointService.TryBuildRoute(character.transform.position, seat.ApproachPosition, out var routePoints) && routePoints.Count > 0)
         {
-            _navigationService.NavigateAlongRouteToSeat(character, routePoints, seat.SeatPosition, seat.SeatForward);
+            _navigationService.NavigateAlongRouteToSeat(character, routePoints, seat);
             _log.LogInfo($"Applied navigation graph route with {routePoints.Count} waypoint step(s) for seat #{seat.Id}.");
             return;
         }
 
-        _navigationService.NavigateDirectlyToSeat(character, seat.SeatPosition, seat.SeatForward);
+        _navigationService.NavigateDirectlyToSeat(character, seat);
         _log.LogWarning($"No connected waypoint route was found for seat #{seat.Id}. Falling back to direct movement.");
     }
 
