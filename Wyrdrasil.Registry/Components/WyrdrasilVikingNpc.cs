@@ -8,6 +8,7 @@ namespace Wyrdrasil.Registry.Components;
 public sealed class WyrdrasilVikingNpc : Humanoid
 {
     private Chair? _attachedChair;
+    private Bed? _attachedBed;
     private bool _attached;
     private bool _attachedToShip;
     private Transform? _attachPoint;
@@ -72,7 +73,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             _loggedAttachedTick = true;
             WyrdrasilSeatDebug.Log(
                 this,
-                $"CustomFixedUpdate attached=true chair={_attachedChair?.name ?? "null"} attachPoint={_attachPoint?.name ?? "null"}");
+                $"CustomFixedUpdate attached=true chair={_attachedChair?.name ?? "null"} bed={_attachedBed?.name ?? "null"} attachPoint={_attachPoint?.name ?? "null"}");
         }
 
         if (!_attached)
@@ -89,11 +90,10 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             return;
         }
 
-        WyrdrasilSeatDebug.Log(
-            this,
-            $"AttachToChair chair={chair.name} attachPoint={chair.m_attachPoint.name} inShip={chair.m_inShip} anim={chair.m_attachAnimation}");
-
         _attachedChair = chair;
+        _attachedBed = null;
+        SetBedAnimationState(false);
+
         AttachStart(
             chair.m_attachPoint,
             null,
@@ -103,13 +103,40 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             chair.m_attachAnimation,
             chair.m_detachOffset,
             null);
+    }
 
-        WyrdrasilSeatDebug.Log(this, $"AttachToChair after AttachStart IsAttached={IsAttached()}");
+    public void AttachToBed(Bed bed, Transform attachPoint)
+    {
+        if (bed == null || attachPoint == null)
+        {
+            WyrdrasilSeatDebug.Log(this, "AttachToBed aborted: bed or attachPoint null");
+            return;
+        }
+
+        _attachedChair = null;
+        _attachedBed = bed;
+
+        AttachStart(
+            attachPoint,
+            null,
+            true,
+            true,
+            false,
+            string.Empty,
+            Vector3.zero,
+            null);
+
+        SetBedAnimationState(true);
     }
 
     public bool IsAttachedToChair(Chair chair)
     {
         return _attachedChair == chair && IsAttached();
+    }
+
+    public bool IsAttachedToBed(Bed bed)
+    {
+        return _attachedBed == bed && IsAttached();
     }
 
     public override void AttachStart(
@@ -122,13 +149,8 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         Vector3 detachOffset,
         Transform? cameraPos = null)
     {
-        WyrdrasilSeatDebug.Log(
-            this,
-            $"AttachStart enter alreadyAttached={_attached} attachPoint={(attachPoint != null ? attachPoint.name : "null")} anim={attachAnimation}");
-
         if (_attached)
         {
-            WyrdrasilSeatDebug.Log(this, "AttachStart early return because _attached is already true");
             return;
         }
 
@@ -165,7 +187,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         UpdateAttachedState();
         ResetCloth();
-        WyrdrasilSeatDebug.Log(this, $"AttachStart exit IsAttached={IsAttached()} attachPoint={_attachPoint?.name ?? "null"}");
     }
 
     public override bool IsAttached()
@@ -180,8 +201,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
     public override void AttachStop()
     {
-        WyrdrasilSeatDebug.Log(this, $"AttachStop enter attached={_attached} chair={_attachedChair?.name ?? "null"}");
-
         if (!_attached)
         {
             return;
@@ -219,9 +238,11 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             m_animator.SetBool(_attachAnimation, false);
         }
 
+        SetBedAnimationState(false);
+
         _attachedChair = null;
+        _attachedBed = null;
         ResetCloth();
-        WyrdrasilSeatDebug.Log(this, "AttachStop exit");
     }
 
     private void UpdateAttachedState()
@@ -233,7 +254,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         if (_attachPoint == null)
         {
-            WyrdrasilSeatDebug.Log(this, "UpdateAttachedState detected null attachPoint -> AttachStop");
             AttachStop();
             return;
         }
@@ -253,6 +273,80 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         }
 
         m_maxAirAltitude = transform.position.y;
+    }
+
+    private void SetBedAnimationState(bool isSleeping)
+    {
+        if (m_animator == null)
+        {
+            return;
+        }
+
+        TrySetAnimatorBool("sleep", isSleeping);
+        TrySetAnimatorBool("Sleep", isSleeping);
+        TrySetAnimatorBool("lying", isSleeping);
+        TrySetAnimatorBool("Lying", isSleeping);
+        TrySetAnimatorBool("lay", isSleeping);
+        TrySetAnimatorBool("Lay", isSleeping);
+
+        if (isSleeping)
+        {
+            TrySetAnimatorTrigger("sleep");
+            TrySetAnimatorTrigger("Sleep");
+            TryPlayAnimatorState("sleep");
+            TryPlayAnimatorState("Sleep");
+            TryPlayAnimatorState("lying");
+            TryPlayAnimatorState("Lying");
+        }
+    }
+
+    private bool TrySetAnimatorBool(string parameterName, bool value)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        foreach (var parameter in m_animator.parameters)
+        {
+            if (parameter.type == AnimatorControllerParameterType.Bool && parameter.name == parameterName)
+            {
+                m_animator.SetBool(parameterName, value);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TrySetAnimatorTrigger(string parameterName)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        foreach (var parameter in m_animator.parameters)
+        {
+            if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == parameterName)
+            {
+                m_animator.SetTrigger(parameterName);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryPlayAnimatorState(string stateName)
+    {
+        if (m_animator == null || !m_animator.HasState(0, Animator.StringToHash(stateName)))
+        {
+            return false;
+        }
+
+        m_animator.Play(stateName);
+        return true;
     }
 
     private static void CopyDeclaredInstanceFields(Player source, WyrdrasilVikingNpc target, Type declaredOnType)

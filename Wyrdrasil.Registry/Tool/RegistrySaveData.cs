@@ -6,12 +6,13 @@ namespace Wyrdrasil.Registry.Tool;
 [Serializable]
 public sealed class RegistrySaveData
 {
-    public int Version = 1;
+    public int Version = 2;
     public int NextBuildingId = 1;
     public int NextZoneId = 1;
     public int NextWaypointId = 1;
     public int NextSlotId = 1;
     public int NextSeatId = 1;
+    public int NextBedId = 1;
     public int NextResidentId = 1;
     public List<BuildingSaveData> Buildings = new();
     public List<FunctionalZoneSaveData> Zones = new();
@@ -19,5 +20,6 @@ public sealed class RegistrySaveData
     public List<NavigationWaypointLinkSaveData> WaypointLinks = new();
     public List<ZoneSlotSaveData> Slots = new();
     public List<RegisteredSeatSaveData> Seats = new();
+    public List<RegisteredBedSaveData> Beds = new();
     public List<RegisteredNpcSaveData> Residents = new();
 }

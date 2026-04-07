@@ -20,7 +20,7 @@ public sealed class RegistryNpcNavigationService
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyControllers(character);
+            ReleaseLegacyControllers(character, true);
             var routeController = EnsureRouteController(character);
             routeController.ConfigureRouteToPosition(routePoints, slotPosition, 0.3f, slotPosition - character.transform.position);
             _log.LogInfo($"Assigned registry viking configured for waypoint route navigation with {routePoints.Count} waypoint(s).");
@@ -37,7 +37,7 @@ public sealed class RegistryNpcNavigationService
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyControllers(character);
+            ReleaseLegacyControllers(character, true);
             var routeController = EnsureRouteController(character);
             routeController.ConfigureRouteToPosition(System.Array.Empty<UnityEngine.Vector3>(), slotPosition, 0.3f, slotPosition - character.transform.position);
             _log.LogInfo("Assigned registry viking configured for deterministic direct movement fallback.");
@@ -56,7 +56,7 @@ public sealed class RegistryNpcNavigationService
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyControllers(character);
+            ReleaseLegacyControllers(character, true);
             var routeController = EnsureRouteController(character);
             routeController.ConfigureRouteToSeat(routePoints, seat);
             _log.LogInfo($"Assigned registry viking configured for designated seat navigation with {routePoints.Count} waypoint(s).");
@@ -75,7 +75,7 @@ public sealed class RegistryNpcNavigationService
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
-            ReleaseLegacyControllers(character);
+            ReleaseLegacyControllers(character, true);
             vikingAi.StartSeatApproach(seat, false);
             _log.LogInfo("Assigned registry viking configured for direct designated seat fallback.");
             return;
@@ -86,8 +86,55 @@ public sealed class RegistryNpcNavigationService
         _log.LogInfo("Assigned resident configured for direct designated seat fallback.");
     }
 
-    private static void ReleaseLegacyControllers(Character character)
+    public void NavigateAlongRouteToBed(Character character, IReadOnlyList<UnityEngine.Vector3> routePoints, RegisteredBedData bed)
     {
+        WyrdrasilSeatDebug.Log(character, $"NavigateAlongRouteToBed bedId={bed.Id} routeCount={routePoints.Count}");
+
+        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
+        if (vikingAi != null)
+        {
+            ReleaseLegacyControllers(character, true);
+            var routeController = EnsureRouteController(character);
+            routeController.ConfigureRouteToBed(routePoints, bed);
+            _log.LogInfo($"Assigned registry viking configured for bed navigation with {routePoints.Count} waypoint(s).");
+            return;
+        }
+
+        var controller = EnsureAssignedSlotController(character);
+        controller.ConfigureForBedRoute(routePoints, bed.ApproachPosition, bed.SleepPosition, bed.SleepForward, bed.BedComponent, bed.SleepAttachPoint, 1.8f, 0.25f);
+        _log.LogInfo($"Assigned resident configured for bed navigation with {routePoints.Count} waypoint(s).");
+    }
+
+    public void NavigateDirectlyToBed(Character character, RegisteredBedData bed)
+    {
+        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToBed bedId={bed.Id} approach={bed.ApproachPosition} sleep={bed.SleepPosition}");
+
+        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
+        if (vikingAi != null)
+        {
+            ReleaseLegacyControllers(character, true);
+            vikingAi.StartBedApproach(bed, false);
+            _log.LogInfo("Assigned registry viking configured for direct bed fallback.");
+            return;
+        }
+
+        var controller = EnsureAssignedSlotController(character);
+        controller.ConfigureForDirectBedMovement(bed.ApproachPosition, bed.SleepPosition, bed.SleepForward, bed.BedComponent, bed.SleepAttachPoint, 1.8f, 0.25f);
+        _log.LogInfo("Assigned resident configured for direct bed fallback.");
+    }
+
+    public void ReleaseOccupation(Character character, bool detachIfAttached = true)
+    {
+        ReleaseLegacyControllers(character, detachIfAttached);
+    }
+
+    private static void ReleaseLegacyControllers(Character character, bool detachIfAttached)
+    {
+        if (detachIfAttached && character is Humanoid humanoid && humanoid.IsAttached())
+        {
+            humanoid.AttachStop();
+        }
+
         var slotController = character.GetComponent<WyrdrasilAssignedSlotController>();
         if (slotController != null)
         {

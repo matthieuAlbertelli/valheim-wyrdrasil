@@ -17,6 +17,8 @@ public class Plugin : BaseUnityPlugin
 
     private RegistryToolController _registryToolController = null!;
     private RegistryPersistenceService _persistenceService = null!;
+    private RegistryWorldClockService _worldClockService = null!;
+    private RegistryResidentRoutineService _residentRoutineService = null!;
     private Harmony? _harmony;
 
     private void Awake()
@@ -31,6 +33,7 @@ public class Plugin : BaseUnityPlugin
         var waypointService = new RegistryWaypointService(Logger, modeService, zoneService);
         var slotService = new RegistrySlotService(Logger, modeService, zoneService, anchorPolicyService);
         var seatService = new RegistrySeatService(Logger, modeService, zoneService, anchorPolicyService);
+        var bedService = new RegistryBedService(Logger, modeService, zoneService, anchorPolicyService);
 
         var appearanceCatalog = new RegistryNpcAppearanceCatalog();
         var equipmentCatalog = new RegistryNpcEquipmentCatalog();
@@ -43,17 +46,22 @@ public class Plugin : BaseUnityPlugin
         var vikingPrefabFactory = new RegistryVikingPrefabFactory(Logger);
         var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
         var navigationService = new RegistryNpcNavigationService(Logger);
-        var residentRuntimeService = new RegistryResidentRuntimeService(Logger, navigationService, waypointService);
-        var residentService = new RegistryResidentService(Logger, modeService.State, modeService, slotService, seatService, residentRuntimeService, spawnService, identityGenerator, customizationApplier);
+        var residentRuntimeService = new RegistryResidentRuntimeService(Logger);
+        var scheduleService = new RegistryResidentScheduleService();
+        var occupationService = new RegistryResidentOccupationService(Logger, residentRuntimeService, slotService, seatService, bedService, navigationService, waypointService);
+        var residentService = new RegistryResidentService(Logger, modeService.State, modeService, slotService, seatService, bedService, residentRuntimeService, spawnService, identityGenerator, customizationApplier, scheduleService, occupationService);
+
+        _worldClockService = new RegistryWorldClockService();
+        _residentRoutineService = new RegistryResidentRoutineService(Logger, _worldClockService, residentService, residentRuntimeService, occupationService);
 
         var diagnosticsService = new RegistryDiagnosticsService(Logger);
-        var deletionService = new RegistryDeletionService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService);
-        _persistenceService = new RegistryPersistenceService(Logger, buildingService, zoneService, waypointService, slotService, seatService, residentService);
+        var deletionService = new RegistryDeletionService(Logger, buildingService, zoneService, slotService, seatService, bedService, waypointService, residentService);
+        _persistenceService = new RegistryPersistenceService(Logger, buildingService, zoneService, waypointService, slotService, seatService, bedService, residentService);
         var flushService = new RegistryFlushService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService, _persistenceService);
 
         var selectionService = new RegistrySelectionService(modeService.State);
         var actionRegistry = BuildActionRegistry();
-        var context = new RegistryContext(Logger, buildingService, zoneService, waypointService, slotService, seatService, spawnService, residentService, diagnosticsService, deletionService, _persistenceService, flushService);
+        var context = new RegistryContext(Logger, buildingService, zoneService, waypointService, slotService, seatService, bedService, spawnService, residentService, diagnosticsService, deletionService, _persistenceService, flushService, _worldClockService);
         var hudRenderer = new RegistryHudRenderer();
 
         _registryToolController = new RegistryToolController(modeService, selectionService, actionRegistry, context, hudRenderer);
@@ -64,24 +72,32 @@ public class Plugin : BaseUnityPlugin
     {
         var registry = new RegistryActionRegistry();
         registry.Register(new CreateTavernZoneAction());
+        registry.Register(new CreateBedroomZoneAction());
         registry.Register(new CreateTavernWaypointAction());
         registry.Register(new ConnectNavigationWaypointsAction());
         registry.Register(new DeleteNavigationWaypointAction());
         registry.Register(new DeleteZoneAction());
         registry.Register(new CreateInnkeeperSlotAction());
         registry.Register(new DesignateSeatFurnitureAction());
+        registry.Register(new DesignateBedFurnitureAction());
         registry.Register(new DeleteSlotAction());
         registry.Register(new DeleteDesignatedSeatAction());
+        registry.Register(new DeleteDesignatedBedAction());
         registry.Register(new SpawnTestVikingAction());
         registry.Register(new RegisterNpcAction());
         registry.Register(new AssignInnkeeperRoleAction());
         registry.Register(new AssignSeatAction());
+        registry.Register(new AssignBedAction());
         registry.Register(new ClearTargetInnkeeperSlotAssignmentAction());
         registry.Register(new ClearTargetSeatAssignmentAction());
+        registry.Register(new ClearTargetBedAssignmentAction());
         registry.Register(new ForceAssignResidentAction());
         registry.Register(new DespawnTargetResidentAction());
         registry.Register(new RespawnAssignedResidentAction());
         registry.Register(new InspectTargetNpcAiAction());
+        registry.Register(new SimulateNoonAction());
+        registry.Register(new SimulateNightAction());
+        registry.Register(new ClearTimeSimulationAction());
         registry.Register(new FlushRegistryStateAction());
         registry.Register(new LoggingRegistryAction(RegistryActionType.None));
         return registry;
@@ -90,6 +106,7 @@ public class Plugin : BaseUnityPlugin
     private void Update()
     {
         _persistenceService.Update();
+        _residentRoutineService.Update();
         _registryToolController.Update();
     }
 

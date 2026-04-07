@@ -7,12 +7,13 @@ namespace Wyrdrasil.Registry.Components;
 public sealed class WyrdrasilVikingNpcAI : MonsterAI
 {
     private const float SeatApproachRadius = 0.95f;
-    private const float SeatRetryInterval = 0.25f;
-    private const float SeatApproachProgressEpsilon = 0.10f;
-    private const float SeatApproachTimeoutDirect = 1.35f;
-    private const float SeatApproachTimeoutFromRoute = 0.75f;
-    private const float SeatApproachStuckTimeoutDirect = 0.90f;
-    private const float SeatApproachStuckTimeoutFromRoute = 0.50f;
+    private const float BedApproachRadius = 0.95f;
+    private const float AttemptRetryInterval = 0.25f;
+    private const float ApproachProgressEpsilon = 0.10f;
+    private const float ApproachTimeoutDirect = 1.35f;
+    private const float ApproachTimeoutFromRoute = 0.75f;
+    private const float ApproachStuckTimeoutDirect = 0.90f;
+    private const float ApproachStuckTimeoutFromRoute = 0.50f;
 
     private enum NavigationMode
     {
@@ -20,7 +21,10 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         Steering,
         SeatApproach,
         SeatAttempt,
-        Seated
+        Seated,
+        BedApproach,
+        BedAttempt,
+        Sleeping
     }
 
     private WyrdrasilVikingNpc? _viking;
@@ -32,14 +36,16 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
     private bool _hasSteeringTarget;
 
     private RegisteredSeatData? _seatTarget;
+    private RegisteredBedData? _bedTarget;
     private bool _travelLocked;
-    private Vector3 _seatApproachPoint;
-    private float _seatApproachElapsed;
-    private float _seatApproachTimeout;
-    private float _seatApproachStuckTimer;
-    private float _seatApproachStuckTimeout;
-    private float _bestSeatApproachDistance;
-    private float _nextSeatAttemptTime;
+
+    private Vector3 _approachPoint;
+    private float _approachElapsed;
+    private float _approachTimeout;
+    private float _approachStuckTimer;
+    private float _approachStuckTimeout;
+    private float _bestApproachDistance;
+    private float _nextAttemptTime;
     private NavigationMode _mode = NavigationMode.Idle;
 
     protected override void Awake()
@@ -54,6 +60,7 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         _travelLocked = true;
         _hasSteeringTarget = false;
         _seatTarget = null;
+        _bedTarget = null;
         _mode = NavigationMode.Idle;
         StopMoving();
         ZeroVelocity();
@@ -77,6 +84,7 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
             : transform.forward;
 
         _seatTarget = null;
+        _bedTarget = null;
         _hasSteeringTarget = true;
         _mode = NavigationMode.Steering;
         enabled = true;
@@ -86,6 +94,7 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
     {
         _hasSteeringTarget = false;
         _seatTarget = null;
+        _bedTarget = null;
         _mode = _viking != null && _viking.IsAttached() ? NavigationMode.Seated : NavigationMode.Idle;
         StopMoving();
         ZeroVelocity();
@@ -93,21 +102,18 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
 
     public void StartSeatApproach(RegisteredSeatData seat, bool arrivedFromWaypointRoute = false)
     {
-        _travelLocked = false;
+        StartOccupiedAnchorApproach(seat.ApproachPosition, arrivedFromWaypointRoute);
         _seatTarget = seat;
-        _seatApproachPoint = seat.ApproachPosition;
-        _seatApproachElapsed = 0f;
-        _seatApproachTimeout = arrivedFromWaypointRoute ? SeatApproachTimeoutFromRoute : SeatApproachTimeoutDirect;
-        _seatApproachStuckTimeout = arrivedFromWaypointRoute ? SeatApproachStuckTimeoutFromRoute : SeatApproachStuckTimeoutDirect;
-        _seatApproachStuckTimer = 0f;
-        _bestSeatApproachDistance = float.MaxValue;
-        _nextSeatAttemptTime = 0f;
-        _hasSteeringTarget = false;
+        _bedTarget = null;
         _mode = NavigationMode.SeatApproach;
-        enabled = true;
+    }
 
-        WyrdrasilSeatDebug.Log(this,
-            $"StartSeatApproach seatId={seat.Id} route={(arrivedFromWaypointRoute ? "yes" : "no")} approach={_seatApproachPoint} timeout={_seatApproachTimeout:0.00}");
+    public void StartBedApproach(RegisteredBedData bed, bool arrivedFromWaypointRoute = false)
+    {
+        StartOccupiedAnchorApproach(bed.ApproachPosition, arrivedFromWaypointRoute);
+        _seatTarget = null;
+        _bedTarget = bed;
+        _mode = NavigationMode.BedApproach;
     }
 
     public override bool UpdateAI(float dt)
@@ -126,7 +132,7 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
 
         if (_viking.IsAttached())
         {
-            _mode = NavigationMode.Seated;
+            _mode = _bedTarget != null ? NavigationMode.Sleeping : NavigationMode.Seated;
             StopMoving();
             ZeroVelocity();
             return true;
@@ -137,20 +143,23 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
             case NavigationMode.Steering:
                 UpdateSteering(dt);
                 break;
-
             case NavigationMode.SeatApproach:
                 UpdateSeatApproach(dt);
                 break;
-
             case NavigationMode.SeatAttempt:
                 UpdateSeatAttempt(dt);
                 break;
-
+            case NavigationMode.BedApproach:
+                UpdateBedApproach(dt);
+                break;
+            case NavigationMode.BedAttempt:
+                UpdateBedAttempt(dt);
+                break;
             case NavigationMode.Seated:
+            case NavigationMode.Sleeping:
                 StopMoving();
                 ZeroVelocity();
                 break;
-
             case NavigationMode.Idle:
             default:
                 StopMoving();
@@ -159,6 +168,20 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         }
 
         return true;
+    }
+
+    private void StartOccupiedAnchorApproach(Vector3 approachPoint, bool arrivedFromWaypointRoute)
+    {
+        _travelLocked = false;
+        _approachPoint = approachPoint;
+        _approachElapsed = 0f;
+        _approachTimeout = arrivedFromWaypointRoute ? ApproachTimeoutFromRoute : ApproachTimeoutDirect;
+        _approachStuckTimeout = arrivedFromWaypointRoute ? ApproachStuckTimeoutFromRoute : ApproachStuckTimeoutDirect;
+        _approachStuckTimer = 0f;
+        _bestApproachDistance = float.MaxValue;
+        _nextAttemptTime = 0f;
+        _hasSteeringTarget = false;
+        enabled = true;
     }
 
     private void UpdateSteering(float dt)
@@ -190,19 +213,15 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
             return;
         }
 
-        if (HasReachedHorizontally(_seatApproachPoint, SeatApproachRadius))
+        if (HasReachedHorizontally(_approachPoint, SeatApproachRadius))
         {
-            WyrdrasilSeatDebug.Log(this,
-                $"Reached seat approach zone seatId={_seatTarget.Id} dist={HorizontalDistanceTo(_seatApproachPoint):0.00}");
             EnterSeatAttemptMode();
             return;
         }
 
-        RotateBodyTowards(_seatApproachPoint, dt);
-        MoveTo(dt, _seatApproachPoint, SeatApproachRadius, false);
-
-        _seatApproachElapsed += dt;
-        UpdateSeatApproachProgress(dt);
+        RotateBodyTowards(_approachPoint, dt);
+        MoveTo(dt, _approachPoint, SeatApproachRadius, false);
+        UpdateApproachProgress(dt, NavigationMode.SeatAttempt, SeatApproachRadius);
     }
 
     private void UpdateSeatAttempt(float dt)
@@ -217,53 +236,86 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         ZeroVelocity();
         RotateTowards(_seatTarget.SeatForward, dt);
 
-        if (Time.time < _nextSeatAttemptTime)
+        if (Time.time < _nextAttemptTime)
         {
             return;
         }
 
-        _nextSeatAttemptTime = Time.time + SeatRetryInterval;
-        WyrdrasilSeatDebug.Log(this,
-            $"SeatAttempt try seatId={_seatTarget.Id} approachDist={HorizontalDistanceTo(_seatApproachPoint):0.00} seatDist={HorizontalDistanceTo(_seatTarget.SeatPosition):0.00}");
-
+        _nextAttemptTime = Time.time + AttemptRetryInterval;
         _seatTarget.ChairComponent.Interact(_viking, false, false);
 
         if (_viking.IsAttached())
         {
             _mode = NavigationMode.Seated;
-            WyrdrasilSeatDebug.Log(this, $"SeatAttempt success seatId={_seatTarget.Id}");
+        }
+    }
+
+    private void UpdateBedApproach(float dt)
+    {
+        if (_bedTarget == null)
+        {
+            _mode = NavigationMode.Idle;
             return;
         }
 
-        WyrdrasilSeatDebug.Log(this, $"SeatAttempt failed -> terminal retry seatId={_seatTarget.Id}");
+        if (HasReachedHorizontally(_approachPoint, BedApproachRadius))
+        {
+            EnterBedAttemptMode();
+            return;
+        }
+
+        RotateBodyTowards(_approachPoint, dt);
+        MoveTo(dt, _approachPoint, BedApproachRadius, false);
+        UpdateApproachProgress(dt, NavigationMode.BedAttempt, BedApproachRadius);
     }
 
-    private void UpdateSeatApproachProgress(float dt)
+    private void UpdateBedAttempt(float dt)
     {
-        var currentDistance = HorizontalDistanceTo(_seatApproachPoint);
-        if (currentDistance < _bestSeatApproachDistance - SeatApproachProgressEpsilon)
+        if (_bedTarget == null || _viking == null || _bedTarget.BedComponent == null || _bedTarget.SleepAttachPoint == null)
         {
-            _bestSeatApproachDistance = currentDistance;
-            _seatApproachStuckTimer = 0f;
+            _mode = NavigationMode.Idle;
+            return;
+        }
+
+        StopMoving();
+        ZeroVelocity();
+        RotateTowards(_bedTarget.SleepForward, dt);
+
+        if (Time.time < _nextAttemptTime)
+        {
+            return;
+        }
+
+        _nextAttemptTime = Time.time + AttemptRetryInterval;
+        _viking.AttachToBed(_bedTarget.BedComponent, _bedTarget.SleepAttachPoint);
+
+        if (_viking.IsAttached())
+        {
+            _mode = NavigationMode.Sleeping;
+        }
+    }
+
+    private void UpdateApproachProgress(float dt, NavigationMode nextMode, float relaxedRadius)
+    {
+        var currentDistance = HorizontalDistanceTo(_approachPoint);
+        if (currentDistance < _bestApproachDistance - ApproachProgressEpsilon)
+        {
+            _bestApproachDistance = currentDistance;
+            _approachStuckTimer = 0f;
         }
         else
         {
-            _seatApproachStuckTimer += dt;
+            _approachStuckTimer += dt;
         }
 
-        if (_seatApproachElapsed >= _seatApproachTimeout)
-        {
-            WyrdrasilSeatDebug.Log(this,
-                $"SeatApproach timeout -> forcing terminal seat attempt seatId={_seatTarget?.Id ?? 0} elapsed={_seatApproachElapsed:0.00}");
-            EnterSeatAttemptMode();
-            return;
-        }
+        _approachElapsed += dt;
 
-        if (_seatApproachStuckTimer >= _seatApproachStuckTimeout)
+        if (_approachElapsed >= _approachTimeout || (_approachStuckTimer >= _approachStuckTimeout && HasReachedHorizontally(_approachPoint, relaxedRadius)))
         {
-            WyrdrasilSeatDebug.Log(this,
-                $"SeatApproach stuck -> forcing terminal seat attempt seatId={_seatTarget?.Id ?? 0} seatDist={(_seatTarget != null ? HorizontalDistanceTo(_seatTarget.SeatPosition) : 0f):0.00}");
-            EnterSeatAttemptMode();
+            _nextAttemptTime = 0f;
+            _mode = nextMode;
+            StopMoving();
+            ZeroVelocity();
         }
     }
 
@@ -271,8 +323,16 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
     {
         StopMoving();
         ZeroVelocity();
-        _nextSeatAttemptTime = 0f;
+        _nextAttemptTime = 0f;
         _mode = NavigationMode.SeatAttempt;
+    }
+
+    private void EnterBedAttemptMode()
+    {
+        StopMoving();
+        ZeroVelocity();
+        _nextAttemptTime = 0f;
+        _mode = NavigationMode.BedAttempt;
     }
 
     private void RotateBodyTowards(Vector3 targetPoint, float dt)

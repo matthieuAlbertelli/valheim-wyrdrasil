@@ -10,6 +10,7 @@ public sealed class RegistrySelectionService
     private static readonly RegistryActionType[] ZoneActions =
     {
         RegistryActionType.CreateTavernZone,
+        RegistryActionType.CreateBedroomZone,
         RegistryActionType.CreateNavigationWaypoint,
         RegistryActionType.ConnectNavigationWaypoints,
         RegistryActionType.DeleteNavigationWaypoint,
@@ -20,8 +21,10 @@ public sealed class RegistrySelectionService
     {
         RegistryActionType.CreateInnkeeperSlot,
         RegistryActionType.DesignateSeatFurniture,
+        RegistryActionType.DesignateBedFurniture,
         RegistryActionType.DeleteSlot,
-        RegistryActionType.DeleteDesignatedSeat
+        RegistryActionType.DeleteDesignatedSeat,
+        RegistryActionType.DeleteDesignatedBed
     };
 
     private static readonly RegistryActionType[] ResidentActions =
@@ -29,8 +32,10 @@ public sealed class RegistrySelectionService
         RegistryActionType.RegisterNpc,
         RegistryActionType.AssignInnkeeperRole,
         RegistryActionType.AssignSeat,
+        RegistryActionType.AssignBed,
         RegistryActionType.ClearTargetInnkeeperSlotAssignment,
         RegistryActionType.ClearTargetSeatAssignment,
+        RegistryActionType.ClearTargetBedAssignment,
         RegistryActionType.ForceAssignResident,
         RegistryActionType.DespawnTargetResident,
         RegistryActionType.RespawnAssignedResident,
@@ -40,6 +45,9 @@ public sealed class RegistrySelectionService
     private static readonly RegistryActionType[] DiagnosticActions =
     {
         RegistryActionType.InspectTargetNpcAi,
+        RegistryActionType.SimulateNoon,
+        RegistryActionType.SimulateNight,
+        RegistryActionType.ClearTimeSimulation,
         RegistryActionType.FlushRegistryState,
         RegistryActionType.None
     };

@@ -9,6 +9,7 @@ public sealed class RegistryDeletionService
     private readonly RegistryZoneService _zoneService;
     private readonly RegistrySlotService _slotService;
     private readonly RegistrySeatService _seatService;
+    private readonly RegistryBedService _bedService;
     private readonly RegistryWaypointService _waypointService;
     private readonly RegistryResidentService _residentService;
 
@@ -18,6 +19,7 @@ public sealed class RegistryDeletionService
         RegistryZoneService zoneService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
+        RegistryBedService bedService,
         RegistryWaypointService waypointService,
         RegistryResidentService residentService)
     {
@@ -26,6 +28,7 @@ public sealed class RegistryDeletionService
         _zoneService = zoneService;
         _slotService = slotService;
         _seatService = seatService;
+        _bedService = bedService;
         _waypointService = waypointService;
         _residentService = residentService;
     }
@@ -48,6 +51,12 @@ public sealed class RegistryDeletionService
         foreach (var seatId in deletedSeatIds)
         {
             _residentService.HandleDeletedSeat(seatId);
+        }
+
+        var deletedBedIds = _bedService.DeleteBedsInZone(zone.Id);
+        foreach (var bedId in deletedBedIds)
+        {
+            _residentService.HandleDeletedBed(bedId);
         }
 
         if (_zoneService.DeleteZone(zone.Id, out var deletedZone))
@@ -87,6 +96,18 @@ public sealed class RegistryDeletionService
         }
 
         _log.LogWarning("Cannot delete designated seat: no registered seat furniture was found under the crosshair.");
+    }
+
+    public void DeleteDesignatedBedAtCrosshair()
+    {
+        if (_bedService.DeleteBedAtCrosshair(out var bedId))
+        {
+            _residentService.HandleDeletedBed(bedId);
+            _log.LogInfo($"Deleted designated bed #{bedId}.");
+            return;
+        }
+
+        _log.LogWarning("Cannot delete designated bed: no registered bed furniture was found under the crosshair.");
     }
 
     public void DeleteNavigationWaypointAtCrosshair()

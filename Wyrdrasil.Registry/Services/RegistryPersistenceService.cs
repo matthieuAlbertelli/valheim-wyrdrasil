@@ -19,11 +19,13 @@ public sealed class RegistryPersistenceService
     private readonly RegistryWaypointService _waypointService;
     private readonly RegistrySlotService _slotService;
     private readonly RegistrySeatService _seatService;
+    private readonly RegistryBedService _bedService;
     private readonly RegistryResidentService _residentService;
 
     private bool _hasLoadedCurrentWorld;
     private string _loadedWorldKey = string.Empty;
     private readonly List<RegisteredSeatSaveData> _pendingSeatResolutions = new();
+    private readonly List<RegisteredBedSaveData> _pendingBedResolutions = new();
 
     public RegistryPersistenceService(
         ManualLogSource log,
@@ -32,6 +34,7 @@ public sealed class RegistryPersistenceService
         RegistryWaypointService waypointService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
+        RegistryBedService bedService,
         RegistryResidentService residentService)
     {
         _log = log;
@@ -40,6 +43,7 @@ public sealed class RegistryPersistenceService
         _waypointService = waypointService;
         _slotService = slotService;
         _seatService = seatService;
+        _bedService = bedService;
         _residentService = residentService;
     }
 
@@ -56,6 +60,7 @@ public sealed class RegistryPersistenceService
             _loadedWorldKey = currentWorldKey;
             _hasLoadedCurrentWorld = false;
             _pendingSeatResolutions.Clear();
+            _pendingBedResolutions.Clear();
             _log.LogInfo($"Registry persistence detected world '{currentWorldKey}'. Preparing load.");
         }
 
@@ -65,7 +70,7 @@ public sealed class RegistryPersistenceService
             return;
         }
 
-        RetryPendingSeatResolutions();
+        RetryPendingAnchorResolutions();
     }
 
     public void SaveWorldState()
@@ -93,7 +98,7 @@ public sealed class RegistryPersistenceService
                 serializer.Serialize(stream, saveData);
             }
 
-            _log.LogInfo($"Saved registry world state to '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, waypoints={saveData.Waypoints.Count}, waypointLinks={saveData.WaypointLinks.Count}, slots={saveData.Slots.Count}, seats={saveData.Seats.Count}, residents={saveData.Residents.Count}. pendingUnresolvedSeats={_pendingSeatResolutions.Count}.");
+            _log.LogInfo($"Saved registry world state to '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, waypoints={saveData.Waypoints.Count}, waypointLinks={saveData.WaypointLinks.Count}, slots={saveData.Slots.Count}, seats={saveData.Seats.Count}, beds={saveData.Beds.Count}, residents={saveData.Residents.Count}.");
         }
         catch (Exception exception)
         {
@@ -117,6 +122,7 @@ public sealed class RegistryPersistenceService
         }
 
         _pendingSeatResolutions.Clear();
+        _pendingBedResolutions.Clear();
     }
 
     private void TryLoadWorldStateForCurrentWorld()
@@ -157,7 +163,7 @@ public sealed class RegistryPersistenceService
 
             LoadFromSaveData(saveData);
             _hasLoadedCurrentWorld = true;
-            _log.LogInfo($"Loaded registry world state from '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, waypoints={_waypointService.Waypoints.Count}, waypointLinks={_waypointService.GetPersistedLinks().Count}, slots={saveData.Slots.Count}, seats={_seatService.Seats.Count}, residents={saveData.Residents.Count}. pendingUnresolvedSeats={_pendingSeatResolutions.Count}.");
+            _log.LogInfo($"Loaded registry world state from '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, waypoints={_waypointService.Waypoints.Count}, waypointLinks={_waypointService.GetPersistedLinks().Count}, slots={saveData.Slots.Count}, seats={_seatService.Seats.Count}, beds={_bedService.Beds.Count}, residents={saveData.Residents.Count}.");
         }
         catch (Exception exception)
         {
@@ -169,6 +175,7 @@ public sealed class RegistryPersistenceService
     private void LoadFromSaveData(RegistrySaveData saveData)
     {
         _pendingSeatResolutions.Clear();
+        _pendingBedResolutions.Clear();
         _buildingService.LoadBuildings(saveData.Buildings.Select(ToBuildingData), saveData.NextBuildingId);
         _zoneService.LoadZones(saveData.Zones.Select(ToFunctionalZoneData), saveData.NextZoneId);
         _waypointService.LoadWaypoints(saveData.Waypoints.Select(ToNavigationWaypointData), saveData.WaypointLinks, saveData.NextWaypointId);
@@ -188,54 +195,94 @@ public sealed class RegistryPersistenceService
         }
 
         _seatService.LoadSeats(resolvedSeats, saveData.NextSeatId);
-        _residentService.LoadResidents(saveData.Residents.Select(ToRegisteredNpcData), saveData.NextResidentId);
-        RebuildAssignmentsFromResidents();
-        _residentService.RestoreResidentsAfterLoad();
 
-        if (_pendingSeatResolutions.Count > 0)
+        var resolvedBeds = new List<RegisteredBedData>();
+        foreach (var bedSave in saveData.Beds)
         {
-            _log.LogWarning($"Deferred {_pendingSeatResolutions.Count} unresolved seat(s). They will be retried while the world finishes loading.");
-        }
-    }
-
-    private void RetryPendingSeatResolutions()
-    {
-        if (_pendingSeatResolutions.Count == 0)
-        {
-            return;
-        }
-
-        var resolvedSeatData = new List<RegisteredSeatData>();
-        var stillPending = new List<RegisteredSeatSaveData>();
-
-        foreach (var pendingSeat in _pendingSeatResolutions)
-        {
-            if (_seatService.TryResolveSeatFromSave(pendingSeat, out var seatData))
+            if (_bedService.TryResolveBedFromSave(bedSave, out var bedData))
             {
-                resolvedSeatData.Add(seatData);
+                resolvedBeds.Add(bedData);
             }
             else
             {
-                stillPending.Add(pendingSeat);
+                _pendingBedResolutions.Add(bedSave);
             }
         }
 
-        if (resolvedSeatData.Count == 0)
+        _bedService.LoadBeds(resolvedBeds, saveData.NextBedId);
+        _residentService.LoadResidents(saveData.Residents.Select(ToRegisteredNpcData), saveData.NextResidentId);
+        RebuildAssignmentsFromResidents();
+        _residentService.RestoreResidentsAfterLoad();
+    }
+
+    private void RetryPendingAnchorResolutions()
+    {
+        var resolvedAny = false;
+
+        if (_pendingSeatResolutions.Count > 0)
         {
+            var resolvedSeatData = new List<RegisteredSeatData>();
+            var stillPendingSeats = new List<RegisteredSeatSaveData>();
+            foreach (var pendingSeat in _pendingSeatResolutions)
+            {
+                if (_seatService.TryResolveSeatFromSave(pendingSeat, out var seatData))
+                {
+                    resolvedSeatData.Add(seatData);
+                }
+                else
+                {
+                    stillPendingSeats.Add(pendingSeat);
+                }
+            }
+
+            if (resolvedSeatData.Count > 0)
+            {
+                var mergedSeats = _seatService.Seats.ToList();
+                mergedSeats.AddRange(resolvedSeatData.Where(candidate => mergedSeats.All(existing => existing.Id != candidate.Id)));
+                _seatService.LoadSeats(mergedSeats, Math.Max(_seatService.NextSeatId, mergedSeats.Count + 1));
+                resolvedAny = true;
+            }
+
             _pendingSeatResolutions.Clear();
-            _pendingSeatResolutions.AddRange(stillPending);
+            _pendingSeatResolutions.AddRange(stillPendingSeats);
+        }
+
+        if (_pendingBedResolutions.Count > 0)
+        {
+            var resolvedBedData = new List<RegisteredBedData>();
+            var stillPendingBeds = new List<RegisteredBedSaveData>();
+            foreach (var pendingBed in _pendingBedResolutions)
+            {
+                if (_bedService.TryResolveBedFromSave(pendingBed, out var bedData))
+                {
+                    resolvedBedData.Add(bedData);
+                }
+                else
+                {
+                    stillPendingBeds.Add(pendingBed);
+                }
+            }
+
+            if (resolvedBedData.Count > 0)
+            {
+                var mergedBeds = _bedService.Beds.ToList();
+                mergedBeds.AddRange(resolvedBedData.Where(candidate => mergedBeds.All(existing => existing.Id != candidate.Id)));
+                _bedService.LoadBeds(mergedBeds, Math.Max(_bedService.NextBedId, mergedBeds.Count + 1));
+                resolvedAny = true;
+            }
+
+            _pendingBedResolutions.Clear();
+            _pendingBedResolutions.AddRange(stillPendingBeds);
+        }
+
+        if (!resolvedAny)
+        {
             return;
         }
 
-        var mergedSeats = _seatService.Seats.ToList();
-        mergedSeats.AddRange(resolvedSeatData.Where(candidate => mergedSeats.All(existing => existing.Id != candidate.Id)));
-        _seatService.LoadSeats(mergedSeats, Math.Max(_seatService.NextSeatId, mergedSeats.Count + 1));
-        _pendingSeatResolutions.Clear();
-        _pendingSeatResolutions.AddRange(stillPending);
         RebuildAssignmentsFromResidents();
         _residentService.RestoreResidentsAfterLoad();
-
-        _log.LogInfo($"Resolved {resolvedSeatData.Count} deferred seat(s). Remaining unresolved seats={_pendingSeatResolutions.Count}.");
+        _log.LogInfo($"Resolved deferred anchors. Remaining unresolved seats={_pendingSeatResolutions.Count}, beds={_pendingBedResolutions.Count}.");
     }
 
     private void RebuildAssignmentsFromResidents()
@@ -253,11 +300,6 @@ public sealed class RegistryPersistenceService
                         resident.SetRole(NpcRole.Villager);
                     }
                 }
-                else
-                {
-                    resident.ClearAssignedSeat();
-                    continue;
-                }
             }
 
             if (resident.AssignedSeatId.HasValue && !_seatService.TryRestoreAssignment(resident.AssignedSeatId.Value, resident.Id))
@@ -270,6 +312,17 @@ public sealed class RegistryPersistenceService
                 _log.LogWarning($"Resident #{resident.Id} references missing seat #{resident.AssignedSeatId.Value}. Clearing seat assignment.");
                 resident.ClearAssignedSeat();
             }
+
+            if (resident.AssignedBedId.HasValue && !_bedService.TryRestoreAssignment(resident.AssignedBedId.Value, resident.Id))
+            {
+                if (_pendingBedResolutions.Any(bed => bed.Id == resident.AssignedBedId.Value))
+                {
+                    continue;
+                }
+
+                _log.LogWarning($"Resident #{resident.Id} references missing bed #{resident.AssignedBedId.Value}. Clearing bed assignment.");
+                resident.ClearAssignedBed();
+            }
         }
     }
 
@@ -279,12 +332,13 @@ public sealed class RegistryPersistenceService
 
         var saveData = new RegistrySaveData
         {
-            Version = 1,
+            Version = 2,
             NextBuildingId = _buildingService.NextBuildingId,
             NextZoneId = _zoneService.NextZoneId,
             NextWaypointId = _waypointService.NextWaypointId,
             NextSlotId = _slotService.NextSlotId,
             NextSeatId = Math.Max(_seatService.NextSeatId, _pendingSeatResolutions.Count > 0 ? _pendingSeatResolutions.Max(seat => seat.Id) + 1 : _seatService.NextSeatId),
+            NextBedId = Math.Max(_bedService.NextBedId, _pendingBedResolutions.Count > 0 ? _pendingBedResolutions.Max(bed => bed.Id) + 1 : _bedService.NextBedId),
             NextResidentId = _residentService.NextRegisteredNpcId
         };
 
@@ -330,11 +384,6 @@ public sealed class RegistryPersistenceService
                 continue;
             }
 
-            if (!seat.HasRuntimeBinding)
-            {
-                _log.LogWarning($"Serializing seat #{seat.Id} from snapshot only because its runtime furniture binding is unavailable.");
-            }
-
             var seatSave = FromRegisteredSeatData(seat);
             saveData.Seats.Add(seatSave);
             serializedSeatIds.Add(seat.Id);
@@ -348,7 +397,29 @@ public sealed class RegistryPersistenceService
             }
         }
 
+        var serializedBedIds = new HashSet<int>();
+        foreach (var bed in _bedService.Beds)
+        {
+            if (bed == null)
+            {
+                continue;
+            }
+
+            var bedSave = FromRegisteredBedData(bed);
+            saveData.Beds.Add(bedSave);
+            serializedBedIds.Add(bed.Id);
+        }
+
+        foreach (var pendingBed in _pendingBedResolutions)
+        {
+            if (serializedBedIds.Add(pendingBed.Id))
+            {
+                saveData.Beds.Add(pendingBed);
+            }
+        }
+
         var persistedSeatIds = new HashSet<int>(saveData.Seats.Select(seat => seat.Id));
+        var persistedBedIds = new HashSet<int>(saveData.Beds.Select(bed => bed.Id));
         foreach (var resident in _residentService.RegisteredNpcs)
         {
             if (resident == null || resident.Identity == null || resident.Identity.Appearance == null || resident.Identity.Equipment == null)
@@ -359,8 +430,12 @@ public sealed class RegistryPersistenceService
             var residentSave = FromRegisteredNpcData(resident);
             if (residentSave.AssignedSeatId.HasValue && !persistedSeatIds.Contains(residentSave.AssignedSeatId.Value))
             {
-                _log.LogWarning($"Dropping stale seat reference for resident #{resident.Id} during save because seat #{residentSave.AssignedSeatId.Value} is not present in the serialized seat set.");
                 residentSave.AssignedSeatId = null;
+            }
+
+            if (residentSave.AssignedBedId.HasValue && !persistedBedIds.Contains(residentSave.AssignedBedId.Value))
+            {
+                residentSave.AssignedBedId = null;
             }
 
             saveData.Residents.Add(residentSave);
@@ -449,6 +524,20 @@ public sealed class RegistryPersistenceService
         };
     }
 
+    private static RegisteredBedSaveData FromRegisteredBedData(RegisteredBedData data)
+    {
+        return new RegisteredBedSaveData
+        {
+            Id = data.Id,
+            BuildingId = data.BuildingId,
+            ZoneId = data.ZoneId,
+            DisplayName = data.DisplayName,
+            PersistentFurnitureId = data.PersistentFurnitureId,
+            SleepPosition = Float3SaveData.FromVector3(data.SleepPosition),
+            SleepForward = Float3SaveData.FromVector3(data.SleepForward)
+        };
+    }
+
     private static RegisteredNpcSaveData FromRegisteredNpcData(RegisteredNpcData data)
     {
         return new RegisteredNpcSaveData
@@ -458,8 +547,10 @@ public sealed class RegistryPersistenceService
             Role = data.Role,
             AssignedSlotId = data.AssignedSlotId,
             AssignedSeatId = data.AssignedSeatId,
+            AssignedBedId = data.AssignedBedId,
             Identity = FromIdentityData(data.Identity),
-            PresenceSnapshot = FromPresenceSnapshotData(data.PresenceSnapshot)
+            PresenceSnapshot = FromPresenceSnapshotData(data.PresenceSnapshot),
+            ScheduleEntries = data.ScheduleEntries.Select(FromScheduleEntryData).ToList()
         };
     }
 
@@ -477,8 +568,30 @@ public sealed class RegistryPersistenceService
             resident.AssignSeat(data.AssignedSeatId.Value);
         }
 
+        if (data.AssignedBedId.HasValue)
+        {
+            resident.AssignBed(data.AssignedBedId.Value);
+        }
+
+        resident.SetScheduleEntries(data.ScheduleEntries.Select(ToScheduleEntryData));
         ApplyPresenceSnapshotSaveData(resident.PresenceSnapshot, data.PresenceSnapshot);
         return resident;
+    }
+
+    private static ResidentScheduleEntrySaveData FromScheduleEntryData(ResidentScheduleEntryData data)
+    {
+        return new ResidentScheduleEntrySaveData
+        {
+            ActivityType = data.ActivityType,
+            StartMinuteOfDay = data.StartMinuteOfDay,
+            EndMinuteOfDay = data.EndMinuteOfDay,
+            Priority = data.Priority
+        };
+    }
+
+    private static ResidentScheduleEntryData ToScheduleEntryData(ResidentScheduleEntrySaveData data)
+    {
+        return new ResidentScheduleEntryData(data.ActivityType, data.StartMinuteOfDay, data.EndMinuteOfDay, data.Priority);
     }
 
     private static ResidentPresenceSnapshotSaveData FromPresenceSnapshotData(ResidentPresenceSnapshotData data)
@@ -503,6 +616,9 @@ public sealed class RegistryPersistenceService
                 break;
             case ResidentRestoreMode.AssignedSeatAnchor:
                 target.SetAssignedSeatAnchor(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
+                break;
+            case ResidentRestoreMode.AssignedBedAnchor:
+                target.SetAssignedBedAnchor(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
                 break;
             default:
                 target.Clear();

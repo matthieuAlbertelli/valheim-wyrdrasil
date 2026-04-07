@@ -5,5 +5,6 @@ public enum ResidentRestoreMode
     None,
     WorldPosition,
     AssignedSlotAnchor,
-    AssignedSeatAnchor
+    AssignedSeatAnchor,
+    AssignedBedAnchor
 }

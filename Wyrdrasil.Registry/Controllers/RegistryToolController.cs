@@ -47,7 +47,7 @@ public sealed class RegistryToolController
         var selectedAction = _modeService.State.SelectedAction;
         UpdateForceAssignFeedback();
 
-        if (selectedAction == RegistryActionType.CreateTavernZone)
+        if (selectedAction == RegistryActionType.CreateTavernZone || selectedAction == RegistryActionType.CreateBedroomZone)
         {
             _context.ZoneService.UpdatePendingZoneAuthoringPreview();
             HandleZoneAuthoringInputs();
@@ -101,8 +101,11 @@ public sealed class RegistryToolController
             _context.WaypointService.PendingLinkStartWaypointId,
             _context.SlotService.Slots.Count,
             _context.SeatService.Seats.Count,
+            _context.BedService.Beds.Count,
             _context.ResidentService.RegisteredNpcs.Count,
-            _context.ZoneService.GetPendingZoneAuthoringSnapshot());
+            _context.ZoneService.GetPendingZoneAuthoringSnapshot(),
+            _context.WorldClockService.GetClockLabel(),
+            _context.WorldClockService.GetClockModeLabel());
     }
 
     private void HandleZoneAuthoringInputs()
@@ -145,6 +148,7 @@ public sealed class RegistryToolController
         {
             _context.SlotService.SetPendingForceAssignTarget(null);
             _context.SeatService.SetPendingForceAssignTarget(null);
+            _context.BedService.SetPendingForceAssignTarget(null);
             return;
         }
 
@@ -152,6 +156,7 @@ public sealed class RegistryToolController
         {
             _context.SlotService.SetPendingForceAssignTarget(slotData.Id);
             _context.SeatService.SetPendingForceAssignTarget(null);
+            _context.BedService.SetPendingForceAssignTarget(null);
             return;
         }
 
@@ -159,11 +164,21 @@ public sealed class RegistryToolController
         {
             _context.SlotService.SetPendingForceAssignTarget(null);
             _context.SeatService.SetPendingForceAssignTarget(seatData.Id);
+            _context.BedService.SetPendingForceAssignTarget(null);
+            return;
+        }
+
+        if (_context.BedService.TryGetBedAtCrosshair(out var bedData))
+        {
+            _context.SlotService.SetPendingForceAssignTarget(null);
+            _context.SeatService.SetPendingForceAssignTarget(null);
+            _context.BedService.SetPendingForceAssignTarget(bedData.Id);
             return;
         }
 
         _context.SlotService.SetPendingForceAssignTarget(null);
         _context.SeatService.SetPendingForceAssignTarget(null);
+        _context.BedService.SetPendingForceAssignTarget(null);
     }
 
     private static bool IsDeleteAction(RegistryActionType actionType)
@@ -171,6 +186,7 @@ public sealed class RegistryToolController
         return actionType == RegistryActionType.DeleteZone ||
                actionType == RegistryActionType.DeleteSlot ||
                actionType == RegistryActionType.DeleteNavigationWaypoint ||
-               actionType == RegistryActionType.DeleteDesignatedSeat;
+               actionType == RegistryActionType.DeleteDesignatedSeat ||
+               actionType == RegistryActionType.DeleteDesignatedBed;
     }
 }

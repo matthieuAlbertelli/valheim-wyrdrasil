@@ -37,4 +37,11 @@ public sealed class ResidentPresenceSnapshotData
         WorldPosition = worldPosition;
         WorldYawDegrees = worldYawDegrees;
     }
+
+    public void SetAssignedBedAnchor(Vector3 worldPosition, float worldYawDegrees)
+    {
+        RestoreMode = ResidentRestoreMode.AssignedBedAnchor;
+        WorldPosition = worldPosition;
+        WorldYawDegrees = worldYawDegrees;
+    }
 }

@@ -11,12 +11,14 @@ public sealed class RegistryContext
     public RegistryWaypointService WaypointService { get; }
     public RegistrySlotService SlotService { get; }
     public RegistrySeatService SeatService { get; }
+    public RegistryBedService BedService { get; }
     public RegistrySpawnService SpawnService { get; }
     public RegistryResidentService ResidentService { get; }
     public RegistryDiagnosticsService DiagnosticsService { get; }
     public RegistryDeletionService DeletionService { get; }
     public RegistryPersistenceService PersistenceService { get; }
     public RegistryFlushService FlushService { get; }
+    public RegistryWorldClockService WorldClockService { get; }
 
     public RegistryContext(
         ManualLogSource log,
@@ -25,12 +27,14 @@ public sealed class RegistryContext
         RegistryWaypointService waypointService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
+        RegistryBedService bedService,
         RegistrySpawnService spawnService,
         RegistryResidentService residentService,
         RegistryDiagnosticsService diagnosticsService,
         RegistryDeletionService deletionService,
         RegistryPersistenceService persistenceService,
-        RegistryFlushService flushService)
+        RegistryFlushService flushService,
+        RegistryWorldClockService worldClockService)
     {
         Log = log;
         BuildingService = buildingService;
@@ -38,11 +42,13 @@ public sealed class RegistryContext
         WaypointService = waypointService;
         SlotService = slotService;
         SeatService = seatService;
+        BedService = bedService;
         SpawnService = spawnService;
         ResidentService = residentService;
         DiagnosticsService = diagnosticsService;
         DeletionService = deletionService;
         PersistenceService = persistenceService;
         FlushService = flushService;
+        WorldClockService = worldClockService;
     }
 }

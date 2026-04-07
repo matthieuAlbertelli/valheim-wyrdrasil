@@ -103,6 +103,7 @@ public sealed class RegistryZoneService
     }
 
     public void CreateTavernZone() => HandleZoneAuthoringPrimaryInput(ZoneType.Tavern);
+    public void CreateBedroomZone() => HandleZoneAuthoringPrimaryInput(ZoneType.Bedroom);
 
     public void UpdatePendingZoneAuthoringPreview()
     {

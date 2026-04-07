@@ -22,20 +22,13 @@ public sealed class RegistryResidentRuntimeService
     }
 
     private readonly ManualLogSource _log;
-    private readonly RegistryNpcNavigationService _navigationService;
-    private readonly RegistryWaypointService _waypointService;
     private readonly Dictionary<int, ResidentRuntimeBinding> _bindingsByResidentId = new();
     private readonly Dictionary<int, int> _residentIdsByCharacterInstanceId = new();
     private readonly Dictionary<int, ResidentRuntimeState> _runtimeStatesByResidentId = new();
 
-    public RegistryResidentRuntimeService(
-        ManualLogSource log,
-        RegistryNpcNavigationService navigationService,
-        RegistryWaypointService waypointService)
+    public RegistryResidentRuntimeService(ManualLogSource log)
     {
         _log = log;
-        _navigationService = navigationService;
-        _waypointService = waypointService;
     }
 
     public ResidentRuntimeState GetRuntimeState(int residentId)
@@ -167,49 +160,6 @@ public sealed class RegistryResidentRuntimeService
         worldYawDegrees = character.transform.eulerAngles.y;
         isAttached = character is Humanoid humanoid && humanoid.IsAttached();
         return true;
-    }
-
-    public void ApplyInnkeeperAssignment(RegisteredNpcData resident, ZoneSlotData slot)
-    {
-        ApplyPositionAssignment(resident.Id, slot.Position, $"innkeeper slot #{slot.Id}");
-    }
-
-    public void ApplySeatAssignment(RegisteredNpcData resident, RegisteredSeatData seat)
-    {
-        if (!TryGetBoundCharacter(resident.Id, out var character))
-        {
-            _log.LogWarning($"Cannot apply assignment to seat #{seat.Id}: resident runtime character is no longer available.");
-            return;
-        }
-
-        if (_waypointService.TryBuildRoute(character.transform.position, seat.ApproachPosition, out var routePoints) && routePoints.Count > 0)
-        {
-            _navigationService.NavigateAlongRouteToSeat(character, routePoints, seat);
-            _log.LogInfo($"Applied navigation graph route with {routePoints.Count} waypoint step(s) for seat #{seat.Id}.");
-            return;
-        }
-
-        _navigationService.NavigateDirectlyToSeat(character, seat);
-        _log.LogWarning($"No connected waypoint route was found for seat #{seat.Id}. Falling back to direct movement.");
-    }
-
-    private void ApplyPositionAssignment(int residentId, Vector3 targetPosition, string targetLabel)
-    {
-        if (!TryGetBoundCharacter(residentId, out var character))
-        {
-            _log.LogWarning($"Cannot apply assignment to {targetLabel}: resident runtime character is no longer available.");
-            return;
-        }
-
-        if (_waypointService.TryBuildRoute(character.transform.position, targetPosition, out var routePoints) && routePoints.Count > 0)
-        {
-            _navigationService.NavigateAlongRoute(character, routePoints, targetPosition);
-            _log.LogInfo($"Applied navigation graph route with {routePoints.Count} waypoint step(s) for {targetLabel}.");
-            return;
-        }
-
-        _navigationService.NavigateDirectlyToAssignedSlot(character, targetPosition);
-        _log.LogWarning($"No connected waypoint route was found for {targetLabel}. Falling back to direct movement.");
     }
 
     private void RemoveBinding(int residentId, bool markMissing)

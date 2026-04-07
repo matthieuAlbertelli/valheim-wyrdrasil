@@ -25,7 +25,7 @@ public sealed class RegistryAnchorPolicyService
 
     public bool RequiresZone(SeatUsageType usageType)
     {
-        return false;
+        return true;
     }
 
     public bool IsZoneTypeAllowed(SeatUsageType usageType, ZoneType zoneType)
@@ -36,5 +36,15 @@ public sealed class RegistryAnchorPolicyService
             SeatUsageType.Reserved => true,
             _ => false
         };
+    }
+
+    public bool RequiresZoneForBed()
+    {
+        return true;
+    }
+
+    public bool IsZoneTypeAllowedForBed(ZoneType zoneType)
+    {
+        return zoneType is ZoneType.Bedroom or ZoneType.Barracks;
     }
 }

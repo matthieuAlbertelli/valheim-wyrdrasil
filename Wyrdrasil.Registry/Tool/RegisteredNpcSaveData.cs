@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace Wyrdrasil.Registry.Tool;
 
@@ -10,6 +11,8 @@ public sealed class RegisteredNpcSaveData
     public NpcRole Role;
     public int? AssignedSlotId;
     public int? AssignedSeatId;
+    public int? AssignedBedId;
     public VikingIdentitySaveData Identity = new();
     public ResidentPresenceSnapshotSaveData PresenceSnapshot = new();
+    public List<ResidentScheduleEntrySaveData> ScheduleEntries = new();
 }
