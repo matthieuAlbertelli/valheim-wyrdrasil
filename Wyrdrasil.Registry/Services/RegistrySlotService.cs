@@ -75,6 +75,21 @@ public sealed class RegistrySlotService
         return false;
     }
 
+    public bool TryGetSlotAtCrosshair(out ZoneSlotData slotData)
+    {
+        var activeCamera = Camera.main;
+        if (activeCamera != null)
+        {
+            var ray = new Ray(activeCamera.transform.position, activeCamera.transform.forward);
+            if (Physics.Raycast(ray, out var hitInfo, 100f, ~0, QueryTriggerInteraction.Ignore))
+            {
+                return TryFindSlotAtPoint(hitInfo.point, out slotData);
+            }
+        }
+
+        slotData = null!;
+        return false;
+    }
 
     public void ClearAssignmentForResident(int registeredNpcId)
     {

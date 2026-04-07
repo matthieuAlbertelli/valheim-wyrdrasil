@@ -46,27 +46,69 @@ public sealed class RegistrySpawnService
         var identity = _identityGenerator.Generate(NpcRole.Villager);
         var displayName = $"Wyrdrasil Test Viking #{identity.GenerationSeed & 0xFF:X2}";
 
-        if (!_vikingPrefabFactory.TryInstantiate(displayName, spawnPosition, spawnRotation, out var instance, out var vikingNpc) ||
+        if (!TrySpawnViking(displayName, spawnPosition, spawnRotation, identity, out _))
+        {
+            return;
+        }
+
+        _log.LogInfo(
+            $"Spawned player-derived registry viking at {spawnPosition}. seed={identity.GenerationSeed}, role={identity.Role}, female={identity.Appearance.IsFemale}, hair={identity.Appearance.HairItem}, beard={identity.Appearance.BeardItem ?? "<none>"}.");
+    }
+
+    public bool TrySpawnResident(
+        RegisteredNpcData resident,
+        Vector3 spawnPosition,
+        Quaternion spawnRotation,
+        out GameObject? instance)
+    {
+        if (resident == null)
+        {
+            throw new ArgumentNullException(nameof(resident));
+        }
+
+        return TrySpawnViking(resident.DisplayName, spawnPosition, spawnRotation, resident.Identity, out instance);
+    }
+
+    public bool TrySpawnViking(
+        string displayName,
+        Vector3 spawnPosition,
+        Quaternion spawnRotation,
+        VikingIdentityData identity,
+        out GameObject? instance)
+    {
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            throw new ArgumentException("Spawned NPC display name cannot be null or whitespace.", nameof(displayName));
+        }
+
+        if (identity == null)
+        {
+            throw new ArgumentNullException(nameof(identity));
+        }
+
+        if (!_vikingPrefabFactory.TryInstantiate(displayName, spawnPosition, spawnRotation, out instance, out var vikingNpc) ||
             instance == null ||
             vikingNpc == null)
         {
-            _log.LogWarning("Cannot spawn test NPC: registry viking prefab instantiation failed.");
-            return;
+            _log.LogWarning("Cannot spawn registry viking: registry viking prefab instantiation failed.");
+            instance = null;
+            return false;
         }
 
         try
         {
             _customizationApplier.Apply(instance, identity);
             instance.SetActive(true);
+            return true;
         }
         catch (Exception exception)
         {
-            _log.LogWarning($"Cannot spawn test NPC: customization failed with {exception.GetType().Name}: {exception.Message}");
-            UnityEngine.Object.Destroy(instance);
-            return;
-        }
+            _log.LogWarning(
+                $"Cannot spawn registry viking '{displayName}': customization failed with {exception.GetType().Name}: {exception.Message}");
 
-        _log.LogInfo(
-            $"Spawned player-derived registry viking at {spawnPosition}. seed={identity.GenerationSeed}, role={identity.Role}, female={identity.Appearance.IsFemale}, hair={identity.Appearance.HairItem}, beard={identity.Appearance.BeardItem ?? "<none>"}.");
+            UnityEngine.Object.Destroy(instance);
+            instance = null;
+            return false;
+        }
     }
 }

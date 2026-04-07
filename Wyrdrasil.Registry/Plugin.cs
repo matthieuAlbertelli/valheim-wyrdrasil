@@ -41,7 +41,16 @@ public class Plugin : BaseUnityPlugin
         var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
         var navigationService = new RegistryNpcNavigationService(Logger);
         var residentRuntimeService = new RegistryResidentRuntimeService(Logger, navigationService, waypointService);
-        var residentService = new RegistryResidentService(Logger, modeService, slotService, seatService, residentRuntimeService);
+        var residentService = new RegistryResidentService(
+            Logger,
+            modeService,
+            slotService,
+            seatService,
+            residentRuntimeService,
+            spawnService,
+            identityGenerator,
+            customizationApplier);
+
         var diagnosticsService = new RegistryDiagnosticsService(Logger);
         var deletionService = new RegistryDeletionService(Logger, zoneService, slotService, seatService, waypointService, residentService);
 
@@ -77,6 +86,7 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new RegisterNpcAction());
         registry.Register(new AssignInnkeeperRoleAction());
         registry.Register(new AssignSeatAction());
+        registry.Register(new RespawnAssignedResidentAction());
         registry.Register(new InspectTargetNpcAiAction());
         registry.Register(new LoggingRegistryAction(RegistryActionType.None));
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using BepInEx.Logging;
@@ -13,8 +14,11 @@ public sealed class RegistryResidentService
     private readonly RegistrySlotService _slotService;
     private readonly RegistrySeatService _seatService;
     private readonly RegistryResidentRuntimeService _runtimeService;
+    private readonly RegistrySpawnService _spawnService;
+    private readonly RegistryNpcIdentityGenerator _identityGenerator;
+    private readonly RegistryNpcCustomizationApplier _customizationApplier;
     private readonly List<RegisteredNpcData> _registeredNpcs = new();
-    private readonly Dictionary<int, RegisteredNpcData> _registeredByCharacterInstanceId = new();
+    private readonly Dictionary<int, RegisteredNpcData> _registeredById = new();
     private readonly Dictionary<int, WyrdrasilRegisteredNpcMarker> _markers = new();
 
     private int _nextRegisteredNpcId = 1;
@@ -27,12 +31,18 @@ public sealed class RegistryResidentService
         RegistryModeService modeService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
-        RegistryResidentRuntimeService runtimeService)
+        RegistryResidentRuntimeService runtimeService,
+        RegistrySpawnService spawnService,
+        RegistryNpcIdentityGenerator identityGenerator,
+        RegistryNpcCustomizationApplier customizationApplier)
     {
         _log = log;
         _slotService = slotService;
         _seatService = seatService;
         _runtimeService = runtimeService;
+        _spawnService = spawnService;
+        _identityGenerator = identityGenerator;
+        _customizationApplier = customizationApplier;
         _visualsVisible = modeService.IsRegistryModeEnabled;
         modeService.RegistryModeChanged += OnRegistryModeChanged;
     }
@@ -52,41 +62,51 @@ public sealed class RegistryResidentService
             return;
         }
 
-        var characterInstanceId = targetCharacter.gameObject.GetInstanceID();
-        if (_registeredByCharacterInstanceId.ContainsKey(characterInstanceId))
+        if (_runtimeService.TryGetResidentId(targetCharacter, out _))
         {
             _log.LogWarning("Cannot register NPC: this character is already registered.");
             return;
         }
 
         var displayName = GetCharacterName(targetCharacter);
-        var identity = targetCharacter.GetComponent<WyrdrasilVikingIdentityComponent>()?.Identity;
-        var data = new RegisteredNpcData(_nextRegisteredNpcId++, characterInstanceId, displayName, targetCharacter, identity);
+        var identity = ResolveOrCreateIdentity(targetCharacter, NpcRole.Villager, out var createdIdentity);
+
+        var data = new RegisteredNpcData(
+            _nextRegisteredNpcId++,
+            displayName,
+            identity);
+
         _registeredNpcs.Add(data);
-        _registeredByCharacterInstanceId[characterInstanceId] = data;
+        _registeredById[data.Id] = data;
+        _runtimeService.BindResident(data.Id, targetCharacter);
         EnsureMarker(data);
 
-        if (identity != null)
+        _log.LogInfo(
+            $"Registered NPC #{data.Id}: '{data.DisplayName}' with {(createdIdentity ? "new" : "existing")} identity " +
+            $"seed={identity.GenerationSeed}, generatedRole={identity.Role}, female={identity.Appearance.IsFemale}.");
+    }
+
+    public void RespawnAssignedResidentAtCrosshair()
+    {
+        if (_slotService.TryGetSlotAtCrosshair(out var slotData))
         {
-            _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}' with generated identity seed={identity.GenerationSeed}.");
+            RespawnResidentAssignedToSlot(slotData);
             return;
         }
 
-        _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}'.");
+        if (_seatService.TryGetSeatAtCrosshair(out var seatData))
+        {
+            RespawnResidentAssignedToSeat(seatData);
+            return;
+        }
+
+        _log.LogWarning("Cannot respawn resident: the targeted object is neither a registered innkeeper slot nor a registered designated seat.");
     }
 
     public void AssignInnkeeperRoleAtCrosshair()
     {
-        if (!TryGetTargetCharacter(out var targetCharacter))
+        if (!TryGetTargetRegisteredResident("Cannot assign innkeeper role", out var targetCharacter, out var data))
         {
-            _log.LogWarning("Cannot assign innkeeper role: no valid character is under the crosshair.");
-            return;
-        }
-
-        var characterInstanceId = targetCharacter.gameObject.GetInstanceID();
-        if (!_registeredByCharacterInstanceId.TryGetValue(characterInstanceId, out var data))
-        {
-            _log.LogWarning("Cannot assign innkeeper role: the targeted character is not registered.");
             return;
         }
 
@@ -110,16 +130,8 @@ public sealed class RegistryResidentService
 
     public void AssignSeatAtCrosshair()
     {
-        if (!TryGetTargetCharacter(out var targetCharacter))
+        if (!TryGetTargetRegisteredResident("Cannot assign seat", out var targetCharacter, out var data))
         {
-            _log.LogWarning("Cannot assign seat: no valid character is under the crosshair.");
-            return;
-        }
-
-        var characterInstanceId = targetCharacter.gameObject.GetInstanceID();
-        if (!_registeredByCharacterInstanceId.TryGetValue(characterInstanceId, out var data))
-        {
-            _log.LogWarning("Cannot assign seat: the targeted character is not registered.");
             return;
         }
 
@@ -171,11 +183,125 @@ public sealed class RegistryResidentService
                 continue;
             }
 
-            DetachIfAttached(resident.Character);
+            if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
+            {
+                DetachIfAttached(character);
+            }
+
             resident.ClearAssignedSeat();
             UpdateMarker(resident);
             _log.LogInfo($"Cleared resident seat assignment for NPC #{resident.Id} because seat #{seatId} was deleted.");
         }
+    }
+
+    private void RespawnResidentAssignedToSlot(ZoneSlotData slotData)
+    {
+        if (!slotData.AssignedRegisteredNpcId.HasValue)
+        {
+            _log.LogWarning($"Cannot respawn resident: innkeeper slot #{slotData.Id} has no assigned resident.");
+            return;
+        }
+
+        if (!_registeredById.TryGetValue(slotData.AssignedRegisteredNpcId.Value, out var resident))
+        {
+            _log.LogWarning($"Cannot respawn resident: slot #{slotData.Id} references unknown resident #{slotData.AssignedRegisteredNpcId.Value}.");
+            return;
+        }
+
+        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
+        {
+            _log.LogWarning($"Cannot respawn resident #{resident.Id}: a runtime character is already bound.");
+            return;
+        }
+
+        var runtimeState = _runtimeService.GetRuntimeState(resident.Id);
+        if (runtimeState == ResidentRuntimeState.Spawning)
+        {
+            _log.LogWarning($"Cannot respawn resident #{resident.Id}: the resident is already in a spawning transition.");
+            return;
+        }
+
+        var spawnPosition = slotData.Position;
+        var spawnRotation = BuildFacingRotation(spawnPosition, GetPlayerLookTargetOrFallback(spawnPosition));
+
+        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _))
+        {
+            _log.LogWarning($"Cannot respawn resident #{resident.Id}: runtime spawn failed from slot #{slotData.Id}.");
+            return;
+        }
+
+        _runtimeService.ApplyInnkeeperAssignment(resident, slotData);
+        _log.LogInfo($"Respawned resident #{resident.Id} ('{resident.DisplayName}') from innkeeper slot #{slotData.Id}.");
+    }
+
+    private void RespawnResidentAssignedToSeat(RegisteredSeatData seatData)
+    {
+        if (!seatData.AssignedRegisteredNpcId.HasValue)
+        {
+            _log.LogWarning($"Cannot respawn resident: seat #{seatData.Id} has no assigned resident.");
+            return;
+        }
+
+        if (!_registeredById.TryGetValue(seatData.AssignedRegisteredNpcId.Value, out var resident))
+        {
+            _log.LogWarning($"Cannot respawn resident: seat #{seatData.Id} references unknown resident #{seatData.AssignedRegisteredNpcId.Value}.");
+            return;
+        }
+
+        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
+        {
+            _log.LogWarning($"Cannot respawn resident #{resident.Id}: a runtime character is already bound.");
+            return;
+        }
+
+        var runtimeState = _runtimeService.GetRuntimeState(resident.Id);
+        if (runtimeState == ResidentRuntimeState.Spawning)
+        {
+            _log.LogWarning($"Cannot respawn resident #{resident.Id}: the resident is already in a spawning transition.");
+            return;
+        }
+
+        var spawnPosition = seatData.ApproachPosition;
+        var spawnRotation = BuildFacingRotation(spawnPosition, seatData.SeatPosition);
+
+        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _))
+        {
+            _log.LogWarning($"Cannot respawn resident #{resident.Id}: runtime spawn failed from seat #{seatData.Id}.");
+            return;
+        }
+
+        _runtimeService.ApplySeatAssignment(resident, seatData);
+        _log.LogInfo($"Respawned resident #{resident.Id} ('{resident.DisplayName}') from seat #{seatData.Id}.");
+    }
+
+    private bool TrySpawnAndBindResident(
+        RegisteredNpcData resident,
+        Vector3 spawnPosition,
+        Quaternion spawnRotation,
+        out Character runtimeCharacter)
+    {
+        runtimeCharacter = null!;
+        _runtimeService.MarkResidentSpawning(resident.Id);
+
+        if (!_spawnService.TrySpawnResident(resident, spawnPosition, spawnRotation, out var instance) || instance == null)
+        {
+            _runtimeService.MarkResidentMissing(resident.Id);
+            return false;
+        }
+
+        var character = instance.GetComponent<Character>();
+        if (character == null)
+        {
+            _log.LogWarning($"Cannot bind respawned resident #{resident.Id}: spawned runtime object has no Character component.");
+            UnityEngine.Object.Destroy(instance);
+            _runtimeService.MarkResidentMissing(resident.Id);
+            return false;
+        }
+
+        _runtimeService.BindResident(resident.Id, character);
+        EnsureMarker(resident);
+        runtimeCharacter = character;
+        return true;
     }
 
     private void OnRegistryModeChanged(bool isEnabled)
@@ -208,6 +334,26 @@ public sealed class RegistryResidentService
         return false;
     }
 
+    private bool TryGetTargetRegisteredResident(string actionLabel, out Character targetCharacter, out RegisteredNpcData resident)
+    {
+        if (!TryGetTargetCharacter(out targetCharacter))
+        {
+            _log.LogWarning($"{actionLabel}: no valid character is under the crosshair.");
+            resident = null!;
+            return false;
+        }
+
+        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) ||
+            !_registeredById.TryGetValue(residentId, out resident))
+        {
+            _log.LogWarning($"{actionLabel}: the targeted character is not registered.");
+            resident = null!;
+            return false;
+        }
+
+        return true;
+    }
+
     private string GetCharacterName(Character character)
     {
         var nameField = typeof(Character).GetField("m_name", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
@@ -218,12 +364,44 @@ public sealed class RegistryResidentService
         return character.gameObject.name;
     }
 
+    private VikingIdentityData ResolveOrCreateIdentity(Character targetCharacter, NpcRole defaultRole, out bool createdIdentity)
+    {
+        var existingIdentity = targetCharacter.GetComponent<WyrdrasilVikingIdentityComponent>()?.Identity;
+        if (existingIdentity != null)
+        {
+            createdIdentity = false;
+            return existingIdentity;
+        }
+
+        var identity = _identityGenerator.Generate(defaultRole);
+
+        try
+        {
+            _customizationApplier.Apply(targetCharacter.gameObject, identity);
+        }
+        catch (Exception exception)
+        {
+            _log.LogWarning(
+                $"Generated identity for '{targetCharacter.gameObject.name}', but runtime application failed with " +
+                $"{exception.GetType().Name}: {exception.Message}");
+        }
+
+        createdIdentity = true;
+        return identity;
+    }
+
     private void EnsureMarker(RegisteredNpcData data)
     {
-        var marker = data.Character.GetComponent<WyrdrasilRegisteredNpcMarker>();
+        if (!_runtimeService.TryGetBoundCharacter(data.Id, out var character))
+        {
+            _log.LogWarning($"Cannot create resident marker for NPC #{data.Id}: runtime character is not available.");
+            return;
+        }
+
+        var marker = character.GetComponent<WyrdrasilRegisteredNpcMarker>();
         if (!marker)
         {
-            marker = data.Character.gameObject.AddComponent<WyrdrasilRegisteredNpcMarker>();
+            marker = character.gameObject.AddComponent<WyrdrasilRegisteredNpcMarker>();
         }
 
         marker.Initialize(data.Id, data.DisplayName, data.Role);
@@ -246,5 +424,29 @@ public sealed class RegistryResidentService
         {
             humanoid.AttachStop();
         }
+    }
+
+    private static Quaternion BuildFacingRotation(Vector3 fromPosition, Vector3 toPosition)
+    {
+        var direction = toPosition - fromPosition;
+        direction.y = 0f;
+
+        if (direction.sqrMagnitude <= 0.0001f)
+        {
+            direction = Vector3.forward;
+        }
+
+        return Quaternion.LookRotation(direction.normalized);
+    }
+
+    private static Vector3 GetPlayerLookTargetOrFallback(Vector3 fallbackPosition)
+    {
+        var localPlayer = Player.m_localPlayer;
+        if (!localPlayer)
+        {
+            return fallbackPosition + Vector3.forward;
+        }
+
+        return localPlayer.transform.position;
     }
 }

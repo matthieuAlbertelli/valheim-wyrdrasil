@@ -102,6 +102,7 @@ public sealed class RegistryHudRenderer
             RegistryActionType.RegisterNpc => "Enregistrer PNJ visé",
             RegistryActionType.AssignInnkeeperRole => "Assigner rôle : Aubergiste",
             RegistryActionType.AssignSeat => "Assigner un siège désigné au PNJ visé",
+            RegistryActionType.RespawnAssignedResident => "Respawn résident assigné au slot/siège visé",
             RegistryActionType.SpawnTestViking => "Faire apparaître PNJ test",
             RegistryActionType.InspectTargetNpcAi => "Inspecter IA du PNJ visé",
             _ => action.ToString()

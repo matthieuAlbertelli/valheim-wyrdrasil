@@ -30,6 +30,7 @@ public sealed class RegistrySelectionService
         RegistryActionType.RegisterNpc,
         RegistryActionType.AssignInnkeeperRole,
         RegistryActionType.AssignSeat,
+        RegistryActionType.RespawnAssignedResident,
         RegistryActionType.SpawnTestViking
     };
 

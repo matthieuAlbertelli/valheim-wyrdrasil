@@ -56,6 +56,25 @@ public sealed class RegistrySeatService
         _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in Tavern zone #{seatData.ZoneId}.");
     }
 
+    public bool TryGetSeatAtCrosshair(out RegisteredSeatData seatData)
+    {
+        if (!TryGetChairAtCrosshair(out var furnitureRoot, out _))
+        {
+            seatData = null!;
+            return false;
+        }
+
+        var existingSeat = FindSeatByFurniture(furnitureRoot);
+        if (existingSeat == null)
+        {
+            seatData = null!;
+            return false;
+        }
+
+        seatData = existingSeat;
+        return true;
+    }
+
     public bool TryAssignSeat(int registeredNpcId, out RegisteredSeatData? seatData)
     {
         foreach (var seat in _seats)
