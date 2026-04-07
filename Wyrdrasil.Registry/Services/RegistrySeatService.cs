@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Components;
@@ -8,6 +9,8 @@ namespace Wyrdrasil.Registry.Services;
 
 public sealed class RegistrySeatService
 {
+    private const float ResolveSeatDistance = 2f;
+
     private readonly ManualLogSource _log;
     private readonly RegistryZoneService _zoneService;
     private readonly RegistryAnchorPolicyService _anchorPolicyService;
@@ -20,6 +23,7 @@ public sealed class RegistrySeatService
     private int? _pendingForceAssignTargetSeatId;
 
     public IReadOnlyList<RegisteredSeatData> Seats => _seats;
+    public int NextSeatId => _nextSeatId;
 
     public RegistrySeatService(ManualLogSource log, RegistryModeService modeService, RegistryZoneService zoneService, RegistryAnchorPolicyService anchorPolicyService)
     {
@@ -28,6 +32,139 @@ public sealed class RegistrySeatService
         _anchorPolicyService = anchorPolicyService;
         _visualsVisible = modeService.IsRegistryModeEnabled;
         modeService.RegistryModeChanged += OnRegistryModeChanged;
+    }
+
+    public void LoadSeats(IEnumerable<RegisteredSeatData> seats, int nextSeatId)
+    {
+        foreach (var seat in _seats)
+        {
+            if (_markers.TryGetValue(seat.Id, out var marker) && marker != null)
+            {
+                marker.SetVisualizationVisible(false, false);
+            }
+        }
+
+        _seats.Clear();
+        _markers.Clear();
+        _seatRoots.Clear();
+
+        foreach (var seat in seats)
+        {
+            _seats.Add(seat);
+            if (seat.FurnitureRoot != null)
+            {
+                _seatRoots[seat.Id] = seat.FurnitureRoot;
+                EnsureMarker(seat);
+            }
+        }
+
+        _nextSeatId = nextSeatId;
+    }
+
+    public void ClearAllSeats()
+    {
+        foreach (var seat in _seats)
+        {
+            if (_markers.TryGetValue(seat.Id, out var marker) && marker != null)
+            {
+                marker.SetVisualizationVisible(false, false);
+            }
+        }
+
+        _seats.Clear();
+        _markers.Clear();
+        _seatRoots.Clear();
+        _pendingForceAssignTargetSeatId = null;
+        _nextSeatId = 1;
+    }
+
+    public bool TryRestoreAssignment(int seatId, int residentId)
+    {
+        var seat = _seats.FirstOrDefault(candidate => candidate.Id == seatId);
+        if (seat == null)
+        {
+            return false;
+        }
+
+        seat.AssignRegisteredNpc(residentId);
+        UpdateMarker(seat);
+        return true;
+    }
+
+    public bool TryGetSeatById(int seatId, out RegisteredSeatData seatData)
+    {
+        var seat = _seats.FirstOrDefault(candidate => candidate.Id == seatId);
+        if (seat == null)
+        {
+            seatData = null!;
+            return false;
+        }
+
+        seatData = seat;
+        return true;
+    }
+
+    public bool TryResolveSeatFromSave(RegisteredSeatSaveData saveData, out RegisteredSeatData seatData)
+    {
+        var fallbackPosition = saveData.SeatPosition.ToVector3();
+        var allChairs = Object.FindObjectsByType<Chair>(FindObjectsSortMode.None);
+
+        var exactCandidates = allChairs
+            .Select(chair => new
+            {
+                Chair = chair,
+                PersistentId = BuildPersistentFurnitureId(chair),
+                Distance = Vector3.Distance(GetSeatReferencePosition(chair), fallbackPosition)
+            })
+            .Where(candidate => candidate.PersistentId == saveData.PersistentFurnitureId)
+            .OrderBy(candidate => candidate.Distance)
+            .ToList();
+
+        if (exactCandidates.Count > 0)
+        {
+            var exactMatch = exactCandidates[0];
+            if (exactMatch.Distance <= ResolveSeatDistance)
+            {
+                var root = exactMatch.Chair.gameObject;
+                seatData = new RegisteredSeatData(
+                    saveData.Id,
+                    saveData.BuildingId,
+                    saveData.ZoneId,
+                    saveData.UsageType,
+                    saveData.DisplayName,
+                    exactMatch.PersistentId,
+                    root,
+                    exactMatch.Chair);
+                return true;
+            }
+        }
+
+        var fallbackChair = allChairs
+            .OrderBy(chair => Vector3.Distance(GetSeatReferencePosition(chair), fallbackPosition))
+            .FirstOrDefault();
+
+        if (fallbackChair != null)
+        {
+            var fallbackDistance = Vector3.Distance(GetSeatReferencePosition(fallbackChair), fallbackPosition);
+            if (fallbackDistance <= ResolveSeatDistance)
+            {
+                var root = fallbackChair.gameObject;
+                var persistentId = BuildPersistentFurnitureId(fallbackChair);
+                seatData = new RegisteredSeatData(
+                    saveData.Id,
+                    saveData.BuildingId,
+                    saveData.ZoneId,
+                    saveData.UsageType,
+                    saveData.DisplayName,
+                    persistentId,
+                    root,
+                    fallbackChair);
+                return true;
+            }
+        }
+
+        seatData = null!;
+        return false;
     }
 
     public void DesignateSeatAtCrosshair()
@@ -45,10 +182,7 @@ public sealed class RegistrySeatService
         }
 
         const SeatUsageType defaultUsageType = SeatUsageType.Public;
-        var referencePosition = chairComponent.m_attachPoint != null
-            ? chairComponent.m_attachPoint.position
-            : chairComponent.transform.position;
-
+        var referencePosition = GetSeatReferencePosition(chairComponent);
         var zone = _zoneService.FindZoneContainingPointHorizontally(referencePosition);
 
         if (_anchorPolicyService.RequiresZone(defaultUsageType) && zone == null)
@@ -69,12 +203,14 @@ public sealed class RegistrySeatService
             return;
         }
 
+        var persistentFurnitureId = BuildPersistentFurnitureId(chairComponent);
         var seatData = new RegisteredSeatData(
             _nextSeatId++,
             zone.BuildingId,
             zone.Id,
             defaultUsageType,
             furnitureRoot.name,
+            persistentFurnitureId,
             furnitureRoot,
             chairComponent);
 
@@ -82,7 +218,7 @@ public sealed class RegistrySeatService
         _seatRoots[seatData.Id] = furnitureRoot;
         EnsureMarker(seatData);
 
-        _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) as {seatData.UsageType}.");
+        _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) as {seatData.UsageType} with persistentId='{persistentFurnitureId}'.");
     }
 
     public bool TryGetSeatAtCrosshair(out RegisteredSeatData seatData)
@@ -184,13 +320,8 @@ public sealed class RegistrySeatService
 
     public void ClearAssignmentForResident(int registeredNpcId)
     {
-        foreach (var seat in _seats)
+        foreach (var seat in _seats.Where(seat => seat.AssignedRegisteredNpcId == registeredNpcId))
         {
-            if (seat.AssignedRegisteredNpcId != registeredNpcId)
-            {
-                continue;
-            }
-
             seat.ClearAssignedRegisteredNpc();
             UpdateMarker(seat);
         }
@@ -199,7 +330,6 @@ public sealed class RegistrySeatService
     public bool DeleteSeatAtCrosshair(out int seatId)
     {
         seatId = 0;
-
         if (!TryGetChairAtCrosshair(out var furnitureRoot, out _))
         {
             return false;
@@ -264,12 +394,12 @@ public sealed class RegistrySeatService
 
     private void EnsureMarker(RegisteredSeatData seat)
     {
-        var marker = seat.FurnitureRoot.GetComponent<WyrdrasilRegisteredSeatMarker>();
-        if (!marker)
+        if (seat.FurnitureRoot == null)
         {
-            marker = seat.FurnitureRoot.AddComponent<WyrdrasilRegisteredSeatMarker>();
+            return;
         }
 
+        var marker = seat.FurnitureRoot.GetComponent<WyrdrasilRegisteredSeatMarker>() ?? seat.FurnitureRoot.AddComponent<WyrdrasilRegisteredSeatMarker>();
         marker.Initialize(seat.Id);
         marker.RegisterRenderers(seat.FurnitureRoot.GetComponentsInChildren<Renderer>(true));
         marker.SetVisualizationVisible(_visualsVisible, seat.AssignedRegisteredNpcId.HasValue);
@@ -288,15 +418,7 @@ public sealed class RegistrySeatService
 
     private RegisteredSeatData? FindSeatByFurniture(GameObject furnitureRoot)
     {
-        foreach (var seat in _seats)
-        {
-            if (seat.FurnitureRoot == furnitureRoot)
-            {
-                return seat;
-            }
-        }
-
-        return null;
+        return _seats.FirstOrDefault(seat => seat.FurnitureRoot != null && seat.FurnitureRoot == furnitureRoot);
     }
 
     private static bool TryGetChairAtCrosshair(out GameObject furnitureRoot, out Chair chairComponent)
@@ -320,5 +442,25 @@ public sealed class RegistrySeatService
         furnitureRoot = null!;
         chairComponent = null!;
         return false;
+    }
+
+    private static Vector3 GetSeatReferencePosition(Chair chair)
+    {
+        return chair.m_attachPoint != null ? chair.m_attachPoint.position : chair.transform.position;
+    }
+
+    private static string BuildPersistentFurnitureId(Chair chair)
+    {
+        var nview = chair.GetComponentInParent<ZNetView>();
+        var referenceTransform = chair.m_attachPoint != null ? chair.m_attachPoint : chair.transform;
+
+        if (nview != null && nview.GetZDO() != null)
+        {
+            var localPosition = nview.transform.InverseTransformPoint(referenceTransform.position);
+            return $"zdo:{nview.GetZDO().m_uid}:chair:{chair.gameObject.name}:{localPosition.x:0.000}:{localPosition.y:0.000}:{localPosition.z:0.000}";
+        }
+
+        var worldPosition = referenceTransform.position;
+        return $"fallback:{chair.gameObject.name}:{worldPosition.x:0.000}:{worldPosition.y:0.000}:{worldPosition.z:0.000}";
     }
 }

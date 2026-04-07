@@ -38,6 +38,7 @@ public sealed class RegistryZoneService
     private bool _visualsVisible;
 
     public IReadOnlyList<FunctionalZoneData> Zones => _zones;
+    public int NextZoneId => _nextZoneId;
     public bool IsZoneAuthoringActive => AuthoringPhase != ZoneAuthoringPhase.None;
     public bool IsZoneHeightEditingActive => AuthoringPhase == ZoneAuthoringPhase.Height;
     public ZoneAuthoringPhase AuthoringPhase { get; private set; }
@@ -57,18 +58,51 @@ public sealed class RegistryZoneService
             return null;
         }
 
-        return new PendingZoneAuthoringSnapshot(
-            AuthoringPhase,
-            _pendingFootprintPoints.Count,
-            _pendingBaseY,
-            _pendingTopY,
-            CanClosePendingFootprint());
+        return new PendingZoneAuthoringSnapshot(AuthoringPhase, _pendingFootprintPoints.Count, _pendingBaseY, _pendingTopY, CanClosePendingFootprint());
     }
 
-    public void CreateTavernZone()
+    public void LoadZones(IEnumerable<FunctionalZoneData> zones, int nextZoneId)
     {
-        HandleZoneAuthoringPrimaryInput(ZoneType.Tavern);
+        CancelPendingZoneAuthoring();
+        foreach (var root in _zoneRoots.Values)
+        {
+            if (root != null)
+            {
+                Object.Destroy(root);
+            }
+        }
+
+        _zones.Clear();
+        _zoneRoots.Clear();
+        _markers.Clear();
+
+        foreach (var zone in zones)
+        {
+            _zones.Add(zone);
+            CreateZoneWorldObject(zone);
+        }
+
+        _nextZoneId = nextZoneId;
     }
+
+    public void ClearAllZones()
+    {
+        CancelPendingZoneAuthoring();
+        foreach (var root in _zoneRoots.Values)
+        {
+            if (root != null)
+            {
+                Object.Destroy(root);
+            }
+        }
+
+        _zones.Clear();
+        _zoneRoots.Clear();
+        _markers.Clear();
+        _nextZoneId = 1;
+    }
+
+    public void CreateTavernZone() => HandleZoneAuthoringPrimaryInput(ZoneType.Tavern);
 
     public void UpdatePendingZoneAuthoringPreview()
     {
@@ -77,16 +111,9 @@ public sealed class RegistryZoneService
             return;
         }
 
-        if (TryGetPlacementPoint(out var placementPoint))
-        {
-            _pendingGhostPoint = CanClosePendingFootprint(placementPoint)
-                ? _pendingFootprintPoints[0]
-                : placementPoint;
-        }
-        else
-        {
-            _pendingGhostPoint = null;
-        }
+        _pendingGhostPoint = TryGetPlacementPoint(out var placementPoint)
+            ? CanClosePendingFootprint(placementPoint) ? _pendingFootprintPoints[0] : placementPoint
+            : null;
 
         UpdatePendingPreviewVisuals();
     }
@@ -116,16 +143,13 @@ public sealed class RegistryZoneService
             BeginZoneAuthoring(zoneType);
         }
 
-        if (AuthoringPhase == ZoneAuthoringPhase.Footprint)
+        if (CanClosePendingFootprint(placementPoint))
         {
-            if (CanClosePendingFootprint(placementPoint))
-            {
-                BeginZoneHeightEditing();
-                return;
-            }
-
-            TryAddPendingFootprintPoint(placementPoint);
+            BeginZoneHeightEditing();
+            return;
         }
+
+        TryAddPendingFootprintPoint(placementPoint);
     }
 
     public void HandleZoneAuthoringSecondaryInput()
@@ -137,7 +161,6 @@ public sealed class RegistryZoneService
 
         if (AuthoringPhase == ZoneAuthoringPhase.Height)
         {
-            _log.LogInfo("Canceled pending zone height editing.");
             CancelPendingZoneAuthoring();
             return;
         }
@@ -145,8 +168,6 @@ public sealed class RegistryZoneService
         if (_pendingFootprintPoints.Count > 0)
         {
             _pendingFootprintPoints.RemoveAt(_pendingFootprintPoints.Count - 1);
-            _log.LogInfo($"Removed last pending zone point. Remaining points: {_pendingFootprintPoints.Count}.");
-
             if (_pendingFootprintPoints.Count == 0)
             {
                 CancelPendingZoneAuthoring();
@@ -266,71 +287,25 @@ public sealed class RegistryZoneService
         return true;
     }
 
-    public FunctionalZoneData? FindZoneContainingPoint(Vector3 point)
-    {
-        FunctionalZoneData? bestMatch = null;
-        var bestDistance = float.MaxValue;
+    public FunctionalZoneData? FindZoneContainingPoint(Vector3 point) =>
+        _zones.Where(zone => zone.ContainsPoint(point))
+              .OrderBy(zone => Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z)))
+              .FirstOrDefault();
 
-        foreach (var zone in _zones)
-        {
-            if (!zone.ContainsPoint(point))
-            {
-                continue;
-            }
+    public FunctionalZoneData? FindZoneContainingPoint(Vector3 point, ZoneType zoneType) =>
+        _zones.Where(zone => zone.ZoneType == zoneType && zone.ContainsPoint(point))
+              .OrderBy(zone => Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z)))
+              .FirstOrDefault();
 
-            var distance = Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z));
-            if (distance >= bestDistance)
-            {
-                continue;
-            }
+    public FunctionalZoneData? FindZoneContainingPointHorizontally(Vector3 point) =>
+        _zones.Where(zone => zone.ContainsPointHorizontally(point))
+              .OrderBy(zone => Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z)))
+              .FirstOrDefault();
 
-            bestDistance = distance;
-            bestMatch = zone;
-        }
-
-        return bestMatch;
-    }
-
-    public FunctionalZoneData? FindZoneContainingPoint(Vector3 point, ZoneType zoneType)
-    {
-        return _zones
-            .Where(zone => zone.ZoneType == zoneType && zone.ContainsPoint(point))
-            .OrderBy(zone => Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z)))
-            .FirstOrDefault();
-    }
-
-    public FunctionalZoneData? FindZoneContainingPointHorizontally(Vector3 point)
-    {
-        FunctionalZoneData? bestMatch = null;
-        var bestDistance = float.MaxValue;
-
-        foreach (var zone in _zones)
-        {
-            if (!zone.ContainsPointHorizontally(point))
-            {
-                continue;
-            }
-
-            var distance = Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z));
-            if (distance >= bestDistance)
-            {
-                continue;
-            }
-
-            bestDistance = distance;
-            bestMatch = zone;
-        }
-
-        return bestMatch;
-    }
-
-    public FunctionalZoneData? FindZoneContainingPointHorizontally(Vector3 point, ZoneType zoneType)
-    {
-        return _zones
-            .Where(zone => zone.ZoneType == zoneType && zone.ContainsPointHorizontally(point))
-            .OrderBy(zone => Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z)))
-            .FirstOrDefault();
-    }
+    public FunctionalZoneData? FindZoneContainingPointHorizontally(Vector3 point, ZoneType zoneType) =>
+        _zones.Where(zone => zone.ZoneType == zoneType && zone.ContainsPointHorizontally(point))
+              .OrderBy(zone => Vector2.Distance(new Vector2(zone.Position.x, zone.Position.z), new Vector2(point.x, point.z)))
+              .FirstOrDefault();
 
     private void OnRegistryModeChanged(bool isEnabled)
     {
@@ -340,7 +315,6 @@ public sealed class RegistryZoneService
             marker.SetVisualizationVisible(isEnabled);
         }
 
-        SetPendingPreviewVisible(isEnabled);
         if (!isEnabled)
         {
             CancelPendingZoneAuthoring();
@@ -353,23 +327,16 @@ public sealed class RegistryZoneService
         AuthoringPhase = ZoneAuthoringPhase.Footprint;
         EnsurePendingPreviewVisuals();
         UpdatePendingPreviewVisuals();
-        _log.LogInfo($"Started {zoneType} zone authoring. Left click to place points.");
     }
 
     private void BeginZoneHeightEditing()
     {
-        if (_pendingFootprintPoints.Count < 3 || _pendingZoneType == null)
-        {
-            return;
-        }
-
         var minY = _pendingFootprintPoints.Min(point => point.y);
         _pendingBaseY = SnapHeight(minY);
         _pendingTopY = SnapHeight(_pendingBaseY + DefaultZoneHeight);
         AuthoringPhase = ZoneAuthoringPhase.Height;
         _pendingGhostPoint = null;
         UpdatePendingPreviewVisuals();
-        _log.LogInfo($"Closed {_pendingZoneType} zone footprint with {_pendingFootprintPoints.Count} points. Mouse wheel adjusts TopY, Shift + Mouse wheel adjusts BaseY, left click confirms.");
     }
 
     private void FinalizePendingZone()
@@ -381,50 +348,32 @@ public sealed class RegistryZoneService
 
         var anchorPosition = ComputeAnchorPosition(_pendingFootprintPoints);
         var building = _buildingService.CreateImplicitBuildingForZone(_pendingZoneType.Value, anchorPosition);
-        var zoneData = new FunctionalZoneData(
-            _nextZoneId++,
-            building.Id,
-            _pendingZoneType.Value,
-            anchorPosition,
-            _pendingFootprintPoints.Select(point => new Vector2(point.x, point.z)),
-            _pendingBaseY,
-            _pendingTopY,
-            levelIndex: 0);
+        var zoneData = new FunctionalZoneData(_nextZoneId++, building.Id, _pendingZoneType.Value, anchorPosition,
+            _pendingFootprintPoints.Select(point => new Vector2(point.x, point.z)), _pendingBaseY, _pendingTopY, 0);
 
         _zones.Add(zoneData);
         CreateZoneWorldObject(zoneData);
-        _log.LogInfo($"Created {_pendingZoneType} zone #{zoneData.Id} in building #{zoneData.BuildingId} with {_pendingFootprintPoints.Count} footprint points, BaseY={zoneData.BaseY:0.00}, TopY={zoneData.TopY:0.00}.");
         CancelPendingZoneAuthoring();
     }
 
     private bool TryAddPendingFootprintPoint(Vector3 point)
     {
-        if (_pendingFootprintPoints.Count > 0)
+        if (_pendingFootprintPoints.Count > 0 && Vector3.Distance(_pendingFootprintPoints[_pendingFootprintPoints.Count - 1], point) < MinPointSpacing)
         {
-            var previousPoint = _pendingFootprintPoints[_pendingFootprintPoints.Count - 1];
-            if (Vector3.Distance(previousPoint, point) < MinPointSpacing)
-            {
-                _log.LogWarning("Cannot add zone point: it is too close to the previous point.");
-                return false;
-            }
+            return false;
         }
 
         if (WouldNewFootprintSegmentSelfIntersect(point))
         {
-            _log.LogWarning("Cannot add zone point: the new segment would self-intersect the footprint.");
             return false;
         }
 
         _pendingFootprintPoints.Add(point);
         UpdatePendingPreviewVisuals();
-        _log.LogInfo($"Added pending zone point #{_pendingFootprintPoints.Count} at {point}.");
         return true;
     }
 
-    private bool CanClosePendingFootprint()
-    {
-        return _pendingFootprintPoints.Count >= 3;
-    }
+    private bool CanClosePendingFootprint() => _pendingFootprintPoints.Count >= 3;
 
     private bool CanClosePendingFootprint(Vector3 candidatePoint)
     {
@@ -434,13 +383,8 @@ public sealed class RegistryZoneService
         }
 
         var firstPoint = _pendingFootprintPoints[0];
-        var horizontalDistance = Vector2.Distance(new Vector2(candidatePoint.x, candidatePoint.z), new Vector2(firstPoint.x, firstPoint.z));
-        if (horizontalDistance > CloseFootprintDistance)
-        {
-            return false;
-        }
-
-        return !WouldClosingSegmentSelfIntersect();
+        return Vector2.Distance(new Vector2(candidatePoint.x, candidatePoint.z), new Vector2(firstPoint.x, firstPoint.z)) <= CloseFootprintDistance
+               && !WouldClosingSegmentSelfIntersect();
     }
 
     private bool WouldNewFootprintSegmentSelfIntersect(Vector3 candidatePoint)
@@ -452,12 +396,9 @@ public sealed class RegistryZoneService
 
         var segmentStart = ToPoint2D(_pendingFootprintPoints[_pendingFootprintPoints.Count - 1]);
         var segmentEnd = ToPoint2D(candidatePoint);
-
         for (var i = 0; i < _pendingFootprintPoints.Count - 2; i++)
         {
-            var edgeStart = ToPoint2D(_pendingFootprintPoints[i]);
-            var edgeEnd = ToPoint2D(_pendingFootprintPoints[i + 1]);
-            if (DoSegmentsIntersect(segmentStart, segmentEnd, edgeStart, edgeEnd))
+            if (DoSegmentsIntersect(segmentStart, segmentEnd, ToPoint2D(_pendingFootprintPoints[i]), ToPoint2D(_pendingFootprintPoints[i + 1])))
             {
                 return true;
             }
@@ -475,12 +416,9 @@ public sealed class RegistryZoneService
 
         var segmentStart = ToPoint2D(_pendingFootprintPoints[_pendingFootprintPoints.Count - 1]);
         var segmentEnd = ToPoint2D(_pendingFootprintPoints[0]);
-
         for (var i = 1; i < _pendingFootprintPoints.Count - 2; i++)
         {
-            var edgeStart = ToPoint2D(_pendingFootprintPoints[i]);
-            var edgeEnd = ToPoint2D(_pendingFootprintPoints[i + 1]);
-            if (DoSegmentsIntersect(segmentStart, segmentEnd, edgeStart, edgeEnd))
+            if (DoSegmentsIntersect(segmentStart, segmentEnd, ToPoint2D(_pendingFootprintPoints[i]), ToPoint2D(_pendingFootprintPoints[i + 1])))
             {
                 return true;
             }
@@ -497,22 +435,16 @@ public sealed class RegistryZoneService
         }
 
         _pendingRoot = new GameObject("Wyrdrasil_PendingZoneAuthoring");
-
         _pendingFootprintLine = CreatePreviewLineRenderer(_pendingRoot, "PendingFootprint", false, 0.06f, new Color(1f, 0.85f, 0.25f, 1f));
         _pendingBaseLine = CreatePreviewLineRenderer(_pendingRoot, "PendingBase", true, 0.05f, new Color(0.3f, 0.9f, 1f, 1f));
         _pendingTopLine = CreatePreviewLineRenderer(_pendingRoot, "PendingTop", true, 0.05f, new Color(0.3f, 1f, 0.5f, 1f));
-
-        SetPendingPreviewVisible(_visualsVisible);
     }
 
     private void DestroyPendingPreviewVisuals()
     {
         foreach (var pointVisual in _pendingPointVisuals)
         {
-            if (pointVisual != null)
-            {
-                Object.Destroy(pointVisual);
-            }
+            if (pointVisual != null) Object.Destroy(pointVisual);
         }
 
         _pendingPointVisuals.Clear();
@@ -520,7 +452,6 @@ public sealed class RegistryZoneService
         _pendingFootprintLine = null;
         _pendingBaseLine = null;
         _pendingTopLine = null;
-
         if (_pendingRoot != null)
         {
             Object.Destroy(_pendingRoot);
@@ -532,26 +463,19 @@ public sealed class RegistryZoneService
     {
         EnsurePendingPreviewVisuals();
         UpdatePendingPointVisuals();
-
         if (AuthoringPhase == ZoneAuthoringPhase.Footprint)
         {
             UpdateFootprintPreviewLine();
             SetLineRendererActive(_pendingBaseLine, false);
             SetLineRendererActive(_pendingTopLine, false);
-            UpdateHeightEdgePreview(visible: false);
+            UpdateHeightEdgePreview(false);
             return;
         }
 
         if (AuthoringPhase == ZoneAuthoringPhase.Height)
         {
             UpdateHeightPreviewLines();
-            return;
         }
-
-        SetLineRendererActive(_pendingFootprintLine, false);
-        SetLineRendererActive(_pendingBaseLine, false);
-        SetLineRendererActive(_pendingTopLine, false);
-        UpdateHeightEdgePreview(visible: false);
     }
 
     private void UpdatePendingPointVisuals()
@@ -559,126 +483,76 @@ public sealed class RegistryZoneService
         while (_pendingPointVisuals.Count < _pendingFootprintPoints.Count)
         {
             var pointObject = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            pointObject.name = $"PendingZonePoint_{_pendingPointVisuals.Count}";
             pointObject.transform.SetParent(_pendingRoot!.transform, false);
             pointObject.transform.localScale = Vector3.one * 0.18f;
-
             var collider = pointObject.GetComponent<Collider>();
-            if (collider != null)
-            {
-                Object.Destroy(collider);
-            }
-
+            if (collider != null) Object.Destroy(collider);
             var renderer = pointObject.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                renderer.material = CreatePreviewMaterial(new Color(1f, 0.85f, 0.25f, 1f));
-            }
-
+            if (renderer != null) renderer.material = CreatePreviewMaterial(new Color(1f, 0.85f, 0.25f, 1f));
             _pendingPointVisuals.Add(pointObject);
         }
 
         for (var i = 0; i < _pendingPointVisuals.Count; i++)
         {
-            var pointVisual = _pendingPointVisuals[i];
-            if (pointVisual == null)
-            {
-                continue;
-            }
-
-            var isActive = i < _pendingFootprintPoints.Count && _visualsVisible;
-            pointVisual.SetActive(isActive);
-            if (isActive)
-            {
-                var point = _pendingFootprintPoints[i];
-                pointVisual.transform.position = point + Vector3.up * PreviewYOffset;
-            }
+            var active = i < _pendingFootprintPoints.Count && _visualsVisible;
+            _pendingPointVisuals[i].SetActive(active);
+            if (active) _pendingPointVisuals[i].transform.position = _pendingFootprintPoints[i] + Vector3.up * PreviewYOffset;
         }
     }
 
     private void UpdateFootprintPreviewLine()
     {
-        if (_pendingFootprintLine == null)
-        {
-            return;
-        }
-
-        var previewPoints = new List<Vector3>(_pendingFootprintPoints.Count + 1);
-        previewPoints.AddRange(_pendingFootprintPoints.Select(point => point + Vector3.up * PreviewYOffset));
-        if (_pendingGhostPoint.HasValue)
-        {
-            previewPoints.Add(_pendingGhostPoint.Value + Vector3.up * PreviewYOffset);
-        }
-
+        if (_pendingFootprintLine == null) return;
+        var previewPoints = new List<Vector3>(_pendingFootprintPoints.Select(p => p + Vector3.up * PreviewYOffset));
+        if (_pendingGhostPoint.HasValue) previewPoints.Add(_pendingGhostPoint.Value + Vector3.up * PreviewYOffset);
         if (previewPoints.Count < 2)
         {
-            SetLineRendererActive(_pendingFootprintLine, false);
+            _pendingFootprintLine.enabled = false;
             return;
         }
 
         _pendingFootprintLine.loop = false;
         _pendingFootprintLine.positionCount = previewPoints.Count;
-        for (var i = 0; i < previewPoints.Count; i++)
-        {
-            _pendingFootprintLine.SetPosition(i, previewPoints[i]);
-        }
-
-        SetLineRendererActive(_pendingFootprintLine, true);
+        for (var i = 0; i < previewPoints.Count; i++) _pendingFootprintLine.SetPosition(i, previewPoints[i]);
+        _pendingFootprintLine.enabled = _visualsVisible;
     }
 
     private void UpdateHeightPreviewLines()
     {
-        if (_pendingBaseLine == null || _pendingTopLine == null)
-        {
-            return;
-        }
-
-        var basePoints = _pendingFootprintPoints.Select(point => new Vector3(point.x, _pendingBaseY + PreviewYOffset, point.z)).ToArray();
-        var topPoints = _pendingFootprintPoints.Select(point => new Vector3(point.x, _pendingTopY + PreviewYOffset, point.z)).ToArray();
-
+        if (_pendingBaseLine == null || _pendingTopLine == null) return;
+        var basePoints = _pendingFootprintPoints.Select(p => new Vector3(p.x, _pendingBaseY + PreviewYOffset, p.z)).ToArray();
+        var topPoints = _pendingFootprintPoints.Select(p => new Vector3(p.x, _pendingTopY + PreviewYOffset, p.z)).ToArray();
         ApplyClosedLine(_pendingBaseLine, basePoints);
         ApplyClosedLine(_pendingTopLine, topPoints);
-        SetLineRendererActive(_pendingFootprintLine, false);
-        UpdateHeightEdgePreview(visible: true);
+        UpdateHeightEdgePreview(true);
+        if (_pendingFootprintLine != null) _pendingFootprintLine.enabled = false;
     }
 
     private void UpdateHeightEdgePreview(bool visible)
     {
         while (_pendingHeightEdges.Count < _pendingFootprintPoints.Count)
         {
-            var edgeObject = new GameObject($"PendingHeightEdge_{_pendingHeightEdges.Count}");
+            var edgeObject = new GameObject();
             edgeObject.transform.SetParent(_pendingRoot!.transform, false);
-            var edgeRenderer = edgeObject.AddComponent<LineRenderer>();
-            edgeRenderer.useWorldSpace = true;
-            edgeRenderer.positionCount = 2;
-            edgeRenderer.startWidth = 0.03f;
-            edgeRenderer.endWidth = 0.03f;
-            edgeRenderer.material = CreatePreviewMaterial(new Color(0.4f, 0.9f, 1f, 1f));
-            edgeRenderer.startColor = new Color(0.4f, 0.9f, 1f, 1f);
-            edgeRenderer.endColor = new Color(0.4f, 0.9f, 1f, 1f);
-            edgeRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            edgeRenderer.receiveShadows = false;
-            _pendingHeightEdges.Add(edgeRenderer);
+            var edge = edgeObject.AddComponent<LineRenderer>();
+            edge.useWorldSpace = true;
+            edge.positionCount = 2;
+            edge.startWidth = 0.03f;
+            edge.endWidth = 0.03f;
+            edge.material = CreatePreviewMaterial(new Color(0.4f, 0.9f, 1f, 1f));
+            edge.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            edge.receiveShadows = false;
+            _pendingHeightEdges.Add(edge);
         }
 
         for (var i = 0; i < _pendingHeightEdges.Count; i++)
         {
-            var edge = _pendingHeightEdges[i];
-            if (edge == null)
-            {
-                continue;
-            }
-
-            var isActive = visible && i < _pendingFootprintPoints.Count && _visualsVisible;
-            edge.enabled = isActive;
-            if (!isActive)
-            {
-                continue;
-            }
-
+            var active = visible && i < _pendingFootprintPoints.Count && _visualsVisible;
+            _pendingHeightEdges[i].enabled = active;
+            if (!active) continue;
             var point = _pendingFootprintPoints[i];
-            edge.SetPosition(0, new Vector3(point.x, _pendingBaseY + PreviewYOffset, point.z));
-            edge.SetPosition(1, new Vector3(point.x, _pendingTopY + PreviewYOffset, point.z));
+            _pendingHeightEdges[i].SetPosition(0, new Vector3(point.x, _pendingBaseY + PreviewYOffset, point.z));
+            _pendingHeightEdges[i].SetPosition(1, new Vector3(point.x, _pendingTopY + PreviewYOffset, point.z));
         }
     }
 
@@ -687,13 +561,11 @@ public sealed class RegistryZoneService
         var root = new GameObject($"Wyrdrasil_FunctionalZone_{zoneData.ZoneType}_{zoneData.Id}");
         root.transform.position = zoneData.Position;
         _zoneRoots[zoneData.Id] = root;
-
         var marker = root.AddComponent<WyrdrasilFunctionalZoneMarker>();
         marker.Initialize(zoneData.Id, zoneData.BuildingId, zoneData.ZoneType, zoneData.BaseY, zoneData.TopY, zoneData.FootprintPoints.Count);
 
         var outlineObject = new GameObject("ZoneOutline");
         outlineObject.transform.SetParent(root.transform, false);
-
         var lineRenderer = outlineObject.AddComponent<LineRenderer>();
         lineRenderer.loop = true;
         lineRenderer.useWorldSpace = true;
@@ -701,11 +573,8 @@ public sealed class RegistryZoneService
         lineRenderer.startWidth = 0.08f;
         lineRenderer.endWidth = 0.08f;
         lineRenderer.material = CreatePreviewMaterial(new Color(0.95f, 0.7f, 0.2f, 1f));
-        lineRenderer.startColor = new Color(0.95f, 0.7f, 0.2f, 1f);
-        lineRenderer.endColor = new Color(0.95f, 0.7f, 0.2f, 1f);
         lineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
         lineRenderer.receiveShadows = false;
-
         for (var i = 0; i < zoneData.FootprintPoints.Count; i++)
         {
             var point = zoneData.FootprintPoints[i];
@@ -721,35 +590,26 @@ public sealed class RegistryZoneService
     {
         var child = new GameObject(name);
         child.transform.SetParent(root.transform, false);
-
-        var lineRenderer = child.AddComponent<LineRenderer>();
-        lineRenderer.loop = loop;
-        lineRenderer.useWorldSpace = true;
-        lineRenderer.positionCount = 0;
-        lineRenderer.startWidth = width;
-        lineRenderer.endWidth = width;
-        lineRenderer.material = CreatePreviewMaterial(color);
-        lineRenderer.startColor = color;
-        lineRenderer.endColor = color;
-        lineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-        lineRenderer.receiveShadows = false;
-        lineRenderer.enabled = false;
-        return lineRenderer;
+        var line = child.AddComponent<LineRenderer>();
+        line.loop = loop;
+        line.useWorldSpace = true;
+        line.positionCount = 0;
+        line.startWidth = width;
+        line.endWidth = width;
+        line.material = CreatePreviewMaterial(color);
+        line.startColor = color;
+        line.endColor = color;
+        line.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        line.receiveShadows = false;
+        line.enabled = false;
+        return line;
     }
 
     private static Material CreatePreviewMaterial(Color color)
     {
         var shader = Shader.Find("Sprites/Default");
-        if (!shader)
-        {
-            shader = Shader.Find("Unlit/Color");
-        }
-
-        var material = new Material(shader)
-        {
-            color = color
-        };
-
+        if (!shader) shader = Shader.Find("Unlit/Color");
+        var material = new Material(shader) { color = color };
         return material;
     }
 
@@ -757,83 +617,21 @@ public sealed class RegistryZoneService
     {
         renderer.loop = true;
         renderer.positionCount = points.Count;
-        for (var i = 0; i < points.Count; i++)
-        {
-            renderer.SetPosition(i, points[i]);
-        }
-
+        for (var i = 0; i < points.Count; i++) renderer.SetPosition(i, points[i]);
         renderer.enabled = true;
-    }
-
-    private void SetPendingPreviewVisible(bool isVisible)
-    {
-        if (_pendingRoot == null)
-        {
-            return;
-        }
-
-        if (_pendingFootprintLine != null)
-        {
-            _pendingFootprintLine.enabled = isVisible && _pendingFootprintLine.positionCount > 1 && AuthoringPhase == ZoneAuthoringPhase.Footprint;
-        }
-
-        if (_pendingBaseLine != null)
-        {
-            _pendingBaseLine.enabled = isVisible && AuthoringPhase == ZoneAuthoringPhase.Height;
-        }
-
-        if (_pendingTopLine != null)
-        {
-            _pendingTopLine.enabled = isVisible && AuthoringPhase == ZoneAuthoringPhase.Height;
-        }
-
-        foreach (var pointVisual in _pendingPointVisuals)
-        {
-            if (pointVisual != null)
-            {
-                pointVisual.SetActive(isVisible && AuthoringPhase != ZoneAuthoringPhase.None);
-            }
-        }
-
-        foreach (var edge in _pendingHeightEdges)
-        {
-            if (edge != null)
-            {
-                edge.enabled = isVisible && AuthoringPhase == ZoneAuthoringPhase.Height;
-            }
-        }
     }
 
     private static void SetLineRendererActive(LineRenderer? lineRenderer, bool isVisible)
     {
-        if (lineRenderer != null)
-        {
-            lineRenderer.enabled = isVisible;
-        }
+        if (lineRenderer != null) lineRenderer.enabled = isVisible;
     }
 
-    private static Vector3 ComputeAnchorPosition(IReadOnlyList<Vector3> points)
-    {
-        var averageX = points.Average(point => point.x);
-        var averageY = points.Average(point => point.y);
-        var averageZ = points.Average(point => point.z);
-        return new Vector3(averageX, averageY, averageZ);
-    }
+    private static Vector3 ComputeAnchorPosition(IReadOnlyList<Vector3> points) =>
+        new(points.Average(p => p.x), points.Average(p => p.y), points.Average(p => p.z));
 
-    private static float SnapHeight(float value)
-    {
-        return Mathf.Round(value / VerticalSnapStep) * VerticalSnapStep;
-    }
-
-    private static bool IsValidSupportSurface(Vector3 surfaceNormal)
-    {
-        return Vector3.Dot(surfaceNormal.normalized, Vector3.up) >= SurfaceUpDotThreshold;
-    }
-
-    private static Vector2 ToPoint2D(Vector3 point)
-    {
-        return new Vector2(point.x, point.z);
-    }
+    private static float SnapHeight(float value) => Mathf.Round(value / VerticalSnapStep) * VerticalSnapStep;
+    private static bool IsValidSupportSurface(Vector3 normal) => Vector3.Dot(normal.normalized, Vector3.up) >= SurfaceUpDotThreshold;
+    private static Vector2 ToPoint2D(Vector3 point) => new(point.x, point.z);
 
     private static bool DoSegmentsIntersect(Vector2 a1, Vector2 a2, Vector2 b1, Vector2 b2)
     {
@@ -841,23 +639,13 @@ public sealed class RegistryZoneService
         var o2 = Orientation(a1, a2, b2);
         var o3 = Orientation(b1, b2, a1);
         var o4 = Orientation(b1, b2, a2);
-
-        if (o1 != o2 && o3 != o4)
-        {
-            return true;
-        }
-
-        return false;
+        return o1 != o2 && o3 != o4;
     }
 
     private static int Orientation(Vector2 a, Vector2 b, Vector2 c)
     {
         var value = ((b.y - a.y) * (c.x - b.x)) - ((b.x - a.x) * (c.y - b.y));
-        if (Mathf.Abs(value) < 0.0001f)
-        {
-            return 0;
-        }
-
+        if (Mathf.Abs(value) < 0.0001f) return 0;
         return value > 0f ? 1 : 2;
     }
 }

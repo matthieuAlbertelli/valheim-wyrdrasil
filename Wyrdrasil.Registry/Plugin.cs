@@ -16,6 +16,7 @@ public class Plugin : BaseUnityPlugin
     public const string PluginVersion = "0.1.0";
 
     private RegistryToolController _registryToolController = null!;
+    private RegistryPersistenceService _persistenceService = null!;
     private Harmony? _harmony;
 
     private void Awake()
@@ -43,39 +44,25 @@ public class Plugin : BaseUnityPlugin
         var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
         var navigationService = new RegistryNpcNavigationService(Logger);
         var residentRuntimeService = new RegistryResidentRuntimeService(Logger, navigationService, waypointService);
-        var residentService = new RegistryResidentService(
-            Logger,
-            modeService.State,
-            modeService,
-            slotService,
-            seatService,
-            residentRuntimeService,
-            spawnService,
-            identityGenerator,
-            customizationApplier);
+        var residentService = new RegistryResidentService(Logger, modeService.State, modeService, slotService, seatService, residentRuntimeService, spawnService, identityGenerator, customizationApplier);
 
         var diagnosticsService = new RegistryDiagnosticsService(Logger);
         var deletionService = new RegistryDeletionService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService);
+        _persistenceService = new RegistryPersistenceService(Logger, buildingService, zoneService, slotService, seatService, residentService);
+        var flushService = new RegistryFlushService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService, _persistenceService);
 
         var selectionService = new RegistrySelectionService(modeService.State);
         var actionRegistry = BuildActionRegistry();
-        var context = new RegistryContext(Logger, buildingService, zoneService, waypointService, slotService, seatService, spawnService, residentService, diagnosticsService, deletionService);
+        var context = new RegistryContext(Logger, buildingService, zoneService, waypointService, slotService, seatService, spawnService, residentService, diagnosticsService, deletionService, _persistenceService, flushService);
         var hudRenderer = new RegistryHudRenderer();
 
-        _registryToolController = new RegistryToolController(
-            modeService,
-            selectionService,
-            actionRegistry,
-            context,
-            hudRenderer);
-
+        _registryToolController = new RegistryToolController(modeService, selectionService, actionRegistry, context, hudRenderer);
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
     }
 
     private static RegistryActionRegistry BuildActionRegistry()
     {
         var registry = new RegistryActionRegistry();
-
         registry.Register(new CreateTavernZoneAction());
         registry.Register(new CreateTavernWaypointAction());
         registry.Register(new ConnectNavigationWaypointsAction());
@@ -95,13 +82,14 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new DespawnTargetResidentAction());
         registry.Register(new RespawnAssignedResidentAction());
         registry.Register(new InspectTargetNpcAiAction());
+        registry.Register(new FlushRegistryStateAction());
         registry.Register(new LoggingRegistryAction(RegistryActionType.None));
-
         return registry;
     }
 
     private void Update()
     {
+        _persistenceService.Update();
         _registryToolController.Update();
     }
 
@@ -112,6 +100,7 @@ public class Plugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        _persistenceService?.SaveWorldState();
         _harmony?.UnpatchSelf();
     }
 }

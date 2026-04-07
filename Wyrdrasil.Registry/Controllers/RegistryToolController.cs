@@ -73,12 +73,14 @@ public sealed class RegistryToolController
         if (!isDeleteAction && Input.GetMouseButtonDown(0))
         {
             _actionRegistry.Execute(selectedAction, _context);
+            _context.PersistenceService.SaveWorldState();
             return;
         }
 
         if (isDeleteAction && Input.GetMouseButtonDown(1))
         {
             _actionRegistry.Execute(selectedAction, _context);
+            _context.PersistenceService.SaveWorldState();
         }
     }
 
@@ -137,8 +139,7 @@ public sealed class RegistryToolController
         var hasPendingResident = state.SelectedAction == RegistryActionType.ForceAssignResident &&
                                  state.PendingResidentForceAssignId.HasValue;
 
-        _context.ResidentService.SetPendingForceAssignResidentVisual(
-            hasPendingResident ? state.PendingResidentForceAssignId : null);
+        _context.ResidentService.SetPendingForceAssignResidentVisual(hasPendingResident ? state.PendingResidentForceAssignId : null);
 
         if (!hasPendingResident)
         {

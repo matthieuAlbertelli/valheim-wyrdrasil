@@ -15,6 +15,8 @@ public sealed class RegistryContext
     public RegistryResidentService ResidentService { get; }
     public RegistryDiagnosticsService DiagnosticsService { get; }
     public RegistryDeletionService DeletionService { get; }
+    public RegistryPersistenceService PersistenceService { get; }
+    public RegistryFlushService FlushService { get; }
 
     public RegistryContext(
         ManualLogSource log,
@@ -26,7 +28,9 @@ public sealed class RegistryContext
         RegistrySpawnService spawnService,
         RegistryResidentService residentService,
         RegistryDiagnosticsService diagnosticsService,
-        RegistryDeletionService deletionService)
+        RegistryDeletionService deletionService,
+        RegistryPersistenceService persistenceService,
+        RegistryFlushService flushService)
     {
         Log = log;
         BuildingService = buildingService;
@@ -38,5 +42,7 @@ public sealed class RegistryContext
         ResidentService = residentService;
         DiagnosticsService = diagnosticsService;
         DeletionService = deletionService;
+        PersistenceService = persistenceService;
+        FlushService = flushService;
     }
 }

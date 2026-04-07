@@ -25,5 +25,6 @@ public enum RegistryActionType
     RespawnAssignedResident,
     SpawnTestViking,
 
-    InspectTargetNpcAi
+    InspectTargetNpcAi,
+    FlushRegistryState
 }

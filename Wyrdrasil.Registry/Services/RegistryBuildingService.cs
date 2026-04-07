@@ -14,6 +14,7 @@ public sealed class RegistryBuildingService
     private int _nextBuildingId = 1;
 
     public IReadOnlyList<BuildingData> Buildings => _buildings;
+    public int NextBuildingId => _nextBuildingId;
 
     public RegistryBuildingService(ManualLogSource log)
     {
@@ -30,6 +31,19 @@ public sealed class RegistryBuildingService
         _buildings.Add(building);
         _log.LogInfo($"Created implicit building #{building.Id} for zone type '{zoneType}' at {building.AnchorPosition}.");
         return building;
+    }
+
+    public void LoadBuildings(IEnumerable<BuildingData> buildings, int nextBuildingId)
+    {
+        _buildings.Clear();
+        _buildings.AddRange(buildings);
+        _nextBuildingId = nextBuildingId;
+    }
+
+    public void ClearAllBuildings()
+    {
+        _buildings.Clear();
+        _nextBuildingId = 1;
     }
 
     public bool DeleteBuildingIfUnused(int buildingId, IReadOnlyList<FunctionalZoneData> zones, IReadOnlyList<ZoneSlotData> slots, IReadOnlyList<RegisteredSeatData> seats)

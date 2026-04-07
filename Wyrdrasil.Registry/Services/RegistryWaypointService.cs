@@ -34,6 +34,33 @@ public sealed class RegistryWaypointService
         modeService.RegistryModeChanged += OnRegistryModeChanged;
     }
 
+    public void ClearAllWaypoints()
+    {
+        foreach (var root in _waypointRoots.Values)
+        {
+            if (root != null)
+            {
+                Object.Destroy(root);
+            }
+        }
+
+        foreach (var lineRenderer in _linkRenderers.Values)
+        {
+            if (lineRenderer != null)
+            {
+                Object.Destroy(lineRenderer.gameObject);
+            }
+        }
+
+        _waypoints.Clear();
+        _markers.Clear();
+        _links.Clear();
+        _linkRenderers.Clear();
+        _waypointRoots.Clear();
+        PendingLinkStartWaypointId = null;
+        _nextWaypointId = 1;
+    }
+
     public void CreateNavigationWaypoint()
     {
         if (!_zoneService.TryGetPlacementPoint(out var placementPoint))
@@ -94,7 +121,6 @@ public sealed class RegistryWaypointService
     public bool TryBuildRoute(Vector3 startPosition, Vector3 endPosition, out List<Vector3> routePoints)
     {
         routePoints = new List<Vector3>();
-
         if (_waypoints.Count == 0)
         {
             return false;
@@ -102,46 +128,25 @@ public sealed class RegistryWaypointService
 
         var startWaypoint = FindNearestWaypoint(startPosition);
         var endWaypoint = FindNearestWaypoint(endPosition);
-        if (startWaypoint == null || endWaypoint == null)
+        if (startWaypoint == null || endWaypoint == null || startWaypoint.Id == endWaypoint.Id)
         {
             return false;
         }
 
-        // Si les deux positions tombent sur le même noeud, il n'y a pas de "vrai" trajet waypoint.
-        // On laisse alors le système appelant utiliser son fallback direct.
-        if (startWaypoint.Id == endWaypoint.Id)
+        if (!TryFindShortestPath(startWaypoint.Id, endWaypoint.Id, out var waypointPath) || waypointPath.Count == 0)
         {
             return false;
         }
 
-        if (!TryFindShortestPath(startWaypoint.Id, endWaypoint.Id, out var waypointPath))
-        {
-            return false;
-        }
-
-        if (waypointPath.Count == 0)
-        {
-            return false;
-        }
-
-        // On ne saute le premier noeud que si le PNJ est déjà réellement posé dessus.
-        // En pratique, un spawn ou une assignation peuvent démarrer plusieurs mètres avant le graphe.
-        // Dans ce cas, il faut impérativement converger d'abord vers le noeud de départ du chemin,
-        // sinon le PNJ coupe en diagonale vers le deuxième noeud et "ignore" visuellement le premier segment.
-        var startIndex = IsCloseToWaypoint(startPosition, startWaypoint.Position)
-            ? 1
-            : 0;
-
+        var startIndex = IsCloseToWaypoint(startPosition, startWaypoint.Position) ? 1 : 0;
         for (var i = startIndex; i < waypointPath.Count; i++)
         {
             var waypointId = waypointPath[i];
             var waypoint = _waypoints.FirstOrDefault(candidate => candidate.Id == waypointId);
-            if (waypoint == null)
+            if (waypoint != null)
             {
-                continue;
+                AddWaypointPositionIfMeaningful(routePoints, waypoint.Position);
             }
-
-            AddWaypointPositionIfMeaningful(routePoints, waypoint.Position);
         }
 
         return routePoints.Count > 0;
@@ -162,13 +167,10 @@ public sealed class RegistryWaypointService
             return;
         }
 
-        var previous = routePoints[routePoints.Count - 1];
-        if (Vector3.Distance(previous, candidatePosition) <= DuplicateWaypointDistance)
+        if (Vector3.Distance(routePoints[routePoints.Count - 1], candidatePosition) > DuplicateWaypointDistance)
         {
-            return;
+            routePoints.Add(candidatePosition);
         }
-
-        routePoints.Add(candidatePosition);
     }
 
     private void DeleteWaypoint(int waypointId)
@@ -233,7 +235,6 @@ public sealed class RegistryWaypointService
     private bool TryFindShortestPath(int startWaypointId, int endWaypointId, out List<int> path)
     {
         path = new List<int>();
-
         var unvisited = new HashSet<int>(_waypoints.Select(waypoint => waypoint.Id));
         var distances = new Dictionary<int, float>();
         var previous = new Dictionary<int, int?>();
@@ -260,7 +261,6 @@ public sealed class RegistryWaypointService
             }
 
             unvisited.Remove(currentId);
-
             if (!_links.TryGetValue(currentId, out var neighbors))
             {
                 continue;
@@ -277,7 +277,6 @@ public sealed class RegistryWaypointService
                 var neighborWaypoint = _waypoints.First(waypoint => waypoint.Id == neighborId);
                 var edgeCost = Vector3.Distance(currentWaypoint.Position, neighborWaypoint.Position);
                 var alternativeDistance = distances[currentId] + edgeCost;
-
                 if (alternativeDistance < distances[neighborId])
                 {
                     distances[neighborId] = alternativeDistance;
@@ -294,10 +293,15 @@ public sealed class RegistryWaypointService
         var pathStack = new Stack<int>();
         var cursor = endWaypointId;
         pathStack.Push(cursor);
-
-        while (previous[cursor].HasValue)
+        while (true)
         {
-            cursor = previous[cursor]!.Value;
+            var previousWaypointId = previous[cursor];
+            if (!previousWaypointId.HasValue)
+            {
+                break;
+            }
+
+            cursor = previousWaypointId.Value;
             pathStack.Push(cursor);
         }
 
@@ -309,7 +313,6 @@ public sealed class RegistryWaypointService
     {
         NavigationWaypointData? nearest = null;
         var bestDistance = float.MaxValue;
-
         foreach (var waypoint in _waypoints)
         {
             var distance = Vector3.Distance(position, waypoint.Position);
@@ -334,7 +337,6 @@ public sealed class RegistryWaypointService
     private void OnRegistryModeChanged(bool isEnabled)
     {
         _visualsVisible = isEnabled;
-
         foreach (var marker in _markers.Values)
         {
             marker.SetVisualizationVisible(isEnabled);
@@ -355,10 +357,7 @@ public sealed class RegistryWaypointService
         if (activeCamera != null)
         {
             var ray = new Ray(activeCamera.transform.position, activeCamera.transform.forward);
-            var hits = Physics.RaycastAll(ray, 100f, ~0, QueryTriggerInteraction.Collide)
-                .OrderBy(hit => hit.distance)
-                .ToArray();
-
+            var hits = Physics.RaycastAll(ray, 100f, ~0, QueryTriggerInteraction.Collide).OrderBy(hit => hit.distance).ToArray();
             foreach (var hitInfo in hits)
             {
                 var marker = hitInfo.collider.GetComponentInParent<WyrdrasilNavigationWaypointMarker>();
@@ -392,15 +391,11 @@ public sealed class RegistryWaypointService
         var interactionCollider = root.AddComponent<SphereCollider>();
         interactionCollider.isTrigger = true;
         interactionCollider.radius = 0.55f;
-        interactionCollider.center = Vector3.zero;
         marker.RegisterCollider(interactionCollider);
 
         var visual = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        visual.name = "WaypointVisual";
         visual.transform.SetParent(root.transform, false);
-        visual.transform.localPosition = Vector3.zero;
         visual.transform.localScale = new Vector3(0.35f, 0.15f, 0.35f);
-
         var visualCollider = visual.GetComponent<Collider>();
         if (visualCollider != null)
         {
@@ -419,29 +414,6 @@ public sealed class RegistryWaypointService
         }
 
         marker.RegisterRenderer(renderer);
-
-        var label = new GameObject("WaypointLabel");
-        label.transform.SetParent(root.transform, false);
-        label.transform.localPosition = new Vector3(0f, 0.65f, 0f);
-
-        var textMesh = label.AddComponent<TextMesh>();
-        textMesh.text = waypointData.Id.ToString();
-        textMesh.characterSize = 0.14f;
-        textMesh.fontSize = 48;
-        textMesh.anchor = TextAnchor.MiddleCenter;
-        textMesh.alignment = TextAlignment.Center;
-
-        var textRenderer = label.GetComponent<MeshRenderer>();
-        if (textRenderer != null)
-        {
-            var material = CreateWaypointMaterial(false);
-            if (material != null)
-            {
-                textRenderer.material = material;
-            }
-        }
-
-        marker.RegisterRenderer(textRenderer);
         marker.SetVisualizationVisible(_visualsVisible);
         _markers[waypointData.Id] = marker;
     }
@@ -451,7 +423,6 @@ public sealed class RegistryWaypointService
         var waypointA = _waypoints.First(waypoint => waypoint.Id == waypointAId);
         var waypointB = _waypoints.First(waypoint => waypoint.Id == waypointBId);
         var linkKey = GetLinkKey(waypointAId, waypointBId);
-
         var root = new GameObject($"Wyrdrasil_WaypointLink_{linkKey}");
         var lineRenderer = root.AddComponent<LineRenderer>();
         lineRenderer.positionCount = 2;
@@ -466,15 +437,12 @@ public sealed class RegistryWaypointService
         lineRenderer.SetPosition(0, waypointA.Position + new Vector3(0f, 0.08f, 0f));
         lineRenderer.SetPosition(1, waypointB.Position + new Vector3(0f, 0.08f, 0f));
         lineRenderer.enabled = _visualsVisible;
-
         _linkRenderers[linkKey] = lineRenderer;
     }
 
     private static string GetLinkKey(int waypointAId, int waypointBId)
     {
-        return waypointAId < waypointBId
-            ? $"{waypointAId}-{waypointBId}"
-            : $"{waypointBId}-{waypointAId}";
+        return waypointAId < waypointBId ? $"{waypointAId}-{waypointBId}" : $"{waypointBId}-{waypointAId}";
     }
 
     private static Material? CreateWaypointMaterial(bool isSelected)
@@ -492,11 +460,8 @@ public sealed class RegistryWaypointService
 
         var material = new Material(shader)
         {
-            color = isSelected
-                ? new Color(0.2f, 1f, 0.65f, 1f)
-                : new Color(1f, 0.45f, 0.2f, 1f)
+            color = isSelected ? new Color(0.2f, 1f, 0.65f, 1f) : new Color(1f, 0.45f, 0.2f, 1f)
         };
-
         return material;
     }
 

@@ -28,7 +28,6 @@ public sealed class RegistryHudRenderer
         }
 
         EnsureStyles();
-
         var panelHeight = pendingZoneAuthoring == null ? 338f : 434f;
         var panelRect = new Rect(20f, 180f, 820f, panelHeight);
 
@@ -52,7 +51,6 @@ public sealed class RegistryHudRenderer
             nextLineY += 24f;
             GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"Points : {pendingZoneAuthoring.PointCount} | Fermeture possible : {(pendingZoneAuthoring.CanCloseFootprint ? "Oui" : "Non")}", _textStyle!);
             nextLineY += 24f;
-
             if (pendingZoneAuthoring.Phase == ZoneAuthoringPhase.Height)
             {
                 GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"BaseY : {pendingZoneAuthoring.BaseY:0.00} | TopY : {pendingZoneAuthoring.TopY:0.00}", _textStyle!);
@@ -69,96 +67,61 @@ public sealed class RegistryHudRenderer
 
         GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Astuce : avec 'Force assign', vise d'abord un PNJ enregistré, puis vise un slot ou un siège.", _hintStyle!);
         nextLineY += 24f;
-        GUI.Label(
-            new Rect(35f, nextLineY, 760f, 20f),
-            $"{toggleKey} : mode | {nextCategoryKey} : catégorie | {nextActionKey} : action | Clic gauche : créer/éditer | Clic droit : supprimer/annuler auteur",
-            _hintStyle!);
+        GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"{toggleKey} : mode | {nextCategoryKey} : catégorie | {nextActionKey} : action | Clic gauche : créer/éditer | Clic droit : supprimer/annuler auteur", _hintStyle!);
     }
 
     private void EnsureStyles()
     {
-        if (_titleStyle is not null)
-        {
-            return;
-        }
-
-        _titleStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 18,
-            fontStyle = FontStyle.Bold
-        };
-
-        _textStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 14
-        };
-
-        _hintStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 12,
-            fontStyle = FontStyle.Italic
-        };
+        if (_titleStyle != null) return;
+        _titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
+        _textStyle = new GUIStyle(GUI.skin.label) { fontSize = 14 };
+        _hintStyle = new GUIStyle(GUI.skin.label) { fontSize = 12, fontStyle = FontStyle.Italic };
     }
 
-    private static string FormatCategory(RegistryCategory category)
+    private static string FormatCategory(RegistryCategory category) => category switch
     {
-        return category switch
-        {
-            RegistryCategory.Zones => "Zones",
-            RegistryCategory.Slots => "Slots",
-            RegistryCategory.Residents => "Residents",
-            RegistryCategory.Diagnostics => "Diagnostics",
-            _ => category.ToString()
-        };
-    }
+        RegistryCategory.Zones => "Zones",
+        RegistryCategory.Slots => "Slots",
+        RegistryCategory.Residents => "Residents",
+        RegistryCategory.Diagnostics => "Diagnostics",
+        _ => category.ToString()
+    };
 
-    private static string FormatAction(RegistryActionType action)
+    private static string FormatAction(RegistryActionType action) => action switch
     {
-        return action switch
-        {
-            RegistryActionType.None => "Aucune",
-            RegistryActionType.CreateTavernZone => "Créer zone : Taverne",
-            RegistryActionType.CreateNavigationWaypoint => "Créer waypoint de navigation",
-            RegistryActionType.ConnectNavigationWaypoints => "Connecter deux waypoints",
-            RegistryActionType.DeleteNavigationWaypoint => "Supprimer waypoint de navigation",
-            RegistryActionType.DeleteZone => "Supprimer zone",
-            RegistryActionType.CreateInnkeeperSlot => "Créer slot : Aubergiste",
-            RegistryActionType.DesignateSeatFurniture => "Désigner un siège dans le monde",
-            RegistryActionType.DeleteSlot => "Supprimer slot : Aubergiste",
-            RegistryActionType.DeleteDesignatedSeat => "Supprimer siège désigné",
-            RegistryActionType.RegisterNpc => "Enregistrer PNJ visé",
-            RegistryActionType.AssignInnkeeperRole => "Assigner rôle : Aubergiste",
-            RegistryActionType.AssignSeat => "Assigner un siège désigné au PNJ visé",
-            RegistryActionType.ClearTargetInnkeeperSlotAssignment => "Effacer l'assignation du slot aubergiste visé",
-            RegistryActionType.ClearTargetSeatAssignment => "Effacer l'assignation du siège visé",
-            RegistryActionType.ForceAssignResident => "Force assign : PNJ visé -> slot/siège visé",
-            RegistryActionType.DespawnTargetResident => "Despawn PNJ visé",
-            RegistryActionType.RespawnAssignedResident => "Respawn résident assigné au slot/siège visé",
-            RegistryActionType.SpawnTestViking => "Faire apparaître PNJ test",
-            RegistryActionType.InspectTargetNpcAi => "Inspecter IA du PNJ visé",
-            _ => action.ToString()
-        };
-    }
+        RegistryActionType.None => "Aucune",
+        RegistryActionType.CreateTavernZone => "Créer zone : Taverne",
+        RegistryActionType.CreateNavigationWaypoint => "Créer waypoint de navigation",
+        RegistryActionType.ConnectNavigationWaypoints => "Connecter deux waypoints",
+        RegistryActionType.DeleteNavigationWaypoint => "Supprimer waypoint de navigation",
+        RegistryActionType.DeleteZone => "Supprimer zone",
+        RegistryActionType.CreateInnkeeperSlot => "Créer slot : Aubergiste",
+        RegistryActionType.DesignateSeatFurniture => "Désigner un siège dans le monde",
+        RegistryActionType.DeleteSlot => "Supprimer slot : Aubergiste",
+        RegistryActionType.DeleteDesignatedSeat => "Supprimer siège désigné",
+        RegistryActionType.RegisterNpc => "Enregistrer PNJ visé",
+        RegistryActionType.AssignInnkeeperRole => "Assigner rôle : Aubergiste",
+        RegistryActionType.AssignSeat => "Assigner un siège désigné au PNJ visé",
+        RegistryActionType.ClearTargetInnkeeperSlotAssignment => "Effacer l'assignation du slot aubergiste visé",
+        RegistryActionType.ClearTargetSeatAssignment => "Effacer l'assignation du siège visé",
+        RegistryActionType.ForceAssignResident => "Force assign : PNJ visé -> slot/siège visé",
+        RegistryActionType.DespawnTargetResident => "Despawn PNJ visé",
+        RegistryActionType.RespawnAssignedResident => "Respawn résident assigné au slot/siège visé",
+        RegistryActionType.SpawnTestViking => "Faire apparaître PNJ test",
+        RegistryActionType.InspectTargetNpcAi => "Inspecter IA du PNJ visé",
+        RegistryActionType.FlushRegistryState => "Diagnostic : flush mémoire registre",
+        _ => action.ToString()
+    };
 
-    private static string FormatPendingLink(int? waypointId)
-    {
-        return waypointId.HasValue ? $"Waypoint #{waypointId.Value}" : "Aucun";
-    }
+    private static string FormatPendingLink(int? waypointId) => waypointId.HasValue ? $"Waypoint #{waypointId.Value}" : "Aucun";
 
-    private static string FormatPendingResidentForceAssign(RegistryToolState state)
-    {
-        return state.PendingResidentForceAssignId.HasValue
-            ? $"#{state.PendingResidentForceAssignId.Value} '{state.PendingResidentForceAssignName}'"
-            : "Aucun";
-    }
+    private static string FormatPendingResidentForceAssign(RegistryToolState state) =>
+        state.PendingResidentForceAssignId.HasValue ? $"#{state.PendingResidentForceAssignId.Value} '{state.PendingResidentForceAssignName}'" : "Aucun";
 
-    private static string FormatZoneAuthoringPhase(ZoneAuthoringPhase phase)
+    private static string FormatZoneAuthoringPhase(ZoneAuthoringPhase phase) => phase switch
     {
-        return phase switch
-        {
-            ZoneAuthoringPhase.Footprint => "Contour",
-            ZoneAuthoringPhase.Height => "Hauteur",
-            _ => "Aucune"
-        };
-    }
+        ZoneAuthoringPhase.Footprint => "Contour",
+        ZoneAuthoringPhase.Height => "Hauteur",
+        _ => "Aucune"
+    };
 }
