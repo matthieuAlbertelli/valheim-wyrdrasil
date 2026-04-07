@@ -11,7 +11,9 @@ public sealed class RegisteredSeatData
     private const float FarSideOffset = 0.85f;
 
     public int Id { get; }
-    public int ZoneId { get; }
+    public int BuildingId { get; }
+    public int? ZoneId { get; }
+    public SeatUsageType UsageType { get; }
     public string DisplayName { get; }
     public GameObject FurnitureRoot { get; }
     public Chair ChairComponent { get; }
@@ -37,10 +39,19 @@ public sealed class RegisteredSeatData
     public Vector3 ApproachPosition => SeatPosition - (SeatForward * NearDepth);
     public int? AssignedRegisteredNpcId { get; private set; }
 
-    public RegisteredSeatData(int id, int zoneId, string displayName, GameObject furnitureRoot, Chair chairComponent)
+    public RegisteredSeatData(
+        int id,
+        int buildingId,
+        int? zoneId,
+        SeatUsageType usageType,
+        string displayName,
+        GameObject furnitureRoot,
+        Chair chairComponent)
     {
         Id = id;
+        BuildingId = buildingId;
         ZoneId = zoneId;
+        UsageType = usageType;
         DisplayName = displayName;
         FurnitureRoot = furnitureRoot;
         ChairComponent = chairComponent;

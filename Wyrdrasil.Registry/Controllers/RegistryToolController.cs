@@ -44,21 +44,30 @@ public sealed class RegistryToolController
             return;
         }
 
+        var selectedAction = _modeService.State.SelectedAction;
+        UpdateForceAssignFeedback();
+
+        if (selectedAction == RegistryActionType.CreateTavernZone)
+        {
+            _context.ZoneService.UpdatePendingZoneAuthoringPreview();
+            HandleZoneAuthoringInputs();
+        }
+
         if (Input.GetKeyDown(NextCategoryKey))
         {
+            CancelZoneAuthoringIfNeeded();
             _selectionService.SelectNextCategory();
             return;
         }
 
         if (Input.GetKeyDown(NextActionKey))
         {
+            CancelZoneAuthoringIfNeeded();
             _selectionService.SelectNextAction();
             return;
         }
 
-        UpdateForceAssignFeedback();
-
-        var selectedAction = _modeService.State.SelectedAction;
+        selectedAction = _modeService.State.SelectedAction;
         var isDeleteAction = IsDeleteAction(selectedAction);
 
         if (!isDeleteAction && Input.GetMouseButtonDown(0))
@@ -90,7 +99,36 @@ public sealed class RegistryToolController
             _context.WaypointService.PendingLinkStartWaypointId,
             _context.SlotService.Slots.Count,
             _context.SeatService.Seats.Count,
-            _context.ResidentService.RegisteredNpcs.Count);
+            _context.ResidentService.RegisteredNpcs.Count,
+            _context.ZoneService.GetPendingZoneAuthoringSnapshot());
+    }
+
+    private void HandleZoneAuthoringInputs()
+    {
+        if (Input.GetMouseButtonDown(1))
+        {
+            _context.ZoneService.HandleZoneAuthoringSecondaryInput();
+            return;
+        }
+
+        if (_context.ZoneService.IsZoneHeightEditingActive)
+        {
+            var scrollDelta = Input.mouseScrollDelta.y;
+            if (Mathf.Abs(scrollDelta) > 0.01f)
+            {
+                var direction = scrollDelta > 0f ? 1 : -1;
+                var adjustBase = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+                _context.ZoneService.AdjustPendingZoneHeight(direction, adjustBase);
+            }
+        }
+    }
+
+    private void CancelZoneAuthoringIfNeeded()
+    {
+        if (_context.ZoneService.IsZoneAuthoringActive)
+        {
+            _context.ZoneService.CancelPendingZoneAuthoring();
+        }
     }
 
     private void UpdateForceAssignFeedback()

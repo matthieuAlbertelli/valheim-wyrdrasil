@@ -24,10 +24,12 @@ public class Plugin : BaseUnityPlugin
         _harmony.PatchAll();
 
         var modeService = new RegistryModeService(Logger);
-        var zoneService = new RegistryZoneService(Logger, modeService);
+        var buildingService = new RegistryBuildingService(Logger);
+        var anchorPolicyService = new RegistryAnchorPolicyService();
+        var zoneService = new RegistryZoneService(Logger, modeService, buildingService);
         var waypointService = new RegistryWaypointService(Logger, modeService, zoneService);
-        var slotService = new RegistrySlotService(Logger, modeService, zoneService);
-        var seatService = new RegistrySeatService(Logger, modeService, zoneService);
+        var slotService = new RegistrySlotService(Logger, modeService, zoneService, anchorPolicyService);
+        var seatService = new RegistrySeatService(Logger, modeService, zoneService, anchorPolicyService);
 
         var appearanceCatalog = new RegistryNpcAppearanceCatalog();
         var equipmentCatalog = new RegistryNpcEquipmentCatalog();
@@ -53,11 +55,11 @@ public class Plugin : BaseUnityPlugin
             customizationApplier);
 
         var diagnosticsService = new RegistryDiagnosticsService(Logger);
-        var deletionService = new RegistryDeletionService(Logger, zoneService, slotService, seatService, waypointService, residentService);
+        var deletionService = new RegistryDeletionService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService);
 
         var selectionService = new RegistrySelectionService(modeService.State);
         var actionRegistry = BuildActionRegistry();
-        var context = new RegistryContext(Logger, zoneService, waypointService, slotService, seatService, spawnService, residentService, diagnosticsService, deletionService);
+        var context = new RegistryContext(Logger, buildingService, zoneService, waypointService, slotService, seatService, spawnService, residentService, diagnosticsService, deletionService);
         var hudRenderer = new RegistryHudRenderer();
 
         _registryToolController = new RegistryToolController(

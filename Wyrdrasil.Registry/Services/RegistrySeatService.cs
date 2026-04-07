@@ -10,6 +10,7 @@ public sealed class RegistrySeatService
 {
     private readonly ManualLogSource _log;
     private readonly RegistryZoneService _zoneService;
+    private readonly RegistryAnchorPolicyService _anchorPolicyService;
     private readonly List<RegisteredSeatData> _seats = new();
     private readonly Dictionary<int, WyrdrasilRegisteredSeatMarker> _markers = new();
     private readonly Dictionary<int, GameObject> _seatRoots = new();
@@ -20,10 +21,11 @@ public sealed class RegistrySeatService
 
     public IReadOnlyList<RegisteredSeatData> Seats => _seats;
 
-    public RegistrySeatService(ManualLogSource log, RegistryModeService modeService, RegistryZoneService zoneService)
+    public RegistrySeatService(ManualLogSource log, RegistryModeService modeService, RegistryZoneService zoneService, RegistryAnchorPolicyService anchorPolicyService)
     {
         _log = log;
         _zoneService = zoneService;
+        _anchorPolicyService = anchorPolicyService;
         _visualsVisible = modeService.IsRegistryModeEnabled;
         modeService.RegistryModeChanged += OnRegistryModeChanged;
     }
@@ -42,19 +44,45 @@ public sealed class RegistrySeatService
             return;
         }
 
-        var tavernZone = _zoneService.FindZoneContainingPoint(furnitureRoot.transform.position, ZoneType.Tavern);
-        if (tavernZone == null)
+        const SeatUsageType defaultUsageType = SeatUsageType.Public;
+        var referencePosition = chairComponent.m_attachPoint != null
+            ? chairComponent.m_attachPoint.position
+            : chairComponent.transform.position;
+
+        var zone = _zoneService.FindZoneContainingPointHorizontally(referencePosition);
+
+        if (_anchorPolicyService.RequiresZone(defaultUsageType) && zone == null)
         {
-            _log.LogWarning("Cannot designate seat: the targeted furniture is not inside a Tavern zone.");
+            _log.LogWarning("Cannot designate seat: this seat usage requires a functional zone, but no zone was found.");
             return;
         }
 
-        var seatData = new RegisteredSeatData(_nextSeatId++, tavernZone.Id, furnitureRoot.name, furnitureRoot, chairComponent);
+        if (zone == null)
+        {
+            _log.LogWarning("Cannot designate seat yet: no functional zone footprint was found at the targeted chair, and standalone building assignment is not authored in this iteration.");
+            return;
+        }
+
+        if (!_anchorPolicyService.IsZoneTypeAllowed(defaultUsageType, zone.ZoneType))
+        {
+            _log.LogWarning($"Cannot designate seat: zone type '{zone.ZoneType}' is not compatible with seat usage '{defaultUsageType}'.");
+            return;
+        }
+
+        var seatData = new RegisteredSeatData(
+            _nextSeatId++,
+            zone.BuildingId,
+            zone.Id,
+            defaultUsageType,
+            furnitureRoot.name,
+            furnitureRoot,
+            chairComponent);
+
         _seats.Add(seatData);
         _seatRoots[seatData.Id] = furnitureRoot;
         EnsureMarker(seatData);
 
-        _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in Tavern zone #{seatData.ZoneId}.");
+        _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) as {seatData.UsageType}.");
     }
 
     public bool TryGetSeatAtCrosshair(out RegisteredSeatData seatData)

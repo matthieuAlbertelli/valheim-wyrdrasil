@@ -5,6 +5,7 @@ namespace Wyrdrasil.Registry.Services;
 public sealed class RegistryDeletionService
 {
     private readonly ManualLogSource _log;
+    private readonly RegistryBuildingService _buildingService;
     private readonly RegistryZoneService _zoneService;
     private readonly RegistrySlotService _slotService;
     private readonly RegistrySeatService _seatService;
@@ -13,6 +14,7 @@ public sealed class RegistryDeletionService
 
     public RegistryDeletionService(
         ManualLogSource log,
+        RegistryBuildingService buildingService,
         RegistryZoneService zoneService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
@@ -20,6 +22,7 @@ public sealed class RegistryDeletionService
         RegistryResidentService residentService)
     {
         _log = log;
+        _buildingService = buildingService;
         _zoneService = zoneService;
         _slotService = slotService;
         _seatService = seatService;
@@ -47,8 +50,13 @@ public sealed class RegistryDeletionService
             _residentService.HandleDeletedSeat(seatId);
         }
 
-        if (_zoneService.DeleteZone(zone.Id))
+        if (_zoneService.DeleteZone(zone.Id, out var deletedZone))
         {
+            if (deletedZone != null)
+            {
+                _buildingService.DeleteBuildingIfUnused(deletedZone.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats);
+            }
+
             _log.LogInfo($"Deleted zone #{zone.Id}.");
         }
     }
@@ -64,6 +72,7 @@ public sealed class RegistryDeletionService
         if (_slotService.DeleteSlot(slot.Id))
         {
             _residentService.HandleDeletedSlot(slot.Id);
+            _buildingService.DeleteBuildingIfUnused(slot.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats);
             _log.LogInfo($"Deleted slot #{slot.Id}.");
         }
     }

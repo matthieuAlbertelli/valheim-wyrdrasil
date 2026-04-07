@@ -6,6 +6,8 @@ public sealed class ZoneSlotData
 {
     public int Id { get; }
 
+    public int BuildingId { get; }
+
     public int ZoneId { get; }
 
     public ZoneSlotType SlotType { get; }
@@ -14,9 +16,10 @@ public sealed class ZoneSlotData
 
     public int? AssignedRegisteredNpcId { get; private set; }
 
-    public ZoneSlotData(int id, int zoneId, ZoneSlotType slotType, Vector3 position)
+    public ZoneSlotData(int id, int buildingId, int zoneId, ZoneSlotType slotType, Vector3 position)
     {
         Id = id;
+        BuildingId = buildingId;
         ZoneId = zoneId;
         SlotType = slotType;
         Position = position;

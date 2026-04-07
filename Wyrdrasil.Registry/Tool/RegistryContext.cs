@@ -6,6 +6,7 @@ namespace Wyrdrasil.Registry.Tool;
 public sealed class RegistryContext
 {
     public ManualLogSource Log { get; }
+    public RegistryBuildingService BuildingService { get; }
     public RegistryZoneService ZoneService { get; }
     public RegistryWaypointService WaypointService { get; }
     public RegistrySlotService SlotService { get; }
@@ -17,6 +18,7 @@ public sealed class RegistryContext
 
     public RegistryContext(
         ManualLogSource log,
+        RegistryBuildingService buildingService,
         RegistryZoneService zoneService,
         RegistryWaypointService waypointService,
         RegistrySlotService slotService,
@@ -27,6 +29,7 @@ public sealed class RegistryContext
         RegistryDeletionService deletionService)
     {
         Log = log;
+        BuildingService = buildingService;
         ZoneService = zoneService;
         WaypointService = waypointService;
         SlotService = slotService;

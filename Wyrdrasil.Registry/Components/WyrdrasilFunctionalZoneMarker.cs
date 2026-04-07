@@ -10,15 +10,24 @@ public sealed class WyrdrasilFunctionalZoneMarker : MonoBehaviour
 
     public int ZoneId { get; private set; }
 
+    public int BuildingId { get; private set; }
+
     public ZoneType ZoneType { get; private set; }
 
-    public float Radius { get; private set; }
+    public float BaseY { get; private set; }
 
-    public void Initialize(int zoneId, ZoneType zoneType, float radius)
+    public float TopY { get; private set; }
+
+    public int FootprintPointCount { get; private set; }
+
+    public void Initialize(int zoneId, int buildingId, ZoneType zoneType, float baseY, float topY, int footprintPointCount)
     {
         ZoneId = zoneId;
+        BuildingId = buildingId;
         ZoneType = zoneType;
-        Radius = radius;
+        BaseY = baseY;
+        TopY = topY;
+        FootprintPointCount = footprintPointCount;
     }
 
     public void RegisterRenderer(Renderer? renderer)

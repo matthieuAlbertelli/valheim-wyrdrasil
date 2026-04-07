@@ -11,6 +11,7 @@ public sealed class RegistrySlotService
 {
     private readonly ManualLogSource _log;
     private readonly RegistryZoneService _zoneService;
+    private readonly RegistryAnchorPolicyService _anchorPolicyService;
     private readonly List<ZoneSlotData> _slots = new();
     private readonly Dictionary<int, WyrdrasilZoneSlotMarker> _markers = new();
     private readonly Dictionary<int, GameObject> _slotFollowTargets = new();
@@ -22,10 +23,11 @@ public sealed class RegistrySlotService
 
     public IReadOnlyList<ZoneSlotData> Slots => _slots;
 
-    public RegistrySlotService(ManualLogSource log, RegistryModeService modeService, RegistryZoneService zoneService)
+    public RegistrySlotService(ManualLogSource log, RegistryModeService modeService, RegistryZoneService zoneService, RegistryAnchorPolicyService anchorPolicyService)
     {
         _log = log;
         _zoneService = zoneService;
+        _anchorPolicyService = anchorPolicyService;
         _visualsVisible = modeService.IsRegistryModeEnabled;
         modeService.RegistryModeChanged += OnRegistryModeChanged;
     }
@@ -34,27 +36,7 @@ public sealed class RegistrySlotService
 
     public bool TryGetPlacementPoint(out Vector3 placementPoint)
     {
-        var localPlayer = Player.m_localPlayer;
-        if (!localPlayer)
-        {
-            placementPoint = Vector3.zero;
-            return false;
-        }
-
-        var activeCamera = Camera.main;
-        if (activeCamera != null)
-        {
-            var ray = new Ray(activeCamera.transform.position, activeCamera.transform.forward);
-            if (Physics.Raycast(ray, out var hitInfo, 100f, ~0, QueryTriggerInteraction.Ignore))
-            {
-                placementPoint = hitInfo.point;
-                placementPoint.y += 0.05f;
-                return true;
-            }
-        }
-
-        placementPoint = localPlayer.transform.position + localPlayer.transform.forward * 2f;
-        return true;
+        return _zoneService.TryGetPlacementPoint(out placementPoint);
     }
 
     public bool TryAssignInnkeeperSlot(int registeredNpcId, out ZoneSlotData? slotData)
@@ -231,22 +213,28 @@ public sealed class RegistrySlotService
     {
         if (!TryGetPlacementPoint(out var placementPoint))
         {
-            _log.LogWarning($"Cannot create slot '{slotType}': no valid placement point was found.");
+            _log.LogWarning($"Cannot create slot '{slotType}': no valid support surface was found under the crosshair.");
             return;
         }
 
-        var tavernZone = _zoneService.FindZoneContainingPoint(placementPoint, ZoneType.Tavern);
-        if (tavernZone == null)
+        var zone = _zoneService.FindZoneContainingPointHorizontally(placementPoint);
+        if (zone == null)
         {
-            _log.LogWarning($"Cannot create slot '{slotType}': the placement point is not inside a Tavern zone.");
+            _log.LogWarning($"Cannot create slot '{slotType}': the placement point is not inside any functional zone footprint.");
+            return;
+        }
+
+        if (_anchorPolicyService.RequiresZone(slotType) && !_anchorPolicyService.IsZoneTypeAllowed(slotType, zone.ZoneType))
+        {
+            _log.LogWarning($"Cannot create slot '{slotType}': zone type '{zone.ZoneType}' is not compatible.");
             return;
         }
 
         var slotId = _nextSlotId++;
-        var slotData = new ZoneSlotData(slotId, tavernZone.Id, slotType, placementPoint);
+        var slotData = new ZoneSlotData(slotId, zone.BuildingId, zone.Id, slotType, placementPoint);
         _slots.Add(slotData);
         CreateSlotWorldObject(slotData);
-        _log.LogInfo($"Created {slotType} slot #{slotData.Id} in Tavern zone #{tavernZone.Id} at {slotData.Position}.");
+        _log.LogInfo($"Created {slotType} slot #{slotData.Id} in zone #{zone.Id} (building #{zone.BuildingId}) at {slotData.Position}.");
     }
 
     private void OnRegistryModeChanged(bool isEnabled)
