@@ -16,6 +16,7 @@ public sealed class RegistrySeatService
 
     private int _nextSeatId = 1;
     private bool _visualsVisible;
+    private int? _pendingForceAssignTargetSeatId;
 
     public IReadOnlyList<RegisteredSeatData> Seats => _seats;
 
@@ -75,6 +76,20 @@ public sealed class RegistrySeatService
         return true;
     }
 
+    public void SetPendingForceAssignTarget(int? seatId)
+    {
+        if (_pendingForceAssignTargetSeatId == seatId)
+        {
+            return;
+        }
+
+        _pendingForceAssignTargetSeatId = seatId;
+        foreach (var seat in _seats)
+        {
+            UpdateMarker(seat);
+        }
+    }
+
     public bool TryAssignSeat(int registeredNpcId, out RegisteredSeatData? seatData)
     {
         foreach (var seat in _seats)
@@ -90,6 +105,51 @@ public sealed class RegistrySeatService
             return true;
         }
 
+        seatData = null;
+        return false;
+    }
+
+    public bool ClearSeatAssignment(int seatId, out int? previousResidentId)
+    {
+        foreach (var seat in _seats)
+        {
+            if (seat.Id != seatId)
+            {
+                continue;
+            }
+
+            previousResidentId = seat.AssignedRegisteredNpcId;
+            if (!previousResidentId.HasValue)
+            {
+                return false;
+            }
+
+            seat.ClearAssignedRegisteredNpc();
+            UpdateMarker(seat);
+            return true;
+        }
+
+        previousResidentId = null;
+        return false;
+    }
+
+    public bool ForceAssignSeat(int seatId, int registeredNpcId, out int? previousResidentId, out RegisteredSeatData? seatData)
+    {
+        foreach (var seat in _seats)
+        {
+            if (seat.Id != seatId)
+            {
+                continue;
+            }
+
+            previousResidentId = seat.AssignedRegisteredNpcId;
+            seat.AssignRegisteredNpc(registeredNpcId);
+            UpdateMarker(seat);
+            seatData = seat;
+            return true;
+        }
+
+        previousResidentId = null;
         seatData = null;
         return false;
     }
@@ -185,6 +245,7 @@ public sealed class RegistrySeatService
         marker.Initialize(seat.Id);
         marker.RegisterRenderers(seat.FurnitureRoot.GetComponentsInChildren<Renderer>(true));
         marker.SetVisualizationVisible(_visualsVisible, seat.AssignedRegisteredNpcId.HasValue);
+        marker.SetPendingForceAssignTarget(_pendingForceAssignTargetSeatId == seat.Id);
         _markers[seat.Id] = marker;
     }
 
@@ -193,6 +254,7 @@ public sealed class RegistrySeatService
         if (_markers.TryGetValue(seat.Id, out var marker))
         {
             marker.SetVisualizationVisible(_visualsVisible, seat.AssignedRegisteredNpcId.HasValue);
+            marker.SetPendingForceAssignTarget(_pendingForceAssignTargetSeatId == seat.Id);
         }
     }
 

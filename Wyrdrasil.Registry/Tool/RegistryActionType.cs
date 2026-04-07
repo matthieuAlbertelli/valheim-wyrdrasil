@@ -18,6 +18,10 @@ public enum RegistryActionType
     RegisterNpc,
     AssignInnkeeperRole,
     AssignSeat,
+    ClearTargetInnkeeperSlotAssignment,
+    ClearTargetSeatAssignment,
+    ForceAssignResident,
+    DespawnTargetResident,
     RespawnAssignedResident,
     SpawnTestViking,
 

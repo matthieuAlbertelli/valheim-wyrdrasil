@@ -18,6 +18,7 @@ public sealed class RegistrySlotService
 
     private int _nextSlotId = 1;
     private bool _visualsVisible;
+    private int? _pendingForceAssignTargetSlotId;
 
     public IReadOnlyList<ZoneSlotData> Slots => _slots;
 
@@ -88,6 +89,65 @@ public sealed class RegistrySlotService
         }
 
         slotData = null!;
+        return false;
+    }
+
+    public void SetPendingForceAssignTarget(int? slotId)
+    {
+        if (_pendingForceAssignTargetSlotId == slotId)
+        {
+            return;
+        }
+
+        _pendingForceAssignTargetSlotId = slotId;
+        foreach (var slot in _slots)
+        {
+            UpdateSlotVisual(slot);
+        }
+    }
+
+    public bool ClearSlotAssignment(int slotId, out int? previousResidentId)
+    {
+        foreach (var slot in _slots)
+        {
+            if (slot.Id != slotId)
+            {
+                continue;
+            }
+
+            previousResidentId = slot.AssignedRegisteredNpcId;
+            if (!previousResidentId.HasValue)
+            {
+                return false;
+            }
+
+            slot.ClearAssignedRegisteredNpc();
+            UpdateSlotVisual(slot);
+            return true;
+        }
+
+        previousResidentId = null;
+        return false;
+    }
+
+    public bool ForceAssignInnkeeperSlot(int slotId, int registeredNpcId, out int? previousResidentId, out ZoneSlotData? slotData)
+    {
+        foreach (var slot in _slots)
+        {
+            if (slot.Id != slotId)
+            {
+                continue;
+            }
+
+            previousResidentId = slot.AssignedRegisteredNpcId;
+            slot.AssignRegisteredNpc(registeredNpcId);
+            UpdateSlotVisual(slot);
+            slotData = slot;
+            return true;
+        }
+
+        previousResidentId = null;
+        slotData = null;
         return false;
     }
 
@@ -234,6 +294,7 @@ public sealed class RegistrySlotService
         marker.RegisterRenderer(renderer);
         marker.SetVisualizationVisible(_visualsVisible);
         _markers[slotData.Id] = marker;
+        UpdateSlotVisual(slotData);
     }
 
     private void UpdateSlotVisual(ZoneSlotData slotData)
@@ -241,6 +302,7 @@ public sealed class RegistrySlotService
         if (_markers.TryGetValue(slotData.Id, out var marker))
         {
             marker.SetOccupied(slotData.AssignedRegisteredNpcId.HasValue);
+            marker.SetPendingForceAssignTarget(_pendingForceAssignTargetSlotId == slotData.Id);
         }
     }
 

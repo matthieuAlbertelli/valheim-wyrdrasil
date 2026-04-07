@@ -93,6 +93,20 @@ public sealed class RegistryResidentRuntimeService
         RemoveBinding(residentId, true);
     }
 
+    public bool TryDespawnResident(int residentId)
+    {
+        if (!TryGetBoundCharacter(residentId, out var character))
+        {
+            return false;
+        }
+
+        Object.Destroy(character.gameObject);
+        RemoveBinding(residentId, false);
+        TransitionRuntimeState(residentId, ResidentRuntimeState.Missing);
+        _log.LogInfo($"Despawned runtime character for resident #{residentId}.");
+        return true;
+    }
+
     public bool TryGetResidentId(Character character, out int residentId)
     {
         if (character == null)

@@ -7,6 +7,8 @@ namespace Wyrdrasil.Registry.Components;
 public sealed class WyrdrasilZoneSlotMarker : MonoBehaviour
 {
     private readonly List<Renderer> _renderers = new();
+    private bool _isOccupied;
+    private bool _isPendingForceAssignTarget;
 
     public int SlotId { get; private set; }
 
@@ -44,6 +46,18 @@ public sealed class WyrdrasilZoneSlotMarker : MonoBehaviour
 
     public void SetOccupied(bool isOccupied)
     {
+        _isOccupied = isOccupied;
+        ApplyColor();
+    }
+
+    public void SetPendingForceAssignTarget(bool isPending)
+    {
+        _isPendingForceAssignTarget = isPending;
+        ApplyColor();
+    }
+
+    private void ApplyColor()
+    {
         foreach (var renderer in _renderers)
         {
             if (renderer == null)
@@ -51,11 +65,13 @@ public sealed class WyrdrasilZoneSlotMarker : MonoBehaviour
                 continue;
             }
 
-            var color = isOccupied
-                ? new Color(0.35f, 1f, 0.35f, 1f)
-                : SlotType == ZoneSlotType.Innkeeper
-                    ? new Color(0.2f, 0.8f, 0.95f, 1f)
-                    : new Color(0.95f, 0.95f, 0.35f, 1f);
+            var color = _isPendingForceAssignTarget
+                ? new Color(1f, 0.2f, 0.2f, 1f)
+                : _isOccupied
+                    ? new Color(0.35f, 1f, 0.35f, 1f)
+                    : SlotType == ZoneSlotType.Innkeeper
+                        ? new Color(0.2f, 0.8f, 0.95f, 1f)
+                        : new Color(0.95f, 0.95f, 0.35f, 1f);
 
             renderer.material.color = color;
         }

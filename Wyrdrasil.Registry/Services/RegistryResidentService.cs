@@ -11,6 +11,7 @@ namespace Wyrdrasil.Registry.Services;
 public sealed class RegistryResidentService
 {
     private readonly ManualLogSource _log;
+    private readonly RegistryToolState _toolState;
     private readonly RegistrySlotService _slotService;
     private readonly RegistrySeatService _seatService;
     private readonly RegistryResidentRuntimeService _runtimeService;
@@ -28,6 +29,7 @@ public sealed class RegistryResidentService
 
     public RegistryResidentService(
         ManualLogSource log,
+        RegistryToolState toolState,
         RegistryModeService modeService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
@@ -37,6 +39,7 @@ public sealed class RegistryResidentService
         RegistryNpcCustomizationApplier customizationApplier)
     {
         _log = log;
+        _toolState = toolState;
         _slotService = slotService;
         _seatService = seatService;
         _runtimeService = runtimeService;
@@ -45,6 +48,21 @@ public sealed class RegistryResidentService
         _customizationApplier = customizationApplier;
         _visualsVisible = modeService.IsRegistryModeEnabled;
         modeService.RegistryModeChanged += OnRegistryModeChanged;
+    }
+
+    public IReadOnlyDictionary<int, WyrdrasilRegisteredNpcMarker> Markers => _markers;
+
+    public void SetPendingForceAssignResidentVisual(int? residentId)
+    {
+        foreach (var pair in _markers)
+        {
+            if (pair.Value == null)
+            {
+                continue;
+            }
+
+            pair.Value.SetPendingForceAssign(residentId.HasValue && pair.Key == residentId.Value);
+        }
     }
 
     public void RegisterNpcAtCrosshair()
@@ -84,6 +102,105 @@ public sealed class RegistryResidentService
         _log.LogInfo(
             $"Registered NPC #{data.Id}: '{data.DisplayName}' with {(createdIdentity ? "new" : "existing")} identity " +
             $"seed={identity.GenerationSeed}, generatedRole={identity.Role}, female={identity.Appearance.IsFemale}.");
+    }
+
+    public void ForceAssignAtCrosshair()
+    {
+        if (TryGetTargetRegisteredResident(out var targetedResident))
+        {
+            _toolState.SetPendingResidentForceAssign(targetedResident.Id, targetedResident.DisplayName);
+            _log.LogInfo(
+                $"Selected resident #{targetedResident.Id} ('{targetedResident.DisplayName}') for force assignment. " +
+                "Target an innkeeper slot or a designated seat to complete the operation.");
+            return;
+        }
+
+        if (!_toolState.PendingResidentForceAssignId.HasValue ||
+            !_registeredById.TryGetValue(_toolState.PendingResidentForceAssignId.Value, out var pendingResident))
+        {
+            _toolState.ClearPendingResidentForceAssign();
+            _log.LogWarning("Cannot force assign: target a registered resident first.");
+            return;
+        }
+
+        if (_slotService.TryGetSlotAtCrosshair(out var slotData))
+        {
+            ForceAssignResidentToSlot(pendingResident, slotData);
+            return;
+        }
+
+        if (_seatService.TryGetSeatAtCrosshair(out var seatData))
+        {
+            ForceAssignResidentToSeat(pendingResident, seatData);
+            return;
+        }
+
+        _log.LogWarning(
+            $"Cannot force assign resident #{pendingResident.Id}: target an innkeeper slot, a designated seat, or another registered resident.");
+    }
+
+    public void ClearTargetInnkeeperSlotAssignmentAtCrosshair()
+    {
+        if (!_slotService.TryGetSlotAtCrosshair(out var slotData))
+        {
+            _log.LogWarning("Cannot clear slot assignment: no innkeeper slot is under the crosshair.");
+            return;
+        }
+
+        if (!_slotService.ClearSlotAssignment(slotData.Id, out var previousResidentId) || !previousResidentId.HasValue)
+        {
+            _log.LogWarning($"Cannot clear slot assignment: innkeeper slot #{slotData.Id} has no assigned resident.");
+            return;
+        }
+
+        if (_registeredById.TryGetValue(previousResidentId.Value, out var resident))
+        {
+            resident.ClearAssignedSlot();
+            resident.SetRole(NpcRole.Villager);
+            UpdateMarker(resident);
+        }
+
+        _log.LogInfo($"Cleared innkeeper slot assignment for slot #{slotData.Id}.");
+    }
+
+    public void ClearTargetSeatAssignmentAtCrosshair()
+    {
+        if (!_seatService.TryGetSeatAtCrosshair(out var seatData))
+        {
+            _log.LogWarning("Cannot clear seat assignment: no designated seat is under the crosshair.");
+            return;
+        }
+
+        if (!_seatService.ClearSeatAssignment(seatData.Id, out var previousResidentId) || !previousResidentId.HasValue)
+        {
+            _log.LogWarning($"Cannot clear seat assignment: seat #{seatData.Id} has no assigned resident.");
+            return;
+        }
+
+        if (_registeredById.TryGetValue(previousResidentId.Value, out var resident))
+        {
+            DetachResidentIfBound(resident);
+            resident.ClearAssignedSeat();
+            UpdateMarker(resident);
+        }
+
+        _log.LogInfo($"Cleared seat assignment for seat #{seatData.Id}.");
+    }
+
+    public void DespawnTargetResidentAtCrosshair()
+    {
+        if (!TryGetTargetRegisteredResident("Cannot despawn resident", out _, out var resident))
+        {
+            return;
+        }
+
+        if (!_runtimeService.TryDespawnResident(resident.Id))
+        {
+            _log.LogWarning($"Cannot despawn resident #{resident.Id}: runtime destruction failed.");
+            return;
+        }
+
+        _log.LogInfo($"Despawned resident #{resident.Id} ('{resident.DisplayName}').");
     }
 
     public void RespawnAssignedResidentAtCrosshair()
@@ -183,15 +300,89 @@ public sealed class RegistryResidentService
                 continue;
             }
 
-            if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-            {
-                DetachIfAttached(character);
-            }
-
+            DetachResidentIfBound(resident);
             resident.ClearAssignedSeat();
             UpdateMarker(resident);
             _log.LogInfo($"Cleared resident seat assignment for NPC #{resident.Id} because seat #{seatId} was deleted.");
         }
+    }
+
+    private void ForceAssignResidentToSlot(RegisteredNpcData pendingResident, ZoneSlotData slotData)
+    {
+        if (pendingResident.AssignedSlotId == slotData.Id)
+        {
+            _toolState.ClearPendingResidentForceAssign();
+            _log.LogInfo($"Resident #{pendingResident.Id} is already assigned to innkeeper slot #{slotData.Id}.");
+            return;
+        }
+
+        _slotService.ClearAssignmentForResident(pendingResident.Id);
+        _seatService.ClearAssignmentForResident(pendingResident.Id);
+        pendingResident.ClearAssignedSeat();
+        pendingResident.ClearAssignedSlot();
+        pendingResident.SetRole(NpcRole.Villager);
+        UpdateMarker(pendingResident);
+        DetachResidentIfBound(pendingResident);
+
+        if (!_slotService.ForceAssignInnkeeperSlot(slotData.Id, pendingResident.Id, out var previousResidentId, out var resolvedSlot) || resolvedSlot == null)
+        {
+            _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: innkeeper slot #{slotData.Id} could not be assigned.");
+            return;
+        }
+
+        if (previousResidentId.HasValue && previousResidentId.Value != pendingResident.Id && _registeredById.TryGetValue(previousResidentId.Value, out var displacedResident))
+        {
+            displacedResident.ClearAssignedSlot();
+            displacedResident.SetRole(NpcRole.Villager);
+            UpdateMarker(displacedResident);
+        }
+
+        pendingResident.SetRole(NpcRole.Innkeeper);
+        pendingResident.AssignSlot(resolvedSlot.Id);
+        UpdateMarker(pendingResident);
+        _runtimeService.ApplyInnkeeperAssignment(pendingResident, resolvedSlot);
+        _toolState.ClearPendingResidentForceAssign();
+
+        _log.LogInfo($"Force-assigned resident #{pendingResident.Id} ('{pendingResident.DisplayName}') to innkeeper slot #{resolvedSlot.Id}.");
+    }
+
+    private void ForceAssignResidentToSeat(RegisteredNpcData pendingResident, RegisteredSeatData seatData)
+    {
+        if (pendingResident.AssignedSeatId == seatData.Id)
+        {
+            _toolState.ClearPendingResidentForceAssign();
+            _log.LogInfo($"Resident #{pendingResident.Id} is already assigned to seat #{seatData.Id}.");
+            return;
+        }
+
+        _slotService.ClearAssignmentForResident(pendingResident.Id);
+        _seatService.ClearAssignmentForResident(pendingResident.Id);
+        pendingResident.ClearAssignedSlot();
+        pendingResident.ClearAssignedSeat();
+        pendingResident.SetRole(NpcRole.Villager);
+        UpdateMarker(pendingResident);
+        DetachResidentIfBound(pendingResident);
+
+        if (!_seatService.ForceAssignSeat(seatData.Id, pendingResident.Id, out var previousResidentId, out var resolvedSeat) || resolvedSeat == null)
+        {
+            _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: seat #{seatData.Id} could not be assigned.");
+            return;
+        }
+
+        if (previousResidentId.HasValue && previousResidentId.Value != pendingResident.Id && _registeredById.TryGetValue(previousResidentId.Value, out var displacedResident))
+        {
+            DetachResidentIfBound(displacedResident);
+            displacedResident.ClearAssignedSeat();
+            UpdateMarker(displacedResident);
+        }
+
+        pendingResident.SetRole(NpcRole.Villager);
+        pendingResident.AssignSeat(resolvedSeat.Id);
+        UpdateMarker(pendingResident);
+        _runtimeService.ApplySeatAssignment(pendingResident, resolvedSeat);
+        _toolState.ClearPendingResidentForceAssign();
+
+        _log.LogInfo($"Force-assigned resident #{pendingResident.Id} ('{pendingResident.DisplayName}') to seat #{resolvedSeat.Id}.");
     }
 
     private void RespawnResidentAssignedToSlot(ZoneSlotData slotData)
@@ -334,6 +525,24 @@ public sealed class RegistryResidentService
         return false;
     }
 
+    private bool TryGetTargetRegisteredResident(out RegisteredNpcData resident)
+    {
+        if (!TryGetTargetCharacter(out var targetCharacter))
+        {
+            resident = null!;
+            return false;
+        }
+
+        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) ||
+            !_registeredById.TryGetValue(residentId, out resident))
+        {
+            resident = null!;
+            return false;
+        }
+
+        return true;
+    }
+
     private bool TryGetTargetRegisteredResident(string actionLabel, out Character targetCharacter, out RegisteredNpcData resident)
     {
         if (!TryGetTargetCharacter(out targetCharacter))
@@ -415,6 +624,14 @@ public sealed class RegistryResidentService
         if (_markers.TryGetValue(data.Id, out var marker))
         {
             marker.UpdateRole(data.Role);
+        }
+    }
+
+    private void DetachResidentIfBound(RegisteredNpcData resident)
+    {
+        if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
+        {
+            DetachIfAttached(character);
         }
     }
 

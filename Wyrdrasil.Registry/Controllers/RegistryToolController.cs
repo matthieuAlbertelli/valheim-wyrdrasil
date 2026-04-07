@@ -56,6 +56,8 @@ public sealed class RegistryToolController
             return;
         }
 
+        UpdateForceAssignFeedback();
+
         var selectedAction = _modeService.State.SelectedAction;
         var isDeleteAction = IsDeleteAction(selectedAction);
 
@@ -89,6 +91,40 @@ public sealed class RegistryToolController
             _context.SlotService.Slots.Count,
             _context.SeatService.Seats.Count,
             _context.ResidentService.RegisteredNpcs.Count);
+    }
+
+    private void UpdateForceAssignFeedback()
+    {
+        var state = _modeService.State;
+        var hasPendingResident = state.SelectedAction == RegistryActionType.ForceAssignResident &&
+                                 state.PendingResidentForceAssignId.HasValue;
+
+        _context.ResidentService.SetPendingForceAssignResidentVisual(
+            hasPendingResident ? state.PendingResidentForceAssignId : null);
+
+        if (!hasPendingResident)
+        {
+            _context.SlotService.SetPendingForceAssignTarget(null);
+            _context.SeatService.SetPendingForceAssignTarget(null);
+            return;
+        }
+
+        if (_context.SlotService.TryGetSlotAtCrosshair(out var slotData))
+        {
+            _context.SlotService.SetPendingForceAssignTarget(slotData.Id);
+            _context.SeatService.SetPendingForceAssignTarget(null);
+            return;
+        }
+
+        if (_context.SeatService.TryGetSeatAtCrosshair(out var seatData))
+        {
+            _context.SlotService.SetPendingForceAssignTarget(null);
+            _context.SeatService.SetPendingForceAssignTarget(seatData.Id);
+            return;
+        }
+
+        _context.SlotService.SetPendingForceAssignTarget(null);
+        _context.SeatService.SetPendingForceAssignTarget(null);
     }
 
     private static bool IsDeleteAction(RegistryActionType actionType)

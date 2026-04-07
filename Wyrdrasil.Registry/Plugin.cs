@@ -43,6 +43,7 @@ public class Plugin : BaseUnityPlugin
         var residentRuntimeService = new RegistryResidentRuntimeService(Logger, navigationService, waypointService);
         var residentService = new RegistryResidentService(
             Logger,
+            modeService.State,
             modeService,
             slotService,
             seatService,
@@ -86,6 +87,10 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new RegisterNpcAction());
         registry.Register(new AssignInnkeeperRoleAction());
         registry.Register(new AssignSeatAction());
+        registry.Register(new ClearTargetInnkeeperSlotAssignmentAction());
+        registry.Register(new ClearTargetSeatAssignmentAction());
+        registry.Register(new ForceAssignResidentAction());
+        registry.Register(new DespawnTargetResidentAction());
         registry.Register(new RespawnAssignedResidentAction());
         registry.Register(new InspectTargetNpcAiAction());
         registry.Register(new LoggingRegistryAction(RegistryActionType.None));

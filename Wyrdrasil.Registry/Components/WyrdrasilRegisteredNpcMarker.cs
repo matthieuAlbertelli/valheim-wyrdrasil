@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
 
@@ -6,7 +7,15 @@ namespace Wyrdrasil.Registry.Components;
 public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
 {
     private const int RingSegments = 24;
+    private const int PendingDashCount = 12;
+    private const float PendingDashDegrees = 14f;
+    private const float PendingRotationSpeed = 120f;
+
     private LineRenderer? _lineRenderer;
+    private Transform? _pendingDashRoot;
+    private readonly List<LineRenderer> _pendingDashRenderers = new();
+    private bool _isVisible;
+    private bool _isPendingForceAssign;
 
     public int RegisteredNpcId { get; private set; }
 
@@ -28,6 +37,41 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
             return;
         }
 
+        CreateNormalRing();
+        CreatePendingRing();
+        ApplyRoleColor();
+        ApplyPendingColor();
+        RefreshVisualization();
+    }
+
+    public void UpdateRole(NpcRole role)
+    {
+        Role = role;
+        ApplyRoleColor();
+    }
+
+    public void SetVisualizationVisible(bool isVisible)
+    {
+        _isVisible = isVisible;
+        RefreshVisualization();
+    }
+
+    public void SetPendingForceAssign(bool isPending)
+    {
+        _isPendingForceAssign = isPending;
+        RefreshVisualization();
+    }
+
+    private void Update()
+    {
+        if (_isVisible && _isPendingForceAssign && _pendingDashRoot != null)
+        {
+            _pendingDashRoot.Rotate(0f, PendingRotationSpeed * Time.deltaTime, 0f, Space.Self);
+        }
+    }
+
+    private void CreateNormalRing()
+    {
         var ringObject = new GameObject("WyrdrasilResidentRing");
         ringObject.transform.SetParent(transform, false);
         ringObject.transform.localPosition = new Vector3(0f, 0.08f, 0f);
@@ -49,21 +93,53 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
             var z = Mathf.Sin(angle) * 0.6f;
             _lineRenderer.SetPosition(i, new Vector3(x, 0f, z));
         }
-
-        ApplyRoleColor();
     }
 
-    public void UpdateRole(NpcRole role)
+    private void CreatePendingRing()
     {
-        Role = role;
-        ApplyRoleColor();
+        var pendingRootObject = new GameObject("WyrdrasilResidentPendingRing");
+        pendingRootObject.transform.SetParent(transform, false);
+        pendingRootObject.transform.localPosition = new Vector3(0f, 0.08f, 0f);
+        _pendingDashRoot = pendingRootObject.transform;
+
+        for (var i = 0; i < PendingDashCount; i++)
+        {
+            var dashObject = new GameObject($"Dash_{i}");
+            dashObject.transform.SetParent(_pendingDashRoot, false);
+
+            var lineRenderer = dashObject.AddComponent<LineRenderer>();
+            lineRenderer.loop = false;
+            lineRenderer.useWorldSpace = false;
+            lineRenderer.positionCount = 2;
+            lineRenderer.startWidth = 0.065f;
+            lineRenderer.endWidth = 0.065f;
+            lineRenderer.material = CreateLineMaterial();
+            lineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            lineRenderer.receiveShadows = false;
+
+            var angleStart = i / (float)PendingDashCount * Mathf.PI * 2f;
+            var angleEnd = angleStart + Mathf.Deg2Rad * PendingDashDegrees;
+            var radius = 0.72f;
+
+            lineRenderer.SetPosition(0, new Vector3(Mathf.Cos(angleStart) * radius, 0f, Mathf.Sin(angleStart) * radius));
+            lineRenderer.SetPosition(1, new Vector3(Mathf.Cos(angleEnd) * radius, 0f, Mathf.Sin(angleEnd) * radius));
+            _pendingDashRenderers.Add(lineRenderer);
+        }
     }
 
-    public void SetVisualizationVisible(bool isVisible)
+    private void RefreshVisualization()
     {
+        var showNormalRing = _isVisible && !_isPendingForceAssign;
+        var showPendingRing = _isVisible && _isPendingForceAssign;
+
         if (_lineRenderer != null)
         {
-            _lineRenderer.enabled = isVisible;
+            _lineRenderer.enabled = showNormalRing;
+        }
+
+        if (_pendingDashRoot != null)
+        {
+            _pendingDashRoot.gameObject.SetActive(showPendingRing);
         }
     }
 
@@ -80,6 +156,22 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
 
         _lineRenderer.startColor = color;
         _lineRenderer.endColor = color;
+    }
+
+    private void ApplyPendingColor()
+    {
+        var color = new Color(1f, 0.95f, 0.35f, 1f);
+
+        foreach (var dashRenderer in _pendingDashRenderers)
+        {
+            if (dashRenderer == null)
+            {
+                continue;
+            }
+
+            dashRenderer.startColor = color;
+            dashRenderer.endColor = color;
+        }
     }
 
     private static Material CreateLineMaterial()
