@@ -16,6 +16,7 @@ public sealed class RegistryPersistenceService
     private readonly ManualLogSource _log;
     private readonly RegistryBuildingService _buildingService;
     private readonly RegistryZoneService _zoneService;
+    private readonly RegistryWaypointService _waypointService;
     private readonly RegistrySlotService _slotService;
     private readonly RegistrySeatService _seatService;
     private readonly RegistryResidentService _residentService;
@@ -28,6 +29,7 @@ public sealed class RegistryPersistenceService
         ManualLogSource log,
         RegistryBuildingService buildingService,
         RegistryZoneService zoneService,
+        RegistryWaypointService waypointService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
         RegistryResidentService residentService)
@@ -35,6 +37,7 @@ public sealed class RegistryPersistenceService
         _log = log;
         _buildingService = buildingService;
         _zoneService = zoneService;
+        _waypointService = waypointService;
         _slotService = slotService;
         _seatService = seatService;
         _residentService = residentService;
@@ -90,7 +93,7 @@ public sealed class RegistryPersistenceService
                 serializer.Serialize(stream, saveData);
             }
 
-            _log.LogInfo($"Saved registry world state to '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, slots={saveData.Slots.Count}, seats={saveData.Seats.Count}, residents={saveData.Residents.Count}. pendingUnresolvedSeats={_pendingSeatResolutions.Count}.");
+            _log.LogInfo($"Saved registry world state to '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, waypoints={saveData.Waypoints.Count}, waypointLinks={saveData.WaypointLinks.Count}, slots={saveData.Slots.Count}, seats={saveData.Seats.Count}, residents={saveData.Residents.Count}. pendingUnresolvedSeats={_pendingSeatResolutions.Count}.");
         }
         catch (Exception exception)
         {
@@ -154,7 +157,7 @@ public sealed class RegistryPersistenceService
 
             LoadFromSaveData(saveData);
             _hasLoadedCurrentWorld = true;
-            _log.LogInfo($"Loaded registry world state from '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, slots={saveData.Slots.Count}, seats={_seatService.Seats.Count}, residents={saveData.Residents.Count}. pendingUnresolvedSeats={_pendingSeatResolutions.Count}.");
+            _log.LogInfo($"Loaded registry world state from '{path}'. buildings={saveData.Buildings.Count}, zones={saveData.Zones.Count}, waypoints={_waypointService.Waypoints.Count}, waypointLinks={_waypointService.GetPersistedLinks().Count}, slots={saveData.Slots.Count}, seats={_seatService.Seats.Count}, residents={saveData.Residents.Count}. pendingUnresolvedSeats={_pendingSeatResolutions.Count}.");
         }
         catch (Exception exception)
         {
@@ -168,6 +171,7 @@ public sealed class RegistryPersistenceService
         _pendingSeatResolutions.Clear();
         _buildingService.LoadBuildings(saveData.Buildings.Select(ToBuildingData), saveData.NextBuildingId);
         _zoneService.LoadZones(saveData.Zones.Select(ToFunctionalZoneData), saveData.NextZoneId);
+        _waypointService.LoadWaypoints(saveData.Waypoints.Select(ToNavigationWaypointData), saveData.WaypointLinks, saveData.NextWaypointId);
         _slotService.LoadSlots(saveData.Slots.Select(ToZoneSlotData), saveData.NextSlotId);
 
         var resolvedSeats = new List<RegisteredSeatData>();
@@ -274,6 +278,7 @@ public sealed class RegistryPersistenceService
             Version = 1,
             NextBuildingId = _buildingService.NextBuildingId,
             NextZoneId = _zoneService.NextZoneId,
+            NextWaypointId = _waypointService.NextWaypointId,
             NextSlotId = _slotService.NextSlotId,
             NextSeatId = Math.Max(_seatService.NextSeatId, _pendingSeatResolutions.Count > 0 ? _pendingSeatResolutions.Max(seat => seat.Id) + 1 : _seatService.NextSeatId),
             NextResidentId = _residentService.NextRegisteredNpcId
@@ -294,6 +299,16 @@ public sealed class RegistryPersistenceService
                 saveData.Zones.Add(FromFunctionalZoneData(zone));
             }
         }
+
+        foreach (var waypoint in _waypointService.Waypoints)
+        {
+            if (waypoint != null)
+            {
+                saveData.Waypoints.Add(FromNavigationWaypointData(waypoint));
+            }
+        }
+
+        saveData.WaypointLinks.AddRange(_waypointService.GetPersistedLinks());
 
         foreach (var slot in _slotService.Slots)
         {
@@ -383,6 +398,20 @@ public sealed class RegistryPersistenceService
     private static FunctionalZoneData ToFunctionalZoneData(FunctionalZoneSaveData data)
     {
         return new FunctionalZoneData(data.Id, data.BuildingId, data.ZoneType, data.Position.ToVector3(), data.FootprintPoints.Select(point => point.ToVector2()), data.BaseY, data.TopY, data.LevelIndex);
+    }
+
+    private static NavigationWaypointSaveData FromNavigationWaypointData(NavigationWaypointData data)
+    {
+        return new NavigationWaypointSaveData
+        {
+            Id = data.Id,
+            Position = Float3SaveData.FromVector3(data.Position)
+        };
+    }
+
+    private static NavigationWaypointData ToNavigationWaypointData(NavigationWaypointSaveData data)
+    {
+        return new NavigationWaypointData(data.Id, data.Position.ToVector3());
     }
 
     private static ZoneSlotSaveData FromZoneSlotData(ZoneSlotData data)

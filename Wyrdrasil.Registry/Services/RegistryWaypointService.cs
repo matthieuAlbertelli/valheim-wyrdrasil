@@ -24,6 +24,7 @@ public sealed class RegistryWaypointService
     private bool _visualsVisible;
 
     public IReadOnlyList<NavigationWaypointData> Waypoints => _waypoints;
+    public int NextWaypointId => _nextWaypointId;
     public int? PendingLinkStartWaypointId { get; private set; }
 
     public RegistryWaypointService(ManualLogSource log, RegistryModeService modeService, RegistryZoneService zoneService)
@@ -59,6 +60,71 @@ public sealed class RegistryWaypointService
         _waypointRoots.Clear();
         PendingLinkStartWaypointId = null;
         _nextWaypointId = 1;
+    }
+
+    public void LoadWaypoints(IEnumerable<NavigationWaypointData> waypoints, IEnumerable<NavigationWaypointLinkSaveData> links, int nextWaypointId)
+    {
+        ClearAllWaypoints();
+
+        foreach (var waypoint in waypoints.OrderBy(candidate => candidate.Id))
+        {
+            _waypoints.Add(waypoint);
+            _links[waypoint.Id] = new HashSet<int>();
+            CreateWaypointWorldObject(waypoint);
+        }
+
+        foreach (var link in links)
+        {
+            var waypointAId = Mathf.Min(link.WaypointAId, link.WaypointBId);
+            var waypointBId = Mathf.Max(link.WaypointAId, link.WaypointBId);
+
+            if (waypointAId == waypointBId)
+            {
+                _log.LogWarning($"Skipping persisted waypoint link #{waypointAId} <-> #{waypointBId}: a waypoint cannot be linked to itself.");
+                continue;
+            }
+
+            if (!_links.ContainsKey(waypointAId) || !_links.ContainsKey(waypointBId))
+            {
+                _log.LogWarning($"Skipping persisted waypoint link #{waypointAId} <-> #{waypointBId}: one of the waypoints is missing.");
+                continue;
+            }
+
+            CreateBidirectionalLink(waypointAId, waypointBId, createVisual: true, shouldLog: false);
+        }
+
+        _nextWaypointId = nextWaypointId;
+        PendingLinkStartWaypointId = null;
+        UpdateWaypointSelectionVisuals();
+    }
+
+    public IReadOnlyList<NavigationWaypointLinkSaveData> GetPersistedLinks()
+    {
+        var links = new List<NavigationWaypointLinkSaveData>();
+        var seen = new HashSet<string>();
+
+        foreach (var pair in _links)
+        {
+            foreach (var neighborId in pair.Value)
+            {
+                var waypointAId = Mathf.Min(pair.Key, neighborId);
+                var waypointBId = Mathf.Max(pair.Key, neighborId);
+                var linkKey = GetLinkKey(waypointAId, waypointBId);
+
+                if (!seen.Add(linkKey))
+                {
+                    continue;
+                }
+
+                links.Add(new NavigationWaypointLinkSaveData
+                {
+                    WaypointAId = waypointAId,
+                    WaypointBId = waypointBId
+                });
+            }
+        }
+
+        return links;
     }
 
     public void CreateNavigationWaypoint()
@@ -113,7 +179,7 @@ public sealed class RegistryWaypointService
             return;
         }
 
-        CreateBidirectionalLink(startId, targetWaypoint.Id);
+        CreateBidirectionalLink(startId, targetWaypoint.Id, createVisual: true, shouldLog: true);
         PendingLinkStartWaypointId = null;
         UpdateWaypointSelectionVisuals();
     }
@@ -212,24 +278,38 @@ public sealed class RegistryWaypointService
         UpdateWaypointSelectionVisuals();
     }
 
-    private void CreateBidirectionalLink(int waypointAId, int waypointBId)
+    private void CreateBidirectionalLink(int waypointAId, int waypointBId, bool createVisual, bool shouldLog)
     {
         if (!_links.TryGetValue(waypointAId, out var linksA) || !_links.TryGetValue(waypointBId, out var linksB))
         {
-            _log.LogWarning("Cannot connect waypoints: one of the waypoint ids is unknown.");
+            if (shouldLog)
+            {
+                _log.LogWarning("Cannot connect waypoints: one of the waypoint ids is unknown.");
+            }
             return;
         }
 
         if (linksA.Contains(waypointBId))
         {
-            _log.LogInfo($"Waypoint link already exists between #{waypointAId} and #{waypointBId}.");
+            if (shouldLog)
+            {
+                _log.LogInfo($"Waypoint link already exists between #{waypointAId} and #{waypointBId}.");
+            }
             return;
         }
 
         linksA.Add(waypointBId);
         linksB.Add(waypointAId);
-        CreateLinkVisual(waypointAId, waypointBId);
-        _log.LogInfo($"Connected waypoint #{waypointAId} <-> #{waypointBId}.");
+
+        if (createVisual)
+        {
+            CreateLinkVisual(waypointAId, waypointBId);
+        }
+
+        if (shouldLog)
+        {
+            _log.LogInfo($"Connected waypoint #{waypointAId} <-> #{waypointBId}.");
+        }
     }
 
     private bool TryFindShortestPath(int startWaypointId, int endWaypointId, out List<int> path)
@@ -423,6 +503,11 @@ public sealed class RegistryWaypointService
         var waypointA = _waypoints.First(waypoint => waypoint.Id == waypointAId);
         var waypointB = _waypoints.First(waypoint => waypoint.Id == waypointBId);
         var linkKey = GetLinkKey(waypointAId, waypointBId);
+        if (_linkRenderers.ContainsKey(linkKey))
+        {
+            return;
+        }
+
         var root = new GameObject($"Wyrdrasil_WaypointLink_{linkKey}");
         var lineRenderer = root.AddComponent<LineRenderer>();
         lineRenderer.positionCount = 2;

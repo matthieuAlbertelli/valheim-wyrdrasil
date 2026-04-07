@@ -9,11 +9,14 @@ public sealed class RegistrySaveData
     public int Version = 1;
     public int NextBuildingId = 1;
     public int NextZoneId = 1;
+    public int NextWaypointId = 1;
     public int NextSlotId = 1;
     public int NextSeatId = 1;
     public int NextResidentId = 1;
     public List<BuildingSaveData> Buildings = new();
     public List<FunctionalZoneSaveData> Zones = new();
+    public List<NavigationWaypointSaveData> Waypoints = new();
+    public List<NavigationWaypointLinkSaveData> WaypointLinks = new();
     public List<ZoneSlotSaveData> Slots = new();
     public List<RegisteredSeatSaveData> Seats = new();
     public List<RegisteredNpcSaveData> Residents = new();

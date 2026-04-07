@@ -48,7 +48,7 @@ public class Plugin : BaseUnityPlugin
 
         var diagnosticsService = new RegistryDiagnosticsService(Logger);
         var deletionService = new RegistryDeletionService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService);
-        _persistenceService = new RegistryPersistenceService(Logger, buildingService, zoneService, slotService, seatService, residentService);
+        _persistenceService = new RegistryPersistenceService(Logger, buildingService, zoneService, waypointService, slotService, seatService, residentService);
         var flushService = new RegistryFlushService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService, _persistenceService);
 
         var selectionService = new RegistrySelectionService(modeService.State);
