@@ -12,19 +12,19 @@ namespace Wyrdrasil.Registry.Components;
 /// </summary>
 public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
 {
-    private const float InitialWaypointSteeringStopDistance = 0.85f;
-    private const float WaypointSteeringStopDistance = 0.55f;
+    private const float InitialWaypointSteeringStopDistance = 0.65f;
+    private const float WaypointSteeringStopDistance = 0.45f;
 
-    private const float InitialSegmentConsumeRadius = 1.35f;
-    private const float InitialSegmentRelaxedConsumeRadius = 1.85f;
-    private const float InitialSegmentCorridorRadius = 2.10f;
-    private const float InitialSegmentEndPlaneSlack = 0.85f;
+    private const float InitialSegmentConsumeRadius = 1.00f;
+    private const float InitialSegmentRelaxedConsumeRadius = 1.45f;
+    private const float InitialSegmentCorridorRadius = 1.25f;
+    private const float InitialSegmentEndPlaneSlack = 0.30f;
     private const float InitialSegmentNoProgressTimeout = 1.25f;
 
-    private const float SegmentConsumeRadius = 0.90f;
-    private const float SegmentRelaxedConsumeRadius = 1.35f;
-    private const float SegmentCorridorRadius = 1.35f;
-    private const float SegmentEndPlaneSlack = 0.45f;
+    private const float SegmentConsumeRadius = 0.70f;
+    private const float SegmentRelaxedConsumeRadius = 1.05f;
+    private const float SegmentCorridorRadius = 0.95f;
+    private const float SegmentEndPlaneSlack = 0.20f;
     private const float SegmentNoProgressTimeout = 0.90f;
 
     private const float FinalDestinationReachRadius = 0.35f;
@@ -52,6 +52,7 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
     private bool _finalTargetIssued;
     private float _bestDistanceToCurrentWaypoint = float.MaxValue;
     private float _waypointNoProgressTimer;
+    private string _consumeReason = "unknown";
     private TraversalMode _mode = TraversalMode.None;
 
     private void Awake()
@@ -84,6 +85,7 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         _finalTargetIssued = false;
         _bestDistanceToCurrentWaypoint = float.MaxValue;
         _waypointNoProgressTimer = 0f;
+        _consumeReason = "unknown";
         SkipAlreadyReachedWaypoints();
 
         _mode = _routePoints.Count > 0 && _currentRouteIndex < _routePoints.Count
@@ -116,6 +118,7 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         _finalTargetIssued = false;
         _bestDistanceToCurrentWaypoint = float.MaxValue;
         _waypointNoProgressTimer = 0f;
+        _consumeReason = "unknown";
         SkipAlreadyReachedWaypoints();
 
         _mode = _routePoints.Count > 0 && _currentRouteIndex < _routePoints.Count
@@ -142,6 +145,7 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         _finalTargetIssued = false;
         _bestDistanceToCurrentWaypoint = float.MaxValue;
         _waypointNoProgressTimer = 0f;
+        _consumeReason = "unknown";
         _mode = TraversalMode.None;
 
         if (_ai != null)
@@ -198,6 +202,7 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
             _announcedRouteIndex = _currentRouteIndex;
             _bestDistanceToCurrentWaypoint = float.MaxValue;
             _waypointNoProgressTimer = 0f;
+            _consumeReason = "unknown";
 
             var steeringStopDistance = _currentRouteIndex == 0
                 ? InitialWaypointSteeringStopDistance
@@ -214,7 +219,7 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         }
 
         WyrdrasilSeatDebug.Log(this,
-            $"Consumed waypoint routeIndex={_currentRouteIndex} position={waypoint}");
+            $"Consumed waypoint routeIndex={_currentRouteIndex} reason={_consumeReason} position={waypoint}");
 
         _currentSegmentStart = waypoint;
         _currentRouteIndex++;
@@ -298,17 +303,20 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
 
         if (HasReachedPoint(waypoint, GetConsumeRadius()))
         {
+            _consumeReason = "capture";
             return true;
         }
 
         if (HasCrossedSegmentGate(_currentSegmentStart, waypoint))
         {
+            _consumeReason = "segment-gate";
             return true;
         }
 
         if (_waypointNoProgressTimer >= GetNoProgressTimeout()
             && HasReachedPoint(waypoint, GetRelaxedConsumeRadius()))
         {
+            _consumeReason = "relaxed";
             WyrdrasilSeatDebug.Log(this,
                 $"Relaxed consume routeIndex={_currentRouteIndex} distance={horizontalDistance:0.00} noProgress={_waypointNoProgressTimer:0.00}");
             return true;
