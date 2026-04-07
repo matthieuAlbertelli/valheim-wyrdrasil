@@ -60,10 +60,18 @@ public sealed class RegistryResidentService
         }
 
         var displayName = GetCharacterName(targetCharacter);
-        var data = new RegisteredNpcData(_nextRegisteredNpcId++, characterInstanceId, displayName, targetCharacter);
+        var identity = targetCharacter.GetComponent<WyrdrasilVikingIdentityComponent>()?.Identity;
+        var data = new RegisteredNpcData(_nextRegisteredNpcId++, characterInstanceId, displayName, targetCharacter, identity);
         _registeredNpcs.Add(data);
         _registeredByCharacterInstanceId[characterInstanceId] = data;
         EnsureMarker(data);
+
+        if (identity != null)
+        {
+            _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}' with generated identity seed={identity.GenerationSeed}.");
+            return;
+        }
+
         _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}'.");
     }
 

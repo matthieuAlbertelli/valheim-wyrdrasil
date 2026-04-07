@@ -6,8 +6,8 @@ namespace Wyrdrasil.Registry.Services;
 
 /// <summary>
 /// Builds an inactive runtime prefab from Valheim's Player prefab.
-/// We keep the player rig/sync stack intact and remove only player-specific components,
-/// following the same construction principle used by VikingNPC.
+/// We keep the player rig/sync stack intact long enough to copy the shared Character/Humanoid state,
+/// then strip player-specific components and replace them with the registry runtime humanoid.
 /// </summary>
 public sealed class RegistryVikingPrefabFactory
 {
@@ -24,29 +24,35 @@ public sealed class RegistryVikingPrefabFactory
         _log = log;
     }
 
-    public bool TrySpawn(string displayName, Vector3 position, Quaternion rotation, out Character? spawnedCharacter)
+    public bool TryInstantiate(
+        string displayName,
+        Vector3 position,
+        Quaternion rotation,
+        out GameObject? instance,
+        out WyrdrasilVikingNpc? vikingNpc)
     {
-        spawnedCharacter = null;
+        instance = null;
+        vikingNpc = null;
 
         if (!TryBuildPrefab(out var prefab))
         {
             return false;
         }
 
-        var instance = Object.Instantiate(prefab, position, rotation);
+        instance = Object.Instantiate(prefab, position, rotation);
         instance.name = displayName;
-        instance.SetActive(true);
+        instance.SetActive(false);
 
-        var vikingNpc = instance.GetComponent<WyrdrasilVikingNpc>();
+        vikingNpc = instance.GetComponent<WyrdrasilVikingNpc>();
         if (!vikingNpc)
         {
-            _log.LogWarning("Cannot spawn registry viking: runtime prefab is missing WyrdrasilVikingNpc.");
+            _log.LogWarning("Cannot instantiate registry viking: runtime prefab is missing WyrdrasilVikingNpc.");
             Object.Destroy(instance);
+            instance = null;
             return false;
         }
 
         vikingNpc.ApplyDisplayName(displayName);
-        spawnedCharacter = vikingNpc;
         return true;
     }
 
@@ -74,37 +80,50 @@ public sealed class RegistryVikingPrefabFactory
             return false;
         }
 
-        var playerTemplate = playerPrefab.GetComponent<Player>();
-        if (!playerTemplate)
-        {
-            _log.LogWarning("Cannot build registry viking prefab: Player component is missing on the player prefab.");
-            prefab = null!;
-            return false;
-        }
-
         EnsureHiddenRoot();
 
         var runtimePrefab = Object.Instantiate(playerPrefab, _hiddenRoot!.transform, false);
         runtimePrefab.name = "Wyrdrasil_RuntimeVikingPrefab";
         runtimePrefab.SetActive(false);
 
+        var runtimePlayer = runtimePrefab.GetComponent<Player>();
+        if (!runtimePlayer)
+        {
+            _log.LogWarning("Cannot build registry viking prefab: instantiated runtime Player is missing.");
+            Object.DestroyImmediate(runtimePrefab);
+            prefab = null!;
+            return false;
+        }
+
+        var runtimeVikingNpc = runtimePrefab.GetComponent<WyrdrasilVikingNpc>();
+        if (!runtimeVikingNpc)
+        {
+            runtimeVikingNpc = runtimePrefab.AddComponent<WyrdrasilVikingNpc>();
+        }
+
+        runtimeVikingNpc.InitializeFromTemplate(runtimePlayer, "Wyrdrasil Test Viking");
+
         DestroyImmediateIfPresent<PlayerController>(runtimePrefab);
         DestroyImmediateIfPresent<Player>(runtimePrefab);
         DestroyImmediateIfPresent<Talker>(runtimePrefab);
         DestroyImmediateIfPresent<Skills>(runtimePrefab);
 
-        var vikingNpc = runtimePrefab.GetComponent<WyrdrasilVikingNpc>();
-        if (!vikingNpc)
-        {
-            vikingNpc = runtimePrefab.AddComponent<WyrdrasilVikingNpc>();
-        }
-
-        vikingNpc.InitializeFromTemplate(playerTemplate, "Wyrdrasil Test Viking");
-
         var vikingAi = runtimePrefab.GetComponent<WyrdrasilVikingNpcAI>();
         if (!vikingAi)
         {
             vikingAi = runtimePrefab.AddComponent<WyrdrasilVikingNpcAI>();
+        }
+
+        var identityComponent = runtimePrefab.GetComponent<WyrdrasilVikingIdentityComponent>();
+        if (!identityComponent)
+        {
+            runtimePrefab.AddComponent<WyrdrasilVikingIdentityComponent>();
+        }
+
+        var visualBootstrap = runtimePrefab.GetComponent<WyrdrasilVikingVisualBootstrap>();
+        if (!visualBootstrap)
+        {
+            runtimePrefab.AddComponent<WyrdrasilVikingVisualBootstrap>();
         }
 
         ConfigureAi(vikingAi);
@@ -114,7 +133,6 @@ public sealed class RegistryVikingPrefabFactory
             zNetView.m_persistent = false;
         }
 
-        Object.DontDestroyOnLoad(runtimePrefab);
         _cachedVikingPrefab = runtimePrefab;
         prefab = runtimePrefab;
 

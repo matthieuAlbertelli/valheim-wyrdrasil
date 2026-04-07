@@ -1,3 +1,5 @@
+using System;
+using System.Reflection;
 using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 
@@ -16,46 +18,22 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
     public void InitializeFromTemplate(Player template, string displayName)
     {
+        if (template == null)
+        {
+            throw new ArgumentNullException(nameof(template));
+        }
+
+        CopyDeclaredInstanceFields(template, this, typeof(Character));
+        CopyDeclaredInstanceFields(template, this, typeof(Humanoid));
+
+        ClearFieldIfPresent(this, "m_defaultItems");
+        ClearFieldIfPresent(this, "m_randomWeapon");
+        ClearFieldIfPresent(this, "m_randomArmor");
+        ClearFieldIfPresent(this, "m_randomShield");
+
         gameObject.name = displayName;
         name = displayName;
         m_name = displayName;
-
-        m_crouchSpeed = template.m_crouchSpeed;
-        m_walkSpeed = template.m_walkSpeed;
-        m_speed = template.m_speed;
-        m_runSpeed = template.m_runSpeed;
-        m_runTurnSpeed = template.m_runTurnSpeed;
-        m_acceleration = template.m_acceleration;
-        m_jumpForce = template.m_jumpForce;
-        m_jumpForceForward = template.m_jumpForceForward;
-        m_jumpForceTiredFactor = template.m_jumpForceTiredFactor;
-        m_airControl = template.m_airControl;
-        m_canSwim = true;
-        m_swimDepth = template.m_swimDepth;
-        m_swimSpeed = template.m_swimSpeed;
-        m_swimTurnSpeed = template.m_swimTurnSpeed;
-        m_swimAcceleration = template.m_swimAcceleration;
-        m_groundTilt = template.m_groundTilt;
-        m_groundTiltSpeed = template.m_groundTiltSpeed;
-        m_jumpStaminaUsage = template.m_jumpStaminaUsage;
-        m_tolerateWater = true;
-        m_staggerWhenBlocked = template.m_staggerWhenBlocked;
-        m_staggerDamageFactor = template.m_staggerDamageFactor;
-        m_unarmedWeapon = template.m_unarmedWeapon;
-        m_health = template.m_health;
-        m_damageModifiers = template.m_damageModifiers;
-        m_hitEffects = template.m_hitEffects;
-        m_critHitEffects = template.m_critHitEffects;
-        m_backstabHitEffects = template.m_backstabHitEffects;
-        m_deathEffects = template.m_deathEffects;
-        m_consumeItemEffects = template.m_consumeItemEffects;
-        m_equipEffects = template.m_equipStartEffects;
-        m_perfectBlockEffect = template.m_perfectBlockEffect;
-        m_waterEffects = template.m_waterEffects;
-        m_tarEffects = template.m_tarEffects;
-        m_slideEffects = template.m_slideEffects;
-        m_jumpEffects = template.m_jumpEffects;
-        m_flyingContinuousEffect = template.m_flyingContinuousEffect;
         m_eye = FindChildRecursive(transform, "EyePos");
     }
 
@@ -69,10 +47,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
     protected override void Awake()
     {
         base.Awake();
-        if (m_visEquipment != null)
-        {
-            m_visEquipment.m_isPlayer = true;
-        }
 
         if (m_eye == null)
         {
@@ -96,7 +70,8 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         if (_attached && !_loggedAttachedTick)
         {
             _loggedAttachedTick = true;
-            WyrdrasilSeatDebug.Log(this,
+            WyrdrasilSeatDebug.Log(
+                this,
                 $"CustomFixedUpdate attached=true chair={_attachedChair?.name ?? "null"} attachPoint={_attachPoint?.name ?? "null"}");
         }
 
@@ -114,11 +89,21 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             return;
         }
 
-        WyrdrasilSeatDebug.Log(this,
+        WyrdrasilSeatDebug.Log(
+            this,
             $"AttachToChair chair={chair.name} attachPoint={chair.m_attachPoint.name} inShip={chair.m_inShip} anim={chair.m_attachAnimation}");
 
         _attachedChair = chair;
-        AttachStart(chair.m_attachPoint, null, false, false, chair.m_inShip, chair.m_attachAnimation, chair.m_detachOffset, null);
+        AttachStart(
+            chair.m_attachPoint,
+            null,
+            false,
+            false,
+            chair.m_inShip,
+            chair.m_attachAnimation,
+            chair.m_detachOffset,
+            null);
+
         WyrdrasilSeatDebug.Log(this, $"AttachToChair after AttachStart IsAttached={IsAttached()}");
     }
 
@@ -127,9 +112,18 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         return _attachedChair == chair && IsAttached();
     }
 
-    public override void AttachStart(Transform attachPoint, GameObject? colliderRoot, bool hideWeapons, bool isBed, bool onShip, string attachAnimation, Vector3 detachOffset, Transform? cameraPos = null)
+    public override void AttachStart(
+        Transform attachPoint,
+        GameObject? colliderRoot,
+        bool hideWeapons,
+        bool isBed,
+        bool onShip,
+        string attachAnimation,
+        Vector3 detachOffset,
+        Transform? cameraPos = null)
     {
-        WyrdrasilSeatDebug.Log(this,
+        WyrdrasilSeatDebug.Log(
+            this,
             $"AttachStart enter alreadyAttached={_attached} attachPoint={(attachPoint != null ? attachPoint.name : "null")} anim={attachAnimation}");
 
         if (_attached)
@@ -251,6 +245,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         {
             var parentBody = _attachPoint.GetComponentInParent<Rigidbody>();
             m_body.useGravity = false;
+
 #pragma warning disable CS0618
             m_body.velocity = parentBody != null ? parentBody.GetPointVelocity(transform.position) : Vector3.zero;
             m_body.angularVelocity = Vector3.zero;
@@ -258,6 +253,69 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         }
 
         m_maxAirAltitude = transform.position.y;
+    }
+
+    private static void CopyDeclaredInstanceFields(Player source, WyrdrasilVikingNpc target, Type declaredOnType)
+    {
+        var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly;
+        var fields = declaredOnType.GetFields(flags);
+
+        foreach (var field in fields)
+        {
+            if (field.IsStatic)
+            {
+                continue;
+            }
+
+            try
+            {
+                var value = field.GetValue(source);
+                field.SetValue(target, value);
+            }
+            catch
+            {
+                // Best effort copy only.
+            }
+        }
+    }
+
+    private static void ClearFieldIfPresent(object target, string fieldName)
+    {
+        var field = target.GetType().GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (field == null)
+        {
+            return;
+        }
+
+        var fieldType = field.FieldType;
+
+        if (fieldType.IsArray)
+        {
+            var elementType = fieldType.GetElementType();
+            if (elementType != null)
+            {
+                var emptyArray = Array.CreateInstance(elementType, 0);
+                field.SetValue(target, emptyArray);
+            }
+
+            return;
+        }
+
+        if (fieldType.IsGenericType &&
+            fieldType.GetGenericTypeDefinition() == typeof(System.Collections.Generic.List<>))
+        {
+            var emptyList = Activator.CreateInstance(fieldType);
+            field.SetValue(target, emptyList);
+            return;
+        }
+
+        if (!fieldType.IsValueType)
+        {
+            field.SetValue(target, null);
+        }
     }
 
     private static Transform? FindChildRecursive(Transform root, string childName)

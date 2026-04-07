@@ -28,8 +28,17 @@ public class Plugin : BaseUnityPlugin
         var waypointService = new RegistryWaypointService(Logger, modeService, zoneService);
         var slotService = new RegistrySlotService(Logger, modeService, zoneService);
         var seatService = new RegistrySeatService(Logger, modeService, zoneService);
+
+        var appearanceCatalog = new RegistryNpcAppearanceCatalog();
+        var equipmentCatalog = new RegistryNpcEquipmentCatalog();
+        var appearanceGenerator = new RegistryNpcAppearanceGenerator(appearanceCatalog);
+        var equipmentGenerator = new RegistryNpcEquipmentGenerator(equipmentCatalog);
+        var identityGenerator = new RegistryNpcIdentityGenerator(appearanceGenerator, equipmentGenerator);
+        var customizationApplier = new RegistryNpcCustomizationApplier(Logger);
+        Wyrdrasil.Registry.Components.WyrdrasilVikingVisualBootstrap.ConfigureLogger(Logger);
+
         var vikingPrefabFactory = new RegistryVikingPrefabFactory(Logger);
-        var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory);
+        var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
         var navigationService = new RegistryNpcNavigationService(Logger);
         var residentRuntimeService = new RegistryResidentRuntimeService(Logger, navigationService, waypointService);
         var residentService = new RegistryResidentService(Logger, modeService, slotService, seatService, residentRuntimeService);
