@@ -32,6 +32,7 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
     private bool _hasSteeringTarget;
 
     private RegisteredSeatData? _seatTarget;
+    private bool _travelLocked;
     private Vector3 _seatApproachPoint;
     private float _seatApproachElapsed;
     private float _seatApproachTimeout;
@@ -48,8 +49,27 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         _rigidbody = GetComponent<Rigidbody>();
     }
 
+    public void EnterRegistryTravelLock()
+    {
+        _travelLocked = true;
+        _hasSteeringTarget = false;
+        _seatTarget = null;
+        _mode = NavigationMode.Idle;
+        StopMoving();
+        ZeroVelocity();
+        enabled = false;
+    }
+
+    public void ExitRegistryTravelLock()
+    {
+        _travelLocked = false;
+        ClearSteering();
+        enabled = true;
+    }
+
     public void SetSteeringTarget(Vector3 targetPosition, float stopDistance, Vector3 facingDirection)
     {
+        _travelLocked = false;
         _steeringTarget = targetPosition;
         _steeringStopDistance = stopDistance;
         _steeringFacingDirection = facingDirection.sqrMagnitude > 0.0001f
@@ -73,6 +93,7 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
 
     public void StartSeatApproach(RegisteredSeatData seat, bool arrivedFromWaypointRoute = false)
     {
+        _travelLocked = false;
         _seatTarget = seat;
         _seatApproachPoint = seat.ApproachPosition;
         _seatApproachElapsed = 0f;
@@ -93,6 +114,13 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
     {
         if (_viking == null)
         {
+            return true;
+        }
+
+        if (_travelLocked)
+        {
+            StopMoving();
+            ZeroVelocity();
             return true;
         }
 
@@ -151,7 +179,6 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
             return;
         }
 
-        RotateBodyTowards(_steeringTarget, dt);
         MoveTo(dt, _steeringTarget, _steeringStopDistance, false);
     }
 

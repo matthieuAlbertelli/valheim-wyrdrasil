@@ -21,8 +21,8 @@ public sealed class RegistryNpcNavigationService
         if (vikingAi != null)
         {
             ReleaseLegacyControllers(character);
-            var routeFollower = EnsureRouteFollower(character);
-            routeFollower.ConfigureRouteToPosition(routePoints, slotPosition, 0.3f, slotPosition - character.transform.position);
+            var routeController = EnsureRouteController(character);
+            routeController.ConfigureRouteToPosition(routePoints, slotPosition, 0.3f, slotPosition - character.transform.position);
             _log.LogInfo($"Assigned registry viking configured for waypoint route navigation with {routePoints.Count} waypoint(s).");
             return;
         }
@@ -38,8 +38,9 @@ public sealed class RegistryNpcNavigationService
         if (vikingAi != null)
         {
             ReleaseLegacyControllers(character);
-            vikingAi.SetSteeringTarget(slotPosition, 0.3f, slotPosition - character.transform.position);
-            _log.LogInfo("Assigned registry viking configured for direct movement fallback.");
+            var routeController = EnsureRouteController(character);
+            routeController.ConfigureRouteToPosition(System.Array.Empty<UnityEngine.Vector3>(), slotPosition, 0.3f, slotPosition - character.transform.position);
+            _log.LogInfo("Assigned registry viking configured for deterministic direct movement fallback.");
             return;
         }
 
@@ -56,8 +57,8 @@ public sealed class RegistryNpcNavigationService
         if (vikingAi != null)
         {
             ReleaseLegacyControllers(character);
-            var routeFollower = EnsureRouteFollower(character);
-            routeFollower.ConfigureRouteToSeat(routePoints, seat);
+            var routeController = EnsureRouteController(character);
+            routeController.ConfigureRouteToSeat(routePoints, seat);
             _log.LogInfo($"Assigned registry viking configured for designated seat navigation with {routePoints.Count} waypoint(s).");
             return;
         }
@@ -94,11 +95,18 @@ public sealed class RegistryNpcNavigationService
             WyrdrasilSeatDebug.Log(character, "Released WyrdrasilAssignedSlotController");
         }
 
+        var routeController = character.GetComponent<WyrdrasilRouteTraversalController>();
+        if (routeController != null)
+        {
+            routeController.ReleaseControl();
+            WyrdrasilSeatDebug.Log(character, "Released WyrdrasilRouteTraversalController");
+        }
+
         var routeFollower = character.GetComponent<WyrdrasilVikingRouteFollower>();
         if (routeFollower != null)
         {
             routeFollower.ReleaseControl();
-            WyrdrasilSeatDebug.Log(character, "Released WyrdrasilVikingRouteFollower");
+            WyrdrasilSeatDebug.Log(character, "Released legacy WyrdrasilVikingRouteFollower");
         }
     }
 
@@ -113,14 +121,14 @@ public sealed class RegistryNpcNavigationService
         return controller;
     }
 
-    private static WyrdrasilVikingRouteFollower EnsureRouteFollower(Character character)
+    private static WyrdrasilRouteTraversalController EnsureRouteController(Character character)
     {
-        var follower = character.GetComponent<WyrdrasilVikingRouteFollower>();
-        if (!follower)
+        var controller = character.GetComponent<WyrdrasilRouteTraversalController>();
+        if (!controller)
         {
-            follower = character.gameObject.AddComponent<WyrdrasilVikingRouteFollower>();
+            controller = character.gameObject.AddComponent<WyrdrasilRouteTraversalController>();
         }
 
-        return follower;
+        return controller;
     }
 }

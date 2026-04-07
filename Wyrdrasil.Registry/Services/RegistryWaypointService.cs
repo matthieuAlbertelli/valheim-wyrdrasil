@@ -10,6 +10,7 @@ namespace Wyrdrasil.Registry.Services;
 public sealed class RegistryWaypointService
 {
     private const float DuplicateWaypointDistance = 0.25f;
+    private const float StartWaypointSnapDistance = 1.50f;
 
     private readonly ManualLogSource _log;
     private readonly RegistryZoneService _zoneService;
@@ -123,12 +124,15 @@ public sealed class RegistryWaypointService
             return false;
         }
 
-        // Très important :
-        // on NE retourne PAS le premier noeud du chemin, car c'est le noeud de départ,
-        // celui sur lequel le PNJ est déjà logiquement "posé".
-        // Le renvoyer force le PNJ à converger vers le centre exact du premier waypoint,
-        // ce qui provoque précisément le symptôme observé.
-        for (var i = 1; i < waypointPath.Count; i++)
+        // On ne saute le premier noeud que si le PNJ est déjà réellement posé dessus.
+        // En pratique, un spawn ou une assignation peuvent démarrer plusieurs mètres avant le graphe.
+        // Dans ce cas, il faut impérativement converger d'abord vers le noeud de départ du chemin,
+        // sinon le PNJ coupe en diagonale vers le deuxième noeud et "ignore" visuellement le premier segment.
+        var startIndex = IsCloseToWaypoint(startPosition, startWaypoint.Position)
+            ? 1
+            : 0;
+
+        for (var i = startIndex; i < waypointPath.Count; i++)
         {
             var waypointId = waypointPath[i];
             var waypoint = _waypoints.FirstOrDefault(candidate => candidate.Id == waypointId);
@@ -141,6 +145,13 @@ public sealed class RegistryWaypointService
         }
 
         return routePoints.Count > 0;
+    }
+
+    private static bool IsCloseToWaypoint(Vector3 worldPosition, Vector3 waypointPosition)
+    {
+        var horizontalDelta = waypointPosition - worldPosition;
+        horizontalDelta.y = 0f;
+        return horizontalDelta.magnitude <= StartWaypointSnapDistance;
     }
 
     private static void AddWaypointPositionIfMeaningful(List<Vector3> routePoints, Vector3 candidatePosition)
