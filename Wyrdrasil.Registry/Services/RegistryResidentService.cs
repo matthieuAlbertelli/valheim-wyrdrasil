@@ -74,11 +74,73 @@ public sealed class RegistryResidentService
         return _registeredById.TryGetValue(residentId, out resident!);
     }
 
+    public void PrepareResidentPresenceSnapshotsForSave()
+    {
+        foreach (var resident in _registeredNpcs)
+        {
+            var runtimeState = _runtimeService.GetRuntimeState(resident.Id);
+            if (runtimeState == ResidentRuntimeState.Spawning)
+            {
+                continue;
+            }
+
+            if (!_runtimeService.TryCaptureBoundResidentTransform(resident.Id, out var worldPosition, out var worldYawDegrees, out var isAttached))
+            {
+                continue;
+            }
+
+            if (resident.AssignedSeatId.HasValue && isAttached)
+            {
+                resident.PresenceSnapshot.SetAssignedSeatAnchor(worldPosition, worldYawDegrees);
+                continue;
+            }
+
+            resident.PresenceSnapshot.SetWorldPosition(worldPosition, worldYawDegrees);
+        }
+    }
+
+    public void RestoreResidentsAfterLoad()
+    {
+        foreach (var resident in _registeredNpcs)
+        {
+            if (!resident.PresenceSnapshot.ShouldRespawnOnLoad)
+            {
+                continue;
+            }
+
+            if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
+            {
+                continue;
+            }
+
+            if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
+            {
+                continue;
+            }
+
+            switch (resident.PresenceSnapshot.RestoreMode)
+            {
+                case ResidentRestoreMode.WorldPosition:
+                    RestoreResidentAtWorldPosition(resident);
+                    break;
+
+                case ResidentRestoreMode.AssignedSeatAnchor:
+                    RestoreResidentAtAssignedSeat(resident);
+                    break;
+
+                case ResidentRestoreMode.AssignedSlotAnchor:
+                    RestoreResidentAtAssignedSlot(resident);
+                    break;
+            }
+        }
+    }
+
     public void ClearAllResidents()
     {
         foreach (var resident in _registeredNpcs)
         {
             _runtimeService.TryDespawnResident(resident.Id);
+            resident.PresenceSnapshot.Clear();
         }
 
         _registeredNpcs.Clear();
@@ -124,6 +186,7 @@ public sealed class RegistryResidentService
         _registeredNpcs.Add(data);
         _registeredById[data.Id] = data;
         _runtimeService.BindResident(data.Id, targetCharacter);
+        data.PresenceSnapshot.SetWorldPosition(targetCharacter.transform.position, targetCharacter.transform.eulerAngles.y);
         EnsureMarker(data);
 
         _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}' with {(createdIdentity ? "new" : "existing")} identity seed={identity.GenerationSeed}, generatedRole={identity.Role}, female={identity.Appearance.IsFemale}.");
@@ -213,6 +276,7 @@ public sealed class RegistryResidentService
             return;
         }
 
+        resident.PresenceSnapshot.Clear();
         _log.LogInfo($"Despawned resident #{resident.Id} ('{resident.DisplayName}').");
     }
 
@@ -361,6 +425,44 @@ public sealed class RegistryResidentService
         _toolState.ClearPendingResidentForceAssign();
     }
 
+    private void RestoreResidentAtWorldPosition(RegisteredNpcData resident)
+    {
+        var spawnPosition = resident.PresenceSnapshot.WorldPosition;
+        var spawnRotation = Quaternion.Euler(0f, resident.PresenceSnapshot.WorldYawDegrees, 0f);
+        TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _);
+    }
+
+    private void RestoreResidentAtAssignedSeat(RegisteredNpcData resident)
+    {
+        if (!resident.AssignedSeatId.HasValue)
+        {
+            return;
+        }
+
+        if (!_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
+        {
+            return;
+        }
+
+        RespawnResidentAssignedToSeat(seatData);
+    }
+
+    private void RestoreResidentAtAssignedSlot(RegisteredNpcData resident)
+    {
+        if (!resident.AssignedSlotId.HasValue)
+        {
+            return;
+        }
+
+        var slotData = _slotService.Slots.FirstOrDefault(candidate => candidate.Id == resident.AssignedSlotId.Value);
+        if (slotData == null)
+        {
+            return;
+        }
+
+        RespawnResidentAssignedToSlot(slotData);
+    }
+
     private void RespawnResidentAssignedToSlot(ZoneSlotData slotData)
     {
         if (!slotData.AssignedRegisteredNpcId.HasValue || !_registeredById.TryGetValue(slotData.AssignedRegisteredNpcId.Value, out var resident)) return;
@@ -402,6 +504,7 @@ public sealed class RegistryResidentService
         }
 
         _runtimeService.BindResident(resident.Id, character);
+        resident.PresenceSnapshot.SetWorldPosition(spawnPosition, spawnRotation.eulerAngles.y);
         EnsureMarker(resident);
         runtimeCharacter = character;
         return true;

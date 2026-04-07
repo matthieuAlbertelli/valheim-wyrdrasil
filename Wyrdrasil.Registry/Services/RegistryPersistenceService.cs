@@ -190,6 +190,7 @@ public sealed class RegistryPersistenceService
         _seatService.LoadSeats(resolvedSeats, saveData.NextSeatId);
         _residentService.LoadResidents(saveData.Residents.Select(ToRegisteredNpcData), saveData.NextResidentId);
         RebuildAssignmentsFromResidents();
+        _residentService.RestoreResidentsAfterLoad();
 
         if (_pendingSeatResolutions.Count > 0)
         {
@@ -232,6 +233,7 @@ public sealed class RegistryPersistenceService
         _pendingSeatResolutions.Clear();
         _pendingSeatResolutions.AddRange(stillPending);
         RebuildAssignmentsFromResidents();
+        _residentService.RestoreResidentsAfterLoad();
 
         _log.LogInfo($"Resolved {resolvedSeatData.Count} deferred seat(s). Remaining unresolved seats={_pendingSeatResolutions.Count}.");
     }
@@ -273,6 +275,8 @@ public sealed class RegistryPersistenceService
 
     private RegistrySaveData BuildSaveData()
     {
+        _residentService.PrepareResidentPresenceSnapshotsForSave();
+
         var saveData = new RegistrySaveData
         {
             Version = 1,
@@ -454,7 +458,8 @@ public sealed class RegistryPersistenceService
             Role = data.Role,
             AssignedSlotId = data.AssignedSlotId,
             AssignedSeatId = data.AssignedSeatId,
-            Identity = FromIdentityData(data.Identity)
+            Identity = FromIdentityData(data.Identity),
+            PresenceSnapshot = FromPresenceSnapshotData(data.PresenceSnapshot)
         };
     }
 
@@ -472,7 +477,37 @@ public sealed class RegistryPersistenceService
             resident.AssignSeat(data.AssignedSeatId.Value);
         }
 
+        ApplyPresenceSnapshotSaveData(resident.PresenceSnapshot, data.PresenceSnapshot);
         return resident;
+    }
+
+    private static ResidentPresenceSnapshotSaveData FromPresenceSnapshotData(ResidentPresenceSnapshotData data)
+    {
+        return new ResidentPresenceSnapshotSaveData
+        {
+            RestoreMode = data.RestoreMode,
+            WorldPosition = Float3SaveData.FromVector3(data.WorldPosition),
+            WorldYawDegrees = data.WorldYawDegrees
+        };
+    }
+
+    private static void ApplyPresenceSnapshotSaveData(ResidentPresenceSnapshotData target, ResidentPresenceSnapshotSaveData saveData)
+    {
+        switch (saveData.RestoreMode)
+        {
+            case ResidentRestoreMode.WorldPosition:
+                target.SetWorldPosition(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
+                break;
+            case ResidentRestoreMode.AssignedSlotAnchor:
+                target.SetAssignedSlotAnchor(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
+                break;
+            case ResidentRestoreMode.AssignedSeatAnchor:
+                target.SetAssignedSeatAnchor(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
+                break;
+            default:
+                target.Clear();
+                break;
+        }
     }
 
     private static VikingIdentitySaveData FromIdentityData(VikingIdentityData data)

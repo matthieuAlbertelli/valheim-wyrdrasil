@@ -10,6 +10,7 @@ public sealed class RegisteredNpcData
     public NpcRole Role { get; private set; } = NpcRole.Villager;
     public int? AssignedSlotId { get; private set; }
     public int? AssignedSeatId { get; private set; }
+    public ResidentPresenceSnapshotData PresenceSnapshot { get; } = new();
 
     public RegisteredNpcData(int id, string displayName, VikingIdentityData identity)
     {

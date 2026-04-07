@@ -11,4 +11,5 @@ public sealed class RegisteredNpcSaveData
     public int? AssignedSlotId;
     public int? AssignedSeatId;
     public VikingIdentitySaveData Identity = new();
+    public ResidentPresenceSnapshotSaveData PresenceSnapshot = new();
 }

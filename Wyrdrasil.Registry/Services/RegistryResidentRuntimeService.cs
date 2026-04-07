@@ -153,6 +153,22 @@ public sealed class RegistryResidentRuntimeService
         return false;
     }
 
+    public bool TryCaptureBoundResidentTransform(int residentId, out Vector3 worldPosition, out float worldYawDegrees, out bool isAttached)
+    {
+        if (!TryGetBoundCharacter(residentId, out var character))
+        {
+            worldPosition = Vector3.zero;
+            worldYawDegrees = 0f;
+            isAttached = false;
+            return false;
+        }
+
+        worldPosition = character.transform.position;
+        worldYawDegrees = character.transform.eulerAngles.y;
+        isAttached = character is Humanoid humanoid && humanoid.IsAttached();
+        return true;
+    }
+
     public void ApplyInnkeeperAssignment(RegisteredNpcData resident, ZoneSlotData slot)
     {
         ApplyPositionAssignment(resident.Id, slot.Position, $"innkeeper slot #{slot.Id}");
