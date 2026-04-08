@@ -52,6 +52,8 @@ public class Plugin : BaseUnityPlugin
         var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
         var navigationService = new RegistryNpcNavigationService(Logger);
         var residentRuntimeService = new RegistryResidentRuntimeService(Logger);
+        var residentCatalogService = new RegistryResidentCatalogService();
+        var residentVisualService = new RegistryResidentVisualService(modeService, residentRuntimeService);
         var scheduleService = new RegistryResidentScheduleService();
         var occupationService = new RegistryResidentOccupationService(
             Logger,
@@ -62,19 +64,39 @@ public class Plugin : BaseUnityPlugin
             navigationService,
             waypointService);
 
-        var residentService = new RegistryResidentService(
-            Logger,
-            modeService.State,
-            modeService,
+        var residentPresenceService = new RegistryResidentPresenceService(
+            residentCatalogService,
+            residentRuntimeService,
+            spawnService,
+            slotService,
+            seatService,
+            bedService,
+            occupationService,
+            residentVisualService);
+
+        var residentAssignmentService = new RegistryResidentAssignmentService(
             slotService,
             seatService,
             bedService,
             residentRuntimeService,
-            spawnService,
+            scheduleService,
+            occupationService,
+            residentCatalogService,
+            residentVisualService);
+
+        var residentService = new RegistryResidentService(
+            Logger,
+            modeService.State,
+            slotService,
+            seatService,
+            bedService,
+            residentRuntimeService,
             identityGenerator,
             customizationApplier,
-            scheduleService,
-            occupationService);
+            residentCatalogService,
+            residentVisualService,
+            residentPresenceService,
+            residentAssignmentService);
 
         _worldClockService = new RegistryWorldClockService();
         _residentRoutineService = new RegistryResidentRoutineService(
@@ -134,7 +156,6 @@ public class Plugin : BaseUnityPlugin
         var actionRegistry = BuildActionRegistry();
         var context = new RegistryContext(
             Logger,
-            buildingService,
             zoneService,
             waypointService,
             slotService,
@@ -144,7 +165,6 @@ public class Plugin : BaseUnityPlugin
             residentService,
             diagnosticsService,
             deletionService,
-            _persistenceService,
             flushService,
             _worldClockService);
 
@@ -155,6 +175,14 @@ public class Plugin : BaseUnityPlugin
             selectionService,
             actionRegistry,
             context,
+            _persistenceService,
+            zoneService,
+            waypointService,
+            slotService,
+            seatService,
+            bedService,
+            residentService,
+            _worldClockService,
             hudRenderer);
 
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");

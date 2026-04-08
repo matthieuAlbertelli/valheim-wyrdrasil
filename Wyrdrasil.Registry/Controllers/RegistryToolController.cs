@@ -14,20 +14,44 @@ public sealed class RegistryToolController
     private readonly RegistryModeService _modeService;
     private readonly RegistrySelectionService _selectionService;
     private readonly RegistryActionRegistry _actionRegistry;
-    private readonly RegistryContext _context;
+    private readonly RegistryContext _actionContext;
+    private readonly RegistryPersistenceService _persistenceService;
+    private readonly RegistryZoneService _zoneService;
+    private readonly RegistryWaypointService _waypointService;
+    private readonly RegistrySlotService _slotService;
+    private readonly RegistrySeatService _seatService;
+    private readonly RegistryBedService _bedService;
+    private readonly RegistryResidentService _residentService;
+    private readonly RegistryWorldClockService _worldClockService;
     private readonly RegistryHudRenderer _hudRenderer;
 
     public RegistryToolController(
         RegistryModeService modeService,
         RegistrySelectionService selectionService,
         RegistryActionRegistry actionRegistry,
-        RegistryContext context,
+        RegistryContext actionContext,
+        RegistryPersistenceService persistenceService,
+        RegistryZoneService zoneService,
+        RegistryWaypointService waypointService,
+        RegistrySlotService slotService,
+        RegistrySeatService seatService,
+        RegistryBedService bedService,
+        RegistryResidentService residentService,
+        RegistryWorldClockService worldClockService,
         RegistryHudRenderer hudRenderer)
     {
         _modeService = modeService;
         _selectionService = selectionService;
         _actionRegistry = actionRegistry;
-        _context = context;
+        _actionContext = actionContext;
+        _persistenceService = persistenceService;
+        _zoneService = zoneService;
+        _waypointService = waypointService;
+        _slotService = slotService;
+        _seatService = seatService;
+        _bedService = bedService;
+        _residentService = residentService;
+        _worldClockService = worldClockService;
         _hudRenderer = hudRenderer;
     }
 
@@ -49,7 +73,7 @@ public sealed class RegistryToolController
 
         if (selectedAction == RegistryActionType.CreateTavernZone || selectedAction == RegistryActionType.CreateBedroomZone)
         {
-            _context.ZoneService.UpdatePendingZoneAuthoringPreview();
+            _zoneService.UpdatePendingZoneAuthoringPreview();
             HandleZoneAuthoringInputs();
         }
 
@@ -72,15 +96,15 @@ public sealed class RegistryToolController
 
         if (!isDeleteAction && Input.GetMouseButtonDown(0))
         {
-            _actionRegistry.Execute(selectedAction, _context);
-            _context.PersistenceService.SaveWorldState();
+            _actionRegistry.Execute(selectedAction, _actionContext);
+            _persistenceService.SaveWorldState();
             return;
         }
 
         if (isDeleteAction && Input.GetMouseButtonDown(1))
         {
-            _actionRegistry.Execute(selectedAction, _context);
-            _context.PersistenceService.SaveWorldState();
+            _actionRegistry.Execute(selectedAction, _actionContext);
+            _persistenceService.SaveWorldState();
         }
     }
 
@@ -96,43 +120,43 @@ public sealed class RegistryToolController
             ToggleKey,
             NextCategoryKey,
             NextActionKey,
-            _context.ZoneService.Zones.Count,
-            _context.WaypointService.Waypoints.Count,
-            _context.WaypointService.PendingLinkStartWaypointId,
-            _context.SlotService.Slots.Count,
-            _context.SeatService.Seats.Count,
-            _context.BedService.Beds.Count,
-            _context.ResidentService.RegisteredNpcs.Count,
-            _context.ZoneService.GetPendingZoneAuthoringSnapshot(),
-            _context.WorldClockService.GetClockLabel(),
-            _context.WorldClockService.GetClockModeLabel());
+            _zoneService.Zones.Count,
+            _waypointService.Waypoints.Count,
+            _waypointService.PendingLinkStartWaypointId,
+            _slotService.Slots.Count,
+            _seatService.Seats.Count,
+            _bedService.Beds.Count,
+            _residentService.RegisteredNpcs.Count,
+            _zoneService.GetPendingZoneAuthoringSnapshot(),
+            _worldClockService.GetClockLabel(),
+            _worldClockService.GetClockModeLabel());
     }
 
     private void HandleZoneAuthoringInputs()
     {
         if (Input.GetMouseButtonDown(1))
         {
-            _context.ZoneService.HandleZoneAuthoringSecondaryInput();
+            _zoneService.HandleZoneAuthoringSecondaryInput();
             return;
         }
 
-        if (_context.ZoneService.IsZoneHeightEditingActive)
+        if (_zoneService.IsZoneHeightEditingActive)
         {
             var scrollDelta = Input.mouseScrollDelta.y;
             if (Mathf.Abs(scrollDelta) > 0.01f)
             {
                 var direction = scrollDelta > 0f ? 1 : -1;
                 var adjustBase = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-                _context.ZoneService.AdjustPendingZoneHeight(direction, adjustBase);
+                _zoneService.AdjustPendingZoneHeight(direction, adjustBase);
             }
         }
     }
 
     private void CancelZoneAuthoringIfNeeded()
     {
-        if (_context.ZoneService.IsZoneAuthoringActive)
+        if (_zoneService.IsZoneAuthoringActive)
         {
-            _context.ZoneService.CancelPendingZoneAuthoring();
+            _zoneService.CancelPendingZoneAuthoring();
         }
     }
 
@@ -142,43 +166,43 @@ public sealed class RegistryToolController
         var hasPendingResident = state.SelectedAction == RegistryActionType.ForceAssignResident &&
                                  state.PendingResidentForceAssignId.HasValue;
 
-        _context.ResidentService.SetPendingForceAssignResidentVisual(hasPendingResident ? state.PendingResidentForceAssignId : null);
+        _residentService.SetPendingForceAssignResidentVisual(hasPendingResident ? state.PendingResidentForceAssignId : null);
 
         if (!hasPendingResident)
         {
-            _context.SlotService.SetPendingForceAssignTarget(null);
-            _context.SeatService.SetPendingForceAssignTarget(null);
-            _context.BedService.SetPendingForceAssignTarget(null);
+            _slotService.SetPendingForceAssignTarget(null);
+            _seatService.SetPendingForceAssignTarget(null);
+            _bedService.SetPendingForceAssignTarget(null);
             return;
         }
 
-        if (_context.SlotService.TryGetSlotAtCrosshair(out var slotData))
+        if (_slotService.TryGetSlotAtCrosshair(out var slotData))
         {
-            _context.SlotService.SetPendingForceAssignTarget(slotData.Id);
-            _context.SeatService.SetPendingForceAssignTarget(null);
-            _context.BedService.SetPendingForceAssignTarget(null);
+            _slotService.SetPendingForceAssignTarget(slotData.Id);
+            _seatService.SetPendingForceAssignTarget(null);
+            _bedService.SetPendingForceAssignTarget(null);
             return;
         }
 
-        if (_context.SeatService.TryGetSeatAtCrosshair(out var seatData))
+        if (_seatService.TryGetSeatAtCrosshair(out var seatData))
         {
-            _context.SlotService.SetPendingForceAssignTarget(null);
-            _context.SeatService.SetPendingForceAssignTarget(seatData.Id);
-            _context.BedService.SetPendingForceAssignTarget(null);
+            _slotService.SetPendingForceAssignTarget(null);
+            _seatService.SetPendingForceAssignTarget(seatData.Id);
+            _bedService.SetPendingForceAssignTarget(null);
             return;
         }
 
-        if (_context.BedService.TryGetBedAtCrosshair(out var bedData))
+        if (_bedService.TryGetBedAtCrosshair(out var bedData))
         {
-            _context.SlotService.SetPendingForceAssignTarget(null);
-            _context.SeatService.SetPendingForceAssignTarget(null);
-            _context.BedService.SetPendingForceAssignTarget(bedData.Id);
+            _slotService.SetPendingForceAssignTarget(null);
+            _seatService.SetPendingForceAssignTarget(null);
+            _bedService.SetPendingForceAssignTarget(bedData.Id);
             return;
         }
 
-        _context.SlotService.SetPendingForceAssignTarget(null);
-        _context.SeatService.SetPendingForceAssignTarget(null);
-        _context.BedService.SetPendingForceAssignTarget(null);
+        _slotService.SetPendingForceAssignTarget(null);
+        _seatService.SetPendingForceAssignTarget(null);
+        _bedService.SetPendingForceAssignTarget(null);
     }
 
     private static bool IsDeleteAction(RegistryActionType actionType)

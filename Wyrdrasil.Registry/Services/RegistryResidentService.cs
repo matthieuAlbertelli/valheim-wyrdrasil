@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
@@ -17,34 +16,29 @@ public sealed class RegistryResidentService
     private readonly RegistrySeatService _seatService;
     private readonly RegistryBedService _bedService;
     private readonly RegistryResidentRuntimeService _runtimeService;
-    private readonly RegistrySpawnService _spawnService;
     private readonly RegistryNpcIdentityGenerator _identityGenerator;
     private readonly RegistryNpcCustomizationApplier _customizationApplier;
-    private readonly RegistryResidentScheduleService _scheduleService;
-    private readonly RegistryResidentOccupationService _occupationService;
-    private readonly List<RegisteredNpcData> _registeredNpcs = new();
-    private readonly Dictionary<int, RegisteredNpcData> _registeredById = new();
-    private readonly Dictionary<int, WyrdrasilRegisteredNpcMarker> _markers = new();
+    private readonly RegistryResidentCatalogService _catalogService;
+    private readonly RegistryResidentVisualService _visualService;
+    private readonly RegistryResidentPresenceService _presenceService;
+    private readonly RegistryResidentAssignmentService _assignmentService;
 
-    private int _nextRegisteredNpcId = 1;
-    private bool _visualsVisible;
-
-    public IReadOnlyList<RegisteredNpcData> RegisteredNpcs => _registeredNpcs;
-    public int NextRegisteredNpcId => _nextRegisteredNpcId;
+    public IReadOnlyList<RegisteredNpcData> RegisteredNpcs => _catalogService.RegisteredNpcs;
+    public int NextRegisteredNpcId => _catalogService.NextRegisteredNpcId;
 
     public RegistryResidentService(
         ManualLogSource log,
         RegistryToolState toolState,
-        RegistryModeService modeService,
         RegistrySlotService slotService,
         RegistrySeatService seatService,
         RegistryBedService bedService,
         RegistryResidentRuntimeService runtimeService,
-        RegistrySpawnService spawnService,
         RegistryNpcIdentityGenerator identityGenerator,
         RegistryNpcCustomizationApplier customizationApplier,
-        RegistryResidentScheduleService scheduleService,
-        RegistryResidentOccupationService occupationService)
+        RegistryResidentCatalogService catalogService,
+        RegistryResidentVisualService visualService,
+        RegistryResidentPresenceService presenceService,
+        RegistryResidentAssignmentService assignmentService)
     {
         _log = log;
         _toolState = toolState;
@@ -52,186 +46,53 @@ public sealed class RegistryResidentService
         _seatService = seatService;
         _bedService = bedService;
         _runtimeService = runtimeService;
-        _spawnService = spawnService;
         _identityGenerator = identityGenerator;
         _customizationApplier = customizationApplier;
-        _scheduleService = scheduleService;
-        _occupationService = occupationService;
-        _visualsVisible = modeService.IsRegistryModeEnabled;
-        modeService.RegistryModeChanged += OnRegistryModeChanged;
+        _catalogService = catalogService;
+        _visualService = visualService;
+        _presenceService = presenceService;
+        _assignmentService = assignmentService;
     }
 
-    public IReadOnlyDictionary<int, WyrdrasilRegisteredNpcMarker> Markers => _markers;
+    public IReadOnlyDictionary<int, WyrdrasilRegisteredNpcMarker> Markers => _visualService.Markers;
 
     public void LoadResidents(IEnumerable<RegisteredNpcData> residents, int nextResidentId)
     {
-        _registeredNpcs.Clear();
-        _registeredById.Clear();
-        _markers.Clear();
-
-        foreach (var resident in residents)
-        {
-            _registeredNpcs.Add(resident);
-            _registeredById[resident.Id] = resident;
-        }
-
-        _nextRegisteredNpcId = nextResidentId;
+        _catalogService.LoadResidents(residents, nextResidentId);
+        _visualService.ClearAll();
     }
 
     public bool TryGetResidentById(int residentId, out RegisteredNpcData resident)
     {
-        return _registeredById.TryGetValue(residentId, out resident!);
+        return _catalogService.TryGetResidentById(residentId, out resident!);
     }
 
     public void PrepareResidentPresenceSnapshotsForSave()
     {
-        foreach (var resident in _registeredNpcs)
-        {
-            var runtimeState = _runtimeService.GetRuntimeState(resident.Id);
-            if (runtimeState == ResidentRuntimeState.Spawning)
-            {
-                continue;
-            }
-
-            if (!_runtimeService.TryCaptureBoundResidentTransform(resident.Id, out var worldPosition, out var worldYawDegrees, out var isAttached))
-            {
-                continue;
-            }
-
-            if (characterIsAttachedToAssignedBed(resident))
-            {
-                resident.PresenceSnapshot.SetAssignedBedAnchor(worldPosition, worldYawDegrees);
-                continue;
-            }
-
-            if (characterIsAttachedToAssignedSeat(resident))
-            {
-                resident.PresenceSnapshot.SetAssignedSeatAnchor(worldPosition, worldYawDegrees);
-                continue;
-            }
-
-            if (resident.AssignedSlotId.HasValue && isAttached)
-            {
-                resident.PresenceSnapshot.SetAssignedSlotAnchor(worldPosition, worldYawDegrees);
-                continue;
-            }
-
-            resident.PresenceSnapshot.SetWorldPosition(worldPosition, worldYawDegrees);
-        }
-
-        bool characterIsAttachedToAssignedSeat(RegisteredNpcData residentData)
-        {
-            if (!residentData.AssignedSeatId.HasValue)
-            {
-                return false;
-            }
-
-            if (!_runtimeService.TryGetBoundCharacter(residentData.Id, out var character))
-            {
-                return false;
-            }
-
-            if (character is not WyrdrasilVikingNpc viking)
-            {
-                return false;
-            }
-
-            if (!_seatService.TryGetSeatById(residentData.AssignedSeatId.Value, out var seatData) || seatData.ChairComponent == null)
-            {
-                return false;
-            }
-
-            return viking.IsAttachedToChair(seatData.ChairComponent);
-        }
-
-        bool characterIsAttachedToAssignedBed(RegisteredNpcData residentData)
-        {
-            if (!residentData.AssignedBedId.HasValue)
-            {
-                return false;
-            }
-
-            if (!_runtimeService.TryGetBoundCharacter(residentData.Id, out var character))
-            {
-                return false;
-            }
-
-            if (character is not WyrdrasilVikingNpc viking)
-            {
-                return false;
-            }
-
-            if (!_bedService.TryGetBedById(residentData.AssignedBedId.Value, out var bedData) || bedData.BedComponent == null)
-            {
-                return false;
-            }
-
-            return viking.IsAttachedToBed(bedData.BedComponent);
-        }
+        _presenceService.PrepareResidentPresenceSnapshotsForSave();
     }
 
     public void RestoreResidentsAfterLoad()
     {
-        foreach (var resident in _registeredNpcs)
-        {
-            if (!resident.PresenceSnapshot.ShouldRespawnOnLoad)
-            {
-                continue;
-            }
-
-            if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
-            {
-                continue;
-            }
-
-            if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
-            {
-                continue;
-            }
-
-            switch (resident.PresenceSnapshot.RestoreMode)
-            {
-                case ResidentRestoreMode.WorldPosition:
-                    RestoreResidentAtWorldPosition(resident);
-                    break;
-
-                case ResidentRestoreMode.AssignedSeatAnchor:
-                    RestoreResidentAtAssignedSeat(resident);
-                    break;
-
-                case ResidentRestoreMode.AssignedSlotAnchor:
-                    RestoreResidentAtAssignedSlot(resident);
-                    break;
-
-                case ResidentRestoreMode.AssignedBedAnchor:
-                    RestoreResidentAtAssignedBed(resident);
-                    break;
-            }
-        }
+        _presenceService.RestoreResidentsAfterLoad();
     }
 
     public void ClearAllResidents()
     {
-        foreach (var resident in _registeredNpcs)
+        foreach (var resident in _catalogService.RegisteredNpcs)
         {
             _runtimeService.TryDespawnResident(resident.Id);
             resident.PresenceSnapshot.Clear();
         }
 
-        _registeredNpcs.Clear();
-        _registeredById.Clear();
-        _markers.Clear();
+        _catalogService.Clear();
+        _visualService.ClearAll();
         _toolState.ClearPendingResidentForceAssign();
-        _nextRegisteredNpcId = 1;
     }
 
     public void SetPendingForceAssignResidentVisual(int? residentId)
     {
-        foreach (var pair in _markers)
-        {
-            if (pair.Value == null) continue;
-            pair.Value.SetPendingForceAssign(residentId.HasValue && pair.Key == residentId.Value);
-        }
+        _visualService.SetPendingForceAssignResidentVisual(residentId);
     }
 
     public void RegisterNpcAtCrosshair()
@@ -257,12 +118,11 @@ public sealed class RegistryResidentService
 
         var displayName = GetCharacterName(targetCharacter);
         var identity = ResolveOrCreateIdentity(targetCharacter, NpcRole.Villager, out var createdIdentity);
-        var data = new RegisteredNpcData(_nextRegisteredNpcId++, displayName, identity);
-        _registeredNpcs.Add(data);
-        _registeredById[data.Id] = data;
+        var data = new RegisteredNpcData(_catalogService.AllocateResidentId(), displayName, identity);
+        _catalogService.AddResident(data);
         _runtimeService.BindResident(data.Id, targetCharacter);
         data.PresenceSnapshot.SetWorldPosition(targetCharacter.transform.position, targetCharacter.transform.eulerAngles.y);
-        EnsureMarker(data);
+        _visualService.EnsureMarker(data);
 
         _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}' with {(createdIdentity ? "new" : "existing")} identity seed={identity.GenerationSeed}, generatedRole={identity.Role}, female={identity.Appearance.IsFemale}.");
     }
@@ -276,7 +136,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (!_toolState.PendingResidentForceAssignId.HasValue || !_registeredById.TryGetValue(_toolState.PendingResidentForceAssignId.Value, out var pendingResident))
+        if (!_toolState.PendingResidentForceAssignId.HasValue || !_catalogService.TryGetResidentById(_toolState.PendingResidentForceAssignId.Value, out var pendingResident))
         {
             _toolState.ClearPendingResidentForceAssign();
             _log.LogWarning("Cannot force assign: target a registered resident first.");
@@ -285,19 +145,31 @@ public sealed class RegistryResidentService
 
         if (_slotService.TryGetSlotAtCrosshair(out var slotData))
         {
-            ForceAssignResidentToSlot(pendingResident, slotData);
+            if (_assignmentService.TryForceAssignToSlot(pendingResident, slotData))
+            {
+                _toolState.ClearPendingResidentForceAssign();
+            }
+
             return;
         }
 
         if (_seatService.TryGetSeatAtCrosshair(out var seatData))
         {
-            ForceAssignResidentToSeat(pendingResident, seatData);
+            if (_assignmentService.TryForceAssignToSeat(pendingResident, seatData))
+            {
+                _toolState.ClearPendingResidentForceAssign();
+            }
+
             return;
         }
 
         if (_bedService.TryGetBedAtCrosshair(out var bedData))
         {
-            ForceAssignResidentToBed(pendingResident, bedData);
+            if (_assignmentService.TryForceAssignToBed(pendingResident, bedData))
+            {
+                _toolState.ClearPendingResidentForceAssign();
+            }
+
             return;
         }
 
@@ -312,19 +184,9 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (!_slotService.ClearSlotAssignment(slotData.Id, out var previousResidentId) || !previousResidentId.HasValue)
+        if (!_assignmentService.TryClearSlotAssignment(slotData, out _))
         {
             _log.LogWarning($"Cannot clear slot assignment: innkeeper slot #{slotData.Id} has no assigned resident.");
-            return;
-        }
-
-        if (_registeredById.TryGetValue(previousResidentId.Value, out var resident))
-        {
-            _occupationService.ReleaseOccupation(resident, false);
-            resident.ClearAssignedSlot();
-            resident.SetRole(NpcRole.Villager);
-            _scheduleService.ClearSlotSchedule(resident);
-            UpdateMarker(resident);
         }
     }
 
@@ -336,18 +198,9 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (!_seatService.ClearSeatAssignment(seatData.Id, out var previousResidentId) || !previousResidentId.HasValue)
+        if (!_assignmentService.TryClearSeatAssignment(seatData, out _))
         {
             _log.LogWarning($"Cannot clear seat assignment: seat #{seatData.Id} has no assigned resident.");
-            return;
-        }
-
-        if (_registeredById.TryGetValue(previousResidentId.Value, out var resident))
-        {
-            _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedSeat();
-            _scheduleService.ClearSeatSchedule(resident);
-            UpdateMarker(resident);
         }
     }
 
@@ -359,31 +212,20 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (!_bedService.ClearBedAssignment(bedData.Id, out var previousResidentId) || !previousResidentId.HasValue)
+        if (!_assignmentService.TryClearBedAssignment(bedData, out _))
         {
             _log.LogWarning($"Cannot clear bed assignment: bed #{bedData.Id} has no assigned resident.");
-            return;
-        }
-
-        if (_registeredById.TryGetValue(previousResidentId.Value, out var resident))
-        {
-            _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedBed();
-            _scheduleService.ClearBedSchedule(resident);
-            UpdateMarker(resident);
         }
     }
 
     public void DespawnTargetResidentAtCrosshair()
     {
         if (!TryGetTargetRegisteredResident("Cannot despawn resident", out _, out var resident)) return;
-        if (!_runtimeService.TryDespawnResident(resident.Id))
+        if (!_presenceService.TryDespawnResident(resident))
         {
             _log.LogWarning($"Cannot despawn resident #{resident.Id}: runtime destruction failed.");
             return;
         }
-
-        resident.PresenceSnapshot.Clear();
         _log.LogInfo($"Despawned resident #{resident.Id} ('{resident.DisplayName}').");
     }
 
@@ -391,19 +233,19 @@ public sealed class RegistryResidentService
     {
         if (_slotService.TryGetSlotAtCrosshair(out var slotData))
         {
-            RespawnResidentAssignedToSlot(slotData);
+            _presenceService.TryRespawnResidentAssignedToSlot(slotData);
             return;
         }
 
         if (_seatService.TryGetSeatAtCrosshair(out var seatData))
         {
-            RespawnResidentAssignedToSeat(seatData);
+            _presenceService.TryRespawnResidentAssignedToSeat(seatData);
             return;
         }
 
         if (_bedService.TryGetBedAtCrosshair(out var bedData))
         {
-            RespawnResidentAssignedToBed(bedData);
+            _presenceService.TryRespawnResidentAssignedToBed(bedData);
             return;
         }
 
@@ -413,22 +255,11 @@ public sealed class RegistryResidentService
     public void AssignInnkeeperRoleAtCrosshair()
     {
         if (!TryGetTargetRegisteredResident("Cannot assign innkeeper role", out var targetCharacter, out var data)) return;
-        DetachIfAttached(targetCharacter);
-        _slotService.ClearAssignmentForResident(data.Id);
-        _seatService.ClearAssignmentForResident(data.Id);
-        data.ClearAssignedSeat();
-        _scheduleService.ClearSeatSchedule(data);
-
-        if (!_slotService.TryAssignInnkeeperSlot(data.Id, out var slotData) || slotData == null)
+        if (!_assignmentService.TryAssignInnkeeperRole(data, targetCharacter, out var slotData) || slotData == null)
         {
             _log.LogWarning("Cannot assign innkeeper role: no free Innkeeper slot is available.");
             return;
         }
-
-        data.SetRole(NpcRole.Innkeeper);
-        data.AssignSlot(slotData.Id);
-        _scheduleService.ApplyDefaultInnkeeperSchedule(data);
-        UpdateMarker(data);
         _log.LogInfo($"Assigned Innkeeper role to registered NPC #{data.Id} ('{data.DisplayName}') using slot #{slotData.Id}.");
     }
 
@@ -441,283 +272,38 @@ public sealed class RegistryResidentService
             return;
         }
 
-        DetachIfAttached(targetCharacter);
-        _seatService.ClearAssignmentForResident(data.Id);
-        data.ClearAssignedSeat();
-
-        if (!_seatService.TryAssignSeat(data.Id, out var seatData) || seatData == null)
+        if (!_assignmentService.TryAssignSeat(data, targetCharacter, out var seatData) || seatData == null)
         {
             _log.LogWarning("Cannot assign seat: no free designated seat is available.");
             return;
         }
-
-        data.SetRole(NpcRole.Villager);
-        data.AssignSeat(seatData.Id);
-        _scheduleService.ApplyDefaultSeatMealSchedule(data);
-        UpdateMarker(data);
         _log.LogInfo($"Assigned designated seat #{seatData.Id} to registered NPC #{data.Id} ('{data.DisplayName}').");
     }
 
     public void AssignBedAtCrosshair()
     {
         if (!TryGetTargetRegisteredResident("Cannot assign bed", out var targetCharacter, out var data)) return;
-        DetachIfAttached(targetCharacter);
-        _bedService.ClearAssignmentForResident(data.Id);
-        data.ClearAssignedBed();
-
-        if (!_bedService.TryAssignBed(data.Id, out var bedData) || bedData == null)
+        if (!_assignmentService.TryAssignBed(data, targetCharacter, out var bedData) || bedData == null)
         {
             _log.LogWarning("Cannot assign bed: no free designated bed is available.");
             return;
         }
-
-        data.AssignBed(bedData.Id);
-        _scheduleService.ApplyDefaultBedSleepSchedule(data);
-        UpdateMarker(data);
         _log.LogInfo($"Assigned designated bed #{bedData.Id} to registered NPC #{data.Id} ('{data.DisplayName}').");
     }
 
     public void HandleDeletedSlot(int slotId)
     {
-        foreach (var resident in _registeredNpcs.Where(resident => resident.AssignedSlotId == slotId))
-        {
-            resident.ClearAssignedSlot();
-            resident.SetRole(NpcRole.Villager);
-            _scheduleService.ClearSlotSchedule(resident);
-            UpdateMarker(resident);
-        }
+        _assignmentService.HandleDeletedSlot(slotId);
     }
 
     public void HandleDeletedSeat(int seatId)
     {
-        foreach (var resident in _registeredNpcs.Where(resident => resident.AssignedSeatId == seatId))
-        {
-            _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedSeat();
-            _scheduleService.ClearSeatSchedule(resident);
-            UpdateMarker(resident);
-        }
+        _assignmentService.HandleDeletedSeat(seatId);
     }
 
     public void HandleDeletedBed(int bedId)
     {
-        foreach (var resident in _registeredNpcs.Where(resident => resident.AssignedBedId == bedId))
-        {
-            _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedBed();
-            _scheduleService.ClearBedSchedule(resident);
-            UpdateMarker(resident);
-        }
-    }
-
-    private void ForceAssignResidentToSlot(RegisteredNpcData pendingResident, ZoneSlotData slotData)
-    {
-        if (pendingResident.AssignedSlotId == slotData.Id)
-        {
-            _toolState.ClearPendingResidentForceAssign();
-            return;
-        }
-
-        _slotService.ClearAssignmentForResident(pendingResident.Id);
-        _seatService.ClearAssignmentForResident(pendingResident.Id);
-        pendingResident.ClearAssignedSeat();
-        pendingResident.ClearAssignedSlot();
-        pendingResident.SetRole(NpcRole.Villager);
-        _scheduleService.ClearSeatSchedule(pendingResident);
-        _scheduleService.ClearSlotSchedule(pendingResident);
-        UpdateMarker(pendingResident);
-        DetachResidentIfBound(pendingResident);
-
-        if (!_slotService.ForceAssignInnkeeperSlot(slotData.Id, pendingResident.Id, out var previousResidentId, out var resolvedSlot) || resolvedSlot == null) return;
-        if (previousResidentId.HasValue && previousResidentId.Value != pendingResident.Id && _registeredById.TryGetValue(previousResidentId.Value, out var displacedResident))
-        {
-            displacedResident.ClearAssignedSlot();
-            displacedResident.SetRole(NpcRole.Villager);
-            _scheduleService.ClearSlotSchedule(displacedResident);
-            UpdateMarker(displacedResident);
-        }
-
-        pendingResident.SetRole(NpcRole.Innkeeper);
-        pendingResident.AssignSlot(resolvedSlot.Id);
-        _scheduleService.ApplyDefaultInnkeeperSchedule(pendingResident);
-        UpdateMarker(pendingResident);
-        _toolState.ClearPendingResidentForceAssign();
-    }
-
-    private void ForceAssignResidentToSeat(RegisteredNpcData pendingResident, RegisteredSeatData seatData)
-    {
-        if (pendingResident.AssignedSeatId == seatData.Id)
-        {
-            _toolState.ClearPendingResidentForceAssign();
-            return;
-        }
-
-        _seatService.ClearAssignmentForResident(pendingResident.Id);
-        pendingResident.ClearAssignedSeat();
-        pendingResident.SetRole(NpcRole.Villager);
-        _scheduleService.ClearSeatSchedule(pendingResident);
-        UpdateMarker(pendingResident);
-        DetachResidentIfBound(pendingResident);
-
-        if (!_seatService.ForceAssignSeat(seatData.Id, pendingResident.Id, out var previousResidentId, out var resolvedSeat) || resolvedSeat == null) return;
-        if (previousResidentId.HasValue && previousResidentId.Value != pendingResident.Id && _registeredById.TryGetValue(previousResidentId.Value, out var displacedResident))
-        {
-            _occupationService.ReleaseOccupation(displacedResident);
-            displacedResident.ClearAssignedSeat();
-            _scheduleService.ClearSeatSchedule(displacedResident);
-            UpdateMarker(displacedResident);
-        }
-
-        pendingResident.AssignSeat(resolvedSeat.Id);
-        _scheduleService.ApplyDefaultSeatMealSchedule(pendingResident);
-        UpdateMarker(pendingResident);
-        _toolState.ClearPendingResidentForceAssign();
-    }
-
-    private void ForceAssignResidentToBed(RegisteredNpcData pendingResident, RegisteredBedData bedData)
-    {
-        if (pendingResident.AssignedBedId == bedData.Id)
-        {
-            _toolState.ClearPendingResidentForceAssign();
-            return;
-        }
-
-        _bedService.ClearAssignmentForResident(pendingResident.Id);
-        pendingResident.ClearAssignedBed();
-        _scheduleService.ClearBedSchedule(pendingResident);
-        UpdateMarker(pendingResident);
-        DetachResidentIfBound(pendingResident);
-
-        if (!_bedService.ForceAssignBed(bedData.Id, pendingResident.Id, out var previousResidentId, out var resolvedBed) || resolvedBed == null) return;
-        if (previousResidentId.HasValue && previousResidentId.Value != pendingResident.Id && _registeredById.TryGetValue(previousResidentId.Value, out var displacedResident))
-        {
-            _occupationService.ReleaseOccupation(displacedResident);
-            displacedResident.ClearAssignedBed();
-            _scheduleService.ClearBedSchedule(displacedResident);
-            UpdateMarker(displacedResident);
-        }
-
-        pendingResident.AssignBed(resolvedBed.Id);
-        _scheduleService.ApplyDefaultBedSleepSchedule(pendingResident);
-        UpdateMarker(pendingResident);
-        _toolState.ClearPendingResidentForceAssign();
-    }
-
-    private void RestoreResidentAtWorldPosition(RegisteredNpcData resident)
-    {
-        var spawnPosition = resident.PresenceSnapshot.WorldPosition;
-        var spawnRotation = Quaternion.Euler(0f, resident.PresenceSnapshot.WorldYawDegrees, 0f);
-        TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _);
-    }
-
-    private void RestoreResidentAtAssignedSeat(RegisteredNpcData resident)
-    {
-        if (!resident.AssignedSeatId.HasValue)
-        {
-            return;
-        }
-
-        if (!_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
-        {
-            return;
-        }
-
-        RespawnResidentAssignedToSeat(seatData);
-    }
-
-    private void RestoreResidentAtAssignedSlot(RegisteredNpcData resident)
-    {
-        if (!resident.AssignedSlotId.HasValue)
-        {
-            return;
-        }
-
-        var slotData = _slotService.Slots.FirstOrDefault(candidate => candidate.Id == resident.AssignedSlotId.Value);
-        if (slotData == null)
-        {
-            return;
-        }
-
-        RespawnResidentAssignedToSlot(slotData);
-    }
-
-    private void RestoreResidentAtAssignedBed(RegisteredNpcData resident)
-    {
-        if (!resident.AssignedBedId.HasValue)
-        {
-            return;
-        }
-
-        if (!_bedService.TryGetBedById(resident.AssignedBedId.Value, out var bedData))
-        {
-            return;
-        }
-
-        RespawnResidentAssignedToBed(bedData);
-    }
-
-    private void RespawnResidentAssignedToSlot(ZoneSlotData slotData)
-    {
-        if (!slotData.AssignedRegisteredNpcId.HasValue || !_registeredById.TryGetValue(slotData.AssignedRegisteredNpcId.Value, out var resident)) return;
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _)) return;
-        if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning) return;
-        var spawnPosition = slotData.Position;
-        var spawnRotation = BuildFacingRotation(spawnPosition, GetPlayerLookTargetOrFallback(spawnPosition));
-        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _)) return;
-        _occupationService.TryOccupyAssignedSlot(resident);
-    }
-
-    private void RespawnResidentAssignedToSeat(RegisteredSeatData seatData)
-    {
-        if (!seatData.AssignedRegisteredNpcId.HasValue || !_registeredById.TryGetValue(seatData.AssignedRegisteredNpcId.Value, out var resident)) return;
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _)) return;
-        if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning) return;
-        var spawnPosition = seatData.ApproachPosition;
-        var spawnRotation = BuildFacingRotation(spawnPosition, seatData.SeatPosition);
-        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _)) return;
-        _occupationService.TryOccupyAssignedSeat(resident);
-    }
-
-    private void RespawnResidentAssignedToBed(RegisteredBedData bedData)
-    {
-        if (!bedData.AssignedRegisteredNpcId.HasValue || !_registeredById.TryGetValue(bedData.AssignedRegisteredNpcId.Value, out var resident)) return;
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _)) return;
-        if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning) return;
-        var spawnPosition = bedData.ApproachPosition;
-        var spawnRotation = BuildFacingRotation(spawnPosition, bedData.SleepPosition);
-        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _)) return;
-        _occupationService.TryOccupyAssignedBed(resident);
-    }
-
-    private bool TrySpawnAndBindResident(RegisteredNpcData resident, Vector3 spawnPosition, Quaternion spawnRotation, out Character runtimeCharacter)
-    {
-        runtimeCharacter = null!;
-        _runtimeService.MarkResidentSpawning(resident.Id);
-        if (!_spawnService.TrySpawnResident(resident, spawnPosition, spawnRotation, out var instance) || instance == null)
-        {
-            _runtimeService.MarkResidentMissing(resident.Id);
-            return false;
-        }
-
-        var character = instance.GetComponent<Character>();
-        if (character == null)
-        {
-            UnityEngine.Object.Destroy(instance);
-            _runtimeService.MarkResidentMissing(resident.Id);
-            return false;
-        }
-
-        _runtimeService.BindResident(resident.Id, character);
-        resident.PresenceSnapshot.SetWorldPosition(spawnPosition, spawnRotation.eulerAngles.y);
-        EnsureMarker(resident);
-        runtimeCharacter = character;
-        return true;
-    }
-
-    private void OnRegistryModeChanged(bool isEnabled)
-    {
-        _visualsVisible = isEnabled;
-        foreach (var marker in _markers.Values) marker.SetVisualizationVisible(isEnabled);
+        _assignmentService.HandleDeletedBed(bedId);
     }
 
     private bool TryGetTargetCharacter(out Character targetCharacter)
@@ -749,7 +335,7 @@ public sealed class RegistryResidentService
             return false;
         }
 
-        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) || !_registeredById.TryGetValue(residentId, out resident))
+        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) || !_catalogService.TryGetResidentById(residentId, out resident))
         {
             resident = null!;
             return false;
@@ -767,7 +353,7 @@ public sealed class RegistryResidentService
             return false;
         }
 
-        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) || !_registeredById.TryGetValue(residentId, out resident))
+        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) || !_catalogService.TryGetResidentById(residentId, out resident))
         {
             _log.LogWarning($"{actionLabel}: the targeted character is not registered.");
             resident = null!;
@@ -799,42 +385,4 @@ public sealed class RegistryResidentService
         return identity;
     }
 
-    private void EnsureMarker(RegisteredNpcData data)
-    {
-        if (!_runtimeService.TryGetBoundCharacter(data.Id, out var character)) return;
-        var marker = character.GetComponent<WyrdrasilRegisteredNpcMarker>() ?? character.gameObject.AddComponent<WyrdrasilRegisteredNpcMarker>();
-        marker.Initialize(data.Id, data.DisplayName, data.Role);
-        marker.EnsureVisual();
-        marker.SetVisualizationVisible(_visualsVisible);
-        _markers[data.Id] = marker;
-    }
-
-    private void UpdateMarker(RegisteredNpcData data)
-    {
-        if (_markers.TryGetValue(data.Id, out var marker)) marker.UpdateRole(data.Role);
-    }
-
-    private void DetachResidentIfBound(RegisteredNpcData resident)
-    {
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character)) DetachIfAttached(character);
-    }
-
-    private static void DetachIfAttached(Character character)
-    {
-        if (character is Humanoid humanoid && humanoid.IsAttached()) humanoid.AttachStop();
-    }
-
-    private static Quaternion BuildFacingRotation(Vector3 fromPosition, Vector3 toPosition)
-    {
-        var direction = toPosition - fromPosition;
-        direction.y = 0f;
-        if (direction.sqrMagnitude <= 0.0001f) direction = Vector3.forward;
-        return Quaternion.LookRotation(direction.normalized);
-    }
-
-    private static Vector3 GetPlayerLookTargetOrFallback(Vector3 fallbackPosition)
-    {
-        var localPlayer = Player.m_localPlayer;
-        return localPlayer ? localPlayer.transform.position : fallbackPosition + Vector3.forward;
-    }
 }
