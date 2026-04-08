@@ -21,6 +21,9 @@ public sealed class ResidentRoutineService
     private readonly Dictionary<int, ResidentRoutineActivityType> _appliedActivitiesByResidentId = new();
 
     private float _nextEvaluationTime;
+    private bool _hasScheduledForcedRefresh;
+    private float _scheduledForcedRefreshTime;
+    private bool _scheduledForcedRefreshClearsAppliedActivities;
 
     public ResidentRoutineService(
         ManualLogSource log,
@@ -38,6 +41,12 @@ public sealed class ResidentRoutineService
 
     public void Update()
     {
+        if (_hasScheduledForcedRefresh && Time.time >= _scheduledForcedRefreshTime)
+        {
+            ForceRefreshAllResidents(_scheduledForcedRefreshClearsAppliedActivities);
+            _hasScheduledForcedRefresh = false;
+        }
+
         if (Time.time < _nextEvaluationTime)
         {
             return;
@@ -56,6 +65,33 @@ public sealed class ResidentRoutineService
         }
     }
 
+    public void ScheduleForcedRefresh(float delaySeconds, bool clearAppliedActivities = false)
+    {
+        _scheduledForcedRefreshTime = Time.time + Mathf.Max(0f, delaySeconds);
+        _scheduledForcedRefreshClearsAppliedActivities = clearAppliedActivities;
+        _hasScheduledForcedRefresh = true;
+    }
+
+    public void ForceRefreshAllResidents(bool clearAppliedActivities = false)
+    {
+        if (clearAppliedActivities)
+        {
+            _appliedActivitiesByResidentId.Clear();
+        }
+
+        if (!_worldClockService.TryGetCurrentMinuteOfDay(out var minuteOfDay))
+        {
+            return;
+        }
+
+        foreach (var resident in _residentService.RegisteredNpcs)
+        {
+            EvaluateResident(resident, minuteOfDay);
+        }
+
+        _nextEvaluationTime = Time.time + EvaluationIntervalSeconds;
+    }
+
     private void EvaluateResident(RegisteredNpcData resident, int minuteOfDay)
     {
         if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
@@ -70,6 +106,7 @@ public sealed class ResidentRoutineService
 
         if (desiredActivity == currentActivity)
         {
+            ContinueActivity(resident, desiredActivity);
             return;
         }
 
@@ -110,10 +147,22 @@ public sealed class ResidentRoutineService
     {
         return activityType switch
         {
+            ResidentRoutineActivityType.WanderBetweenWaypoints => _occupationService.TryStartOrContinueWandering(resident),
             ResidentRoutineActivityType.WorkAtAssignedSlot => _occupationService.TryOccupyAssignedSlot(resident),
+            ResidentRoutineActivityType.SitAtAvailablePublicSeat => _occupationService.TryOccupyAvailablePublicSeat(resident),
             ResidentRoutineActivityType.SitAtAssignedSeat => _occupationService.TryOccupyAssignedSeat(resident),
             ResidentRoutineActivityType.SleepAtAssignedBed => _occupationService.TryOccupyAssignedBed(resident),
             _ => false
         };
+    }
+
+    private void ContinueActivity(RegisteredNpcData resident, ResidentRoutineActivityType activityType)
+    {
+        switch (activityType)
+        {
+            case ResidentRoutineActivityType.WanderBetweenWaypoints:
+                _occupationService.TryStartOrContinueWandering(resident);
+                break;
+        }
     }
 }

@@ -53,6 +53,7 @@ public sealed class SeatService
 
         foreach (var seat in seats)
         {
+            seat.ClearOccupant();
             _seats.Add(seat);
             if (seat.FurnitureRoot != null)
             {
@@ -97,6 +98,19 @@ public sealed class SeatService
     public bool TryGetSeatById(int seatId, out RegisteredSeatData seatData)
     {
         var seat = _seats.FirstOrDefault(candidate => candidate.Id == seatId);
+        if (seat == null)
+        {
+            seatData = null!;
+            return false;
+        }
+
+        seatData = seat;
+        return true;
+    }
+
+    public bool TryGetOccupiedSeatForResident(int residentId, out RegisteredSeatData seatData)
+    {
+        var seat = _seats.FirstOrDefault(candidate => candidate.OccupyingRegisteredNpcId == residentId);
         if (seat == null)
         {
             seatData = null!;
@@ -261,7 +275,7 @@ public sealed class SeatService
     {
         foreach (var seat in _seats)
         {
-            if (seat.AssignedRegisteredNpcId.HasValue)
+            if (seat.UsageType != SeatUsageType.Reserved || seat.AssignedRegisteredNpcId.HasValue)
             {
                 continue;
             }
@@ -274,6 +288,42 @@ public sealed class SeatService
 
         seatData = null;
         return false;
+    }
+
+    public bool TryReservePublicTavernSeat(int registeredNpcId, out RegisteredSeatData? seatData)
+    {
+        if (TryGetOccupiedSeatForResident(registeredNpcId, out var occupiedSeat))
+        {
+            seatData = occupiedSeat;
+            return true;
+        }
+
+        foreach (var seat in _seats.OrderBy(candidate => candidate.Id))
+        {
+            if (!IsEligiblePublicMealSeat(seat))
+            {
+                continue;
+            }
+
+            if (!seat.TryOccupy(registeredNpcId))
+            {
+                continue;
+            }
+
+            seatData = seat;
+            return true;
+        }
+
+        seatData = null;
+        return false;
+    }
+
+    public void ReleasePublicSeatOccupation(int registeredNpcId)
+    {
+        foreach (var seat in _seats.Where(candidate => candidate.OccupyingRegisteredNpcId == registeredNpcId))
+        {
+            seat.ReleaseOccupant(registeredNpcId);
+        }
     }
 
     public bool ClearSeatAssignment(int seatId, out int? previousResidentId)
@@ -307,6 +357,13 @@ public sealed class SeatService
             if (seat.Id != seatId)
             {
                 continue;
+            }
+
+            if (seat.UsageType != SeatUsageType.Reserved)
+            {
+                previousResidentId = null;
+                seatData = null;
+                return false;
             }
 
             previousResidentId = seat.AssignedRegisteredNpcId;
@@ -374,6 +431,7 @@ public sealed class SeatService
         }
 
         var seat = _seats[index];
+        seat.ClearOccupant();
         _seats.RemoveAt(index);
 
         if (_markers.TryGetValue(seatId, out var marker) && marker != null)
@@ -417,6 +475,22 @@ public sealed class SeatService
             marker.SetVisualizationVisible(_visualsVisible, seat.AssignedRegisteredNpcId.HasValue);
             marker.SetPendingForceAssignTarget(_pendingForceAssignTargetSeatId == seat.Id);
         }
+    }
+
+    private bool IsEligiblePublicMealSeat(RegisteredSeatData seat)
+    {
+        if (seat.UsageType != SeatUsageType.Public || seat.AssignedRegisteredNpcId.HasValue || seat.IsTemporarilyOccupied)
+        {
+            return false;
+        }
+
+        if (!seat.ZoneId.HasValue)
+        {
+            return false;
+        }
+
+        var zone = _zoneService.Zones.FirstOrDefault(candidate => candidate.Id == seat.ZoneId.Value);
+        return zone != null && zone.ZoneType == ZoneType.Tavern;
     }
 
     private RegisteredSeatData? FindSeatByFurniture(GameObject furnitureRoot)

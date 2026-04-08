@@ -21,6 +21,7 @@ public sealed class RegistryPersistenceService
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
     private readonly RegistryResidentService _residentService;
+    private readonly ResidentRoutineService _residentRoutineService;
     private readonly WorldPersistenceCoordinator _coordinator;
     private readonly IReadOnlyList<IWorldPersistenceParticipant> _participants;
 
@@ -33,6 +34,7 @@ public sealed class RegistryPersistenceService
         SeatService seatService,
         BedService bedService,
         RegistryResidentService residentService,
+        ResidentRoutineService residentRoutineService,
         WorldPersistenceCoordinator coordinator,
         IReadOnlyList<IWorldPersistenceParticipant> participants)
     {
@@ -41,6 +43,7 @@ public sealed class RegistryPersistenceService
         _seatService = seatService;
         _bedService = bedService;
         _residentService = residentService;
+        _residentRoutineService = residentRoutineService;
         _coordinator = coordinator;
         _participants = participants;
     }
@@ -76,6 +79,8 @@ public sealed class RegistryPersistenceService
         {
             RebuildAssignmentsFromResidents();
             _residentService.RestoreResidentsAfterLoad();
+            _residentRoutineService.ForceRefreshAllResidents(true);
+            _residentRoutineService.ScheduleForcedRefresh(1f, true);
         }
     }
 
@@ -172,6 +177,8 @@ public sealed class RegistryPersistenceService
             _coordinator.Restore(saveData, _participants);
             RebuildAssignmentsFromResidents();
             _residentService.RestoreResidentsAfterLoad();
+            _residentRoutineService.ForceRefreshAllResidents(true);
+            _residentRoutineService.ScheduleForcedRefresh(1f, true);
             _hasLoadedCurrentWorld = true;
             _log.LogInfo($"Loaded modular registry world state from '{path}'. sections={saveData.Sections.Count}.");
         }

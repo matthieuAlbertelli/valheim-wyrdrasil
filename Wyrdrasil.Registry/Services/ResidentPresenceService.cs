@@ -1,12 +1,13 @@
-﻿using Wyrdrasil.Registry.Components;
+﻿using System.Linq;
+using Wyrdrasil.Registry.Components;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
-using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Settlements.Tool;
-using Wyrdrasil.Souls.Tool;
 using Wyrdrasil.Souls.Components;
+using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 
@@ -18,6 +19,7 @@ public sealed class ResidentPresenceService
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
+    private readonly NavigationWaypointService _waypointService;
     private readonly ResidentOccupationService _occupationService;
     private readonly ResidentVisualService _visualService;
 
@@ -28,6 +30,7 @@ public sealed class ResidentPresenceService
         ZoneSlotService slotService,
         SeatService seatService,
         BedService bedService,
+        NavigationWaypointService waypointService,
         ResidentOccupationService occupationService,
         ResidentVisualService visualService)
     {
@@ -37,6 +40,7 @@ public sealed class ResidentPresenceService
         _slotService = slotService;
         _seatService = seatService;
         _bedService = bedService;
+        _waypointService = waypointService;
         _occupationService = occupationService;
         _visualService = visualService;
     }
@@ -50,7 +54,11 @@ public sealed class ResidentPresenceService
                 continue;
             }
 
-            if (!_runtimeService.TryCaptureBoundResidentTransform(resident.Id, out var worldPosition, out var worldYawDegrees, out var isAttached))
+            if (!_runtimeService.TryCaptureBoundResidentTransform(
+                    resident.Id,
+                    out var worldPosition,
+                    out var worldYawDegrees,
+                    out var isAttached))
             {
                 continue;
             }
@@ -64,6 +72,12 @@ public sealed class ResidentPresenceService
             if (IsAttachedToAssignedSeat(resident))
             {
                 resident.PresenceSnapshot.SetAssignedSeatAnchor(worldPosition, worldYawDegrees);
+                continue;
+            }
+
+            if (TryGetPublicSeatRestoreAnchor(resident, out var publicSeatRestorePosition, out var publicSeatRestoreYawDegrees))
+            {
+                resident.PresenceSnapshot.SetWorldPosition(publicSeatRestorePosition, publicSeatRestoreYawDegrees);
                 continue;
             }
 
@@ -119,6 +133,8 @@ public sealed class ResidentPresenceService
 
     public bool TryDespawnResident(RegisteredNpcData resident)
     {
+        _occupationService.ReleaseOccupation(resident);
+
         if (!_runtimeService.TryDespawnResident(resident.Id))
         {
             return false;
@@ -130,7 +146,8 @@ public sealed class ResidentPresenceService
 
     public bool TryRespawnResidentAssignedToSlot(ZoneSlotData slotData)
     {
-        if (!slotData.AssignedRegisteredNpcId.HasValue || !_catalogService.TryGetResidentById(slotData.AssignedRegisteredNpcId.Value, out var resident))
+        if (!slotData.AssignedRegisteredNpcId.HasValue ||
+            !_catalogService.TryGetResidentById(slotData.AssignedRegisteredNpcId.Value, out var resident))
         {
             return false;
         }
@@ -158,7 +175,8 @@ public sealed class ResidentPresenceService
 
     public bool TryRespawnResidentAssignedToSeat(RegisteredSeatData seatData)
     {
-        if (!seatData.AssignedRegisteredNpcId.HasValue || !_catalogService.TryGetResidentById(seatData.AssignedRegisteredNpcId.Value, out var resident))
+        if (!seatData.AssignedRegisteredNpcId.HasValue ||
+            !_catalogService.TryGetResidentById(seatData.AssignedRegisteredNpcId.Value, out var resident))
         {
             return false;
         }
@@ -186,7 +204,8 @@ public sealed class ResidentPresenceService
 
     public bool TryRespawnResidentAssignedToBed(RegisteredBedData bedData)
     {
-        if (!bedData.AssignedRegisteredNpcId.HasValue || !_catalogService.TryGetResidentById(bedData.AssignedRegisteredNpcId.Value, out var resident))
+        if (!bedData.AssignedRegisteredNpcId.HasValue ||
+            !_catalogService.TryGetResidentById(bedData.AssignedRegisteredNpcId.Value, out var resident))
         {
             return false;
         }
@@ -237,6 +256,34 @@ public sealed class ResidentPresenceService
         return viking.IsAttachedToChair(seatData.ChairComponent);
     }
 
+    private bool TryGetPublicSeatRestoreAnchor(RegisteredNpcData resident, out Vector3 worldPosition, out float worldYawDegrees)
+    {
+        worldPosition = Vector3.zero;
+        worldYawDegrees = 0f;
+
+        if (!_seatService.TryGetOccupiedSeatForResident(resident.Id, out var seatData))
+        {
+            return false;
+        }
+
+        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
+        {
+            return false;
+        }
+
+        if (character is not WyrdrasilVikingNpc viking ||
+            seatData.ChairComponent == null ||
+            !viking.IsAttachedToChair(seatData.ChairComponent))
+        {
+            return false;
+        }
+
+        worldPosition = seatData.ApproachPosition;
+        var rotation = BuildFacingRotation(seatData.ApproachPosition, seatData.SeatPosition);
+        worldYawDegrees = rotation.eulerAngles.y;
+        return true;
+    }
+
     private bool IsAttachedToAssignedBed(RegisteredNpcData resident)
     {
         if (!resident.AssignedBedId.HasValue)
@@ -264,7 +311,7 @@ public sealed class ResidentPresenceService
 
     private void RestoreResidentAtWorldPosition(RegisteredNpcData resident)
     {
-        var spawnPosition = resident.PresenceSnapshot.WorldPosition;
+        var spawnPosition = ResolveSafeWorldSpawnPosition(resident.PresenceSnapshot.WorldPosition);
         var spawnRotation = Quaternion.Euler(0f, resident.PresenceSnapshot.WorldYawDegrees, 0f);
         TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _);
     }
@@ -314,10 +361,103 @@ public sealed class ResidentPresenceService
         TryRespawnResidentAssignedToBed(bedData);
     }
 
+    private Vector3 ResolveSafeWorldSpawnPosition(Vector3 preferredPosition)
+    {
+        if (TryGetNearestWaypointPosition(preferredPosition, 12f, out var nearbyWaypointPosition) &&
+            TryResolveProjectedSpawnPosition(nearbyWaypointPosition, out var safeWaypointPosition))
+        {
+            return safeWaypointPosition;
+        }
+
+        if (TryResolveProjectedSpawnPosition(preferredPosition, out var projectedPreferredPosition))
+        {
+            return projectedPreferredPosition;
+        }
+
+        foreach (var offset in GetSpawnSearchOffsets())
+        {
+            if (TryResolveProjectedSpawnPosition(preferredPosition + offset, out var offsetResolvedPosition))
+            {
+                return offsetResolvedPosition;
+            }
+        }
+
+        if (TryGetNearestWaypointPosition(preferredPosition, float.MaxValue, out var fallbackWaypointPosition) &&
+            TryResolveProjectedSpawnPosition(fallbackWaypointPosition, out var fallbackResolvedPosition))
+        {
+            return fallbackResolvedPosition;
+        }
+
+        return preferredPosition;
+    }
+
+    private bool TryGetNearestWaypointPosition(Vector3 origin, float maxHorizontalDistance, out Vector3 waypointPosition)
+    {
+        waypointPosition = Vector3.zero;
+
+        var nearestWaypoint = _waypointService.Waypoints
+            .OrderBy(candidate => HorizontalDistance(origin, candidate.Position))
+            .FirstOrDefault();
+
+        if (nearestWaypoint == null)
+        {
+            return false;
+        }
+
+        if (HorizontalDistance(origin, nearestWaypoint.Position) > maxHorizontalDistance)
+        {
+            return false;
+        }
+
+        waypointPosition = nearestWaypoint.Position;
+        return true;
+    }
+
+    private static bool TryResolveProjectedSpawnPosition(Vector3 candidatePosition, out Vector3 resolvedPosition)
+    {
+        var rayOrigin = candidatePosition + Vector3.up * 3f;
+        if (Physics.Raycast(rayOrigin, Vector3.down, out var hitInfo, 8f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            resolvedPosition = hitInfo.point + Vector3.up * 0.05f;
+            return true;
+        }
+
+        resolvedPosition = Vector3.zero;
+        return false;
+    }
+
+    private static Vector3[] GetSpawnSearchOffsets()
+    {
+        return new[]
+        {
+            Vector3.zero,
+            new Vector3(0.90f, 0f, 0f),
+            new Vector3(-0.90f, 0f, 0f),
+            new Vector3(0f, 0f, 0.90f),
+            new Vector3(0f, 0f, -0.90f),
+            new Vector3(1.60f, 0f, 0f),
+            new Vector3(-1.60f, 0f, 0f),
+            new Vector3(0f, 0f, 1.60f),
+            new Vector3(0f, 0f, -1.60f),
+            new Vector3(1.10f, 0f, 1.10f),
+            new Vector3(1.10f, 0f, -1.10f),
+            new Vector3(-1.10f, 0f, 1.10f),
+            new Vector3(-1.10f, 0f, -1.10f)
+        };
+    }
+
+    private static float HorizontalDistance(Vector3 a, Vector3 b)
+    {
+        var delta = b - a;
+        delta.y = 0f;
+        return delta.magnitude;
+    }
+
     private bool TrySpawnAndBindResident(RegisteredNpcData resident, Vector3 spawnPosition, Quaternion spawnRotation, out Character runtimeCharacter)
     {
         runtimeCharacter = null!;
         _runtimeService.MarkResidentSpawning(resident.Id);
+
         if (!_spawnService.TrySpawnResident(resident, spawnPosition, spawnRotation, out var instance) || instance == null)
         {
             _runtimeService.MarkResidentMissing(resident.Id);
@@ -343,6 +483,7 @@ public sealed class ResidentPresenceService
     {
         var direction = toPosition - fromPosition;
         direction.y = 0f;
+
         if (direction.sqrMagnitude <= 0.0001f)
         {
             direction = Vector3.forward;

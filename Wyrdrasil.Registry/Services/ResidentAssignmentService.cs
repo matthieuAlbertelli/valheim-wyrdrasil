@@ -71,7 +71,7 @@ public sealed class ResidentAssignmentService
         {
             _occupationService.ReleaseOccupation(resident);
             resident.ClearAssignedSeat();
-            _scheduleService.ClearSeatSchedule(resident);
+            _scheduleService.ClearAssignedSeatSchedule(resident);
             _visualService.UpdateMarker(resident);
         }
 
@@ -103,7 +103,8 @@ public sealed class ResidentAssignmentService
         _slotService.ClearAssignmentForResident(resident.Id);
         _seatService.ClearAssignmentForResident(resident.Id);
         resident.ClearAssignedSeat();
-        _scheduleService.ClearSeatSchedule(resident);
+        _scheduleService.ClearAssignedSeatSchedule(resident);
+        _scheduleService.EnsureDefaultAutonomySchedules(resident);
 
         if (!_slotService.TryAssignInnkeeperSlot(resident.Id, out slotData) || slotData == null)
         {
@@ -119,20 +120,8 @@ public sealed class ResidentAssignmentService
 
     public bool TryAssignSeat(RegisteredNpcData resident, Character targetCharacter, out RegisteredSeatData? seatData)
     {
-        DetachIfAttached(targetCharacter);
-        _seatService.ClearAssignmentForResident(resident.Id);
-        resident.ClearAssignedSeat();
-
-        if (!_seatService.TryAssignSeat(resident.Id, out seatData) || seatData == null)
-        {
-            return false;
-        }
-
-        resident.SetRole(NpcRole.Villager);
-        resident.AssignSeat(seatData.Id);
-        _scheduleService.ApplyDefaultSeatMealSchedule(resident);
-        _visualService.UpdateMarker(resident);
-        return true;
+        seatData = null;
+        return false;
     }
 
     public bool TryAssignBed(RegisteredNpcData resident, Character targetCharacter, out RegisteredBedData? bedData)
@@ -164,7 +153,7 @@ public sealed class ResidentAssignmentService
         resident.ClearAssignedSeat();
         resident.ClearAssignedSlot();
         resident.SetRole(NpcRole.Villager);
-        _scheduleService.ClearSeatSchedule(resident);
+        _scheduleService.ClearAssignedSeatSchedule(resident);
         _scheduleService.ClearSlotSchedule(resident);
         _visualService.UpdateMarker(resident);
         DetachResidentIfBound(resident);
@@ -191,6 +180,11 @@ public sealed class ResidentAssignmentService
 
     public bool TryForceAssignToSeat(RegisteredNpcData resident, RegisteredSeatData seatData)
     {
+        if (seatData.UsageType != SeatUsageType.Reserved)
+        {
+            return false;
+        }
+
         if (resident.AssignedSeatId == seatData.Id)
         {
             return true;
@@ -198,8 +192,7 @@ public sealed class ResidentAssignmentService
 
         _seatService.ClearAssignmentForResident(resident.Id);
         resident.ClearAssignedSeat();
-        resident.SetRole(NpcRole.Villager);
-        _scheduleService.ClearSeatSchedule(resident);
+        _scheduleService.ClearAssignedSeatSchedule(resident);
         _visualService.UpdateMarker(resident);
         DetachResidentIfBound(resident);
 
@@ -212,7 +205,7 @@ public sealed class ResidentAssignmentService
         {
             _occupationService.ReleaseOccupation(displacedResident);
             displacedResident.ClearAssignedSeat();
-            _scheduleService.ClearSeatSchedule(displacedResident);
+            _scheduleService.ClearAssignedSeatSchedule(displacedResident);
             _visualService.UpdateMarker(displacedResident);
         }
 
@@ -271,7 +264,7 @@ public sealed class ResidentAssignmentService
         {
             _occupationService.ReleaseOccupation(resident);
             resident.ClearAssignedSeat();
-            _scheduleService.ClearSeatSchedule(resident);
+            _scheduleService.ClearAssignedSeatSchedule(resident);
             _visualService.UpdateMarker(resident);
         }
     }

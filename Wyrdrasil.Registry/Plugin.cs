@@ -2,17 +2,17 @@ using System.Collections.Generic;
 using BepInEx;
 using HarmonyLib;
 using Wyrdrasil.Core.Persistence;
+using Wyrdrasil.Core.Services;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Registry.UI;
 using Wyrdrasil.Routines;
-using Wyrdrasil.Core.Services;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
-using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Souls.Components;
+using Wyrdrasil.Souls.Services;
 
 namespace Wyrdrasil.Registry;
 
@@ -27,6 +27,7 @@ public class Plugin : BaseUnityPlugin
     private RegistryPersistenceService _persistenceService = null!;
     private WorldClockService _worldClockService = null!;
     private ResidentRoutineService _residentRoutineService = null!;
+    private TargetDiagnosticsService _diagnosticsService = null!;
     private Harmony? _harmony;
 
     private void Awake()
@@ -60,6 +61,7 @@ public class Plugin : BaseUnityPlugin
         var residentCatalogService = new ResidentCatalogService();
         var residentVisualService = new ResidentVisualService(modeService, residentRuntimeService);
         var scheduleService = new ResidentScheduleService();
+
         var occupationService = new ResidentOccupationService(
             Logger,
             residentRuntimeService,
@@ -76,6 +78,7 @@ public class Plugin : BaseUnityPlugin
             slotService,
             seatService,
             bedService,
+            waypointService,
             occupationService,
             residentVisualService);
 
@@ -101,7 +104,8 @@ public class Plugin : BaseUnityPlugin
             residentCatalogService,
             residentVisualService,
             residentPresenceService,
-            residentAssignmentService);
+            residentAssignmentService,
+            scheduleService);
 
         _worldClockService = new WorldClockService();
         _residentRoutineService = new ResidentRoutineService(
@@ -111,7 +115,7 @@ public class Plugin : BaseUnityPlugin
             residentRuntimeService,
             occupationService);
 
-        var diagnosticsService = new TargetDiagnosticsService(Logger);
+        _diagnosticsService = new TargetDiagnosticsService(Logger);
         var deletionService = new RegistryDeletionService(
             Logger,
             buildingService,
@@ -144,6 +148,7 @@ public class Plugin : BaseUnityPlugin
             seatService,
             bedService,
             residentService,
+            _residentRoutineService,
             persistenceCoordinator,
             persistenceParticipants);
 
@@ -159,6 +164,7 @@ public class Plugin : BaseUnityPlugin
 
         var selectionService = new ToolSelectionService(modeService.State);
         var actionRegistry = BuildActionRegistry();
+
         var context = new RegistryContext(
             Logger,
             zoneService,
@@ -168,7 +174,7 @@ public class Plugin : BaseUnityPlugin
             bedService,
             spawnService,
             residentService,
-            diagnosticsService,
+            _diagnosticsService,
             deletionService,
             flushService,
             _worldClockService);

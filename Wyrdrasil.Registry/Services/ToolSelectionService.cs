@@ -31,10 +31,8 @@ public sealed class ToolSelectionService
     {
         RegistryActionType.RegisterNpc,
         RegistryActionType.AssignInnkeeperRole,
-        RegistryActionType.AssignSeat,
         RegistryActionType.AssignBed,
         RegistryActionType.ClearTargetInnkeeperSlotAssignment,
-        RegistryActionType.ClearTargetSeatAssignment,
         RegistryActionType.ClearTargetBedAssignment,
         RegistryActionType.ForceAssignResident,
         RegistryActionType.DespawnTargetResident,

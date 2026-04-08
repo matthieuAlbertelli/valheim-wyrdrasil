@@ -244,6 +244,37 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         ResetCloth();
     }
 
+    public void ForceDetachFromCurrentAnchor()
+    {
+        if (!_attached)
+        {
+            return;
+        }
+
+        var fallbackPosition = transform.position;
+        var fallbackYaw = transform.eulerAngles.y;
+        var candidatePosition = ResolveForcedDetachPosition();
+
+        AttachStop();
+
+        transform.position = candidatePosition;
+        transform.rotation = Quaternion.Euler(0f, fallbackYaw, 0f);
+
+        if (m_body != null)
+        {
+            m_body.position = candidatePosition;
+#pragma warning disable CS0618
+            m_body.velocity = Vector3.zero;
+#pragma warning restore CS0618
+            m_body.angularVelocity = Vector3.zero;
+            m_body.useGravity = true;
+        }
+
+        m_maxAirAltitude = Mathf.Max(m_maxAirAltitude, candidatePosition.y);
+
+        WyrdrasilSeatDebug.Log(this, $"ForceDetachFromCurrentAnchor -> {candidatePosition} (fallback was {fallbackPosition})");
+    }
+
     private void UpdateAttachedState()
     {
         if (!_attached)
@@ -271,6 +302,58 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         }
 
         m_maxAirAltitude = transform.position.y;
+    }
+
+    private Vector3 ResolveForcedDetachPosition()
+    {
+        var anchor = _attachPoint != null ? _attachPoint : transform;
+        var forward = anchor.forward;
+        forward.y = 0f;
+        if (forward.sqrMagnitude <= 0.0001f)
+        {
+            forward = transform.forward;
+            forward.y = 0f;
+        }
+
+        forward = forward.sqrMagnitude > 0.0001f ? forward.normalized : Vector3.forward;
+        var right = anchor.right;
+        right.y = 0f;
+        right = right.sqrMagnitude > 0.0001f ? right.normalized : Vector3.Cross(Vector3.up, forward).normalized;
+
+        var baseOrigin = anchor.position;
+        var candidates = new[]
+        {
+            baseOrigin + anchor.TransformVector(_detachOffset),
+            baseOrigin - forward * 1.15f,
+            baseOrigin - forward * 1.15f + right * 0.55f,
+            baseOrigin - forward * 1.15f - right * 0.55f,
+            baseOrigin - forward * 1.65f,
+            baseOrigin - forward * 1.65f + right * 0.85f,
+            baseOrigin - forward * 1.65f - right * 0.85f
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (TryProjectDetachPoint(candidate, out var projected))
+            {
+                return projected;
+            }
+        }
+
+        return candidates[0];
+    }
+
+    private static bool TryProjectDetachPoint(Vector3 candidate, out Vector3 projected)
+    {
+        var rayOrigin = candidate + Vector3.up * 1.5f;
+        if (Physics.Raycast(rayOrigin, Vector3.down, out var hitInfo, 4f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            projected = hitInfo.point + Vector3.up * 0.05f;
+            return true;
+        }
+
+        projected = candidate;
+        return false;
     }
 
     private static void CopyDeclaredInstanceFields(Player source, WyrdrasilVikingNpc target, Type declaredOnType)

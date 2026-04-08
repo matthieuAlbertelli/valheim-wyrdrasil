@@ -6,6 +6,8 @@ using UnityEngine;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Tool;
+using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Souls.Tool;
 using Wyrdrasil.Souls.Components;
@@ -26,6 +28,7 @@ public sealed class RegistryResidentService
     private readonly ResidentVisualService _visualService;
     private readonly ResidentPresenceService _presenceService;
     private readonly ResidentAssignmentService _assignmentService;
+    private readonly ResidentScheduleService _scheduleService;
 
     public IReadOnlyList<RegisteredNpcData> RegisteredNpcs => _catalogService.RegisteredNpcs;
     public int NextRegisteredNpcId => _catalogService.NextRegisteredNpcId;
@@ -42,7 +45,8 @@ public sealed class RegistryResidentService
         ResidentCatalogService catalogService,
         ResidentVisualService visualService,
         ResidentPresenceService presenceService,
-        ResidentAssignmentService assignmentService)
+        ResidentAssignmentService assignmentService,
+        ResidentScheduleService scheduleService)
     {
         _log = log;
         _toolState = toolState;
@@ -56,6 +60,7 @@ public sealed class RegistryResidentService
         _visualService = visualService;
         _presenceService = presenceService;
         _assignmentService = assignmentService;
+        _scheduleService = scheduleService;
     }
 
     public IReadOnlyDictionary<int, WyrdrasilRegisteredNpcMarker> Markers => _visualService.Markers;
@@ -63,6 +68,12 @@ public sealed class RegistryResidentService
     public void LoadResidents(IEnumerable<RegisteredNpcData> residents, int nextResidentId)
     {
         _catalogService.LoadResidents(residents, nextResidentId);
+
+        foreach (var resident in _catalogService.RegisteredNpcs)
+        {
+            NormalizeResidentAfterLoad(resident);
+        }
+
         _visualService.ClearAll();
     }
 
@@ -123,6 +134,7 @@ public sealed class RegistryResidentService
         var displayName = GetCharacterName(targetCharacter);
         var identity = ResolveOrCreateIdentity(targetCharacter, NpcRole.Villager, out var createdIdentity);
         var data = new RegisteredNpcData(_catalogService.AllocateResidentId(), displayName, identity);
+        _scheduleService.EnsureDefaultAutonomySchedules(data);
         _catalogService.AddResident(data);
         _runtimeService.BindResident(data.Id, targetCharacter);
         data.PresenceSnapshot.SetWorldPosition(targetCharacter.transform.position, targetCharacter.transform.eulerAngles.y);
@@ -162,6 +174,10 @@ public sealed class RegistryResidentService
             if (_assignmentService.TryForceAssignToSeat(pendingResident, seatData))
             {
                 _toolState.ClearPendingResidentForceAssign();
+            }
+            else
+            {
+                _log.LogWarning("Cannot force assign this seat: public tavern seats are now claimed dynamically at mealtime. Only reserved seats can have an owner.");
             }
 
             return;
@@ -269,19 +285,7 @@ public sealed class RegistryResidentService
 
     public void AssignSeatAtCrosshair()
     {
-        if (!TryGetTargetRegisteredResident("Cannot assign seat", out var targetCharacter, out var data)) return;
-        if (data.Role == NpcRole.Innkeeper)
-        {
-            _log.LogWarning("Cannot assign seat: the targeted resident is already an Innkeeper.");
-            return;
-        }
-
-        if (!_assignmentService.TryAssignSeat(data, targetCharacter, out var seatData) || seatData == null)
-        {
-            _log.LogWarning("Cannot assign seat: no free designated seat is available.");
-            return;
-        }
-        _log.LogInfo($"Assigned designated seat #{seatData.Id} to registered NPC #{data.Id} ('{data.DisplayName}').");
+        _log.LogWarning("Seat ownership is disabled for tavern seating in this iteration. Public seats are now claimed dynamically at mealtime.");
     }
 
     public void AssignBedAtCrosshair()
@@ -293,6 +297,38 @@ public sealed class RegistryResidentService
             return;
         }
         _log.LogInfo($"Assigned designated bed #{bedData.Id} to registered NPC #{data.Id} ('{data.DisplayName}').");
+    }
+
+    private void NormalizeResidentAfterLoad(RegisteredNpcData resident)
+    {
+        _scheduleService.EnsureDefaultAutonomySchedules(resident);
+
+        if (!resident.AssignedSeatId.HasValue)
+        {
+            return;
+        }
+
+        if (!_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
+        {
+            return;
+        }
+
+        if (seatData.UsageType != SeatUsageType.Public)
+        {
+            return;
+        }
+
+        resident.ClearAssignedSeat();
+        _scheduleService.ClearAssignedSeatSchedule(resident);
+
+        if (resident.PresenceSnapshot.RestoreMode == ResidentRestoreMode.AssignedSeatAnchor)
+        {
+            resident.PresenceSnapshot.SetWorldPosition(
+                resident.PresenceSnapshot.WorldPosition,
+                resident.PresenceSnapshot.WorldYawDegrees);
+        }
+
+        _log.LogInfo($"Migrated resident #{resident.Id} away from legacy public seat ownership. Public tavern seats are now claimed dynamically at mealtime.");
     }
 
     public void HandleDeletedSlot(int slotId)

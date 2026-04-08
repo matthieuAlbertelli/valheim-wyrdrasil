@@ -59,6 +59,8 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
     private string _consumeReason = "unknown";
     private TraversalMode _mode = TraversalMode.None;
 
+    public bool IsTraversalActive => enabled && _mode != TraversalMode.None;
+
     private void Awake()
     {
         _humanoid = GetComponent<Humanoid>();

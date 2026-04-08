@@ -41,6 +41,8 @@ public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
 
     private AssignedSlotOccupationPhase _phase = AssignedSlotOccupationPhase.None;
 
+    public bool IsControlActive => enabled && _isConfigured;
+
     private void Awake()
     {
         _rigidbody = GetComponent<Rigidbody>();

@@ -10,6 +10,23 @@ public sealed class ResidentScheduleService
     private const int SleepPriority = 200;
     private const int WorkPriority = 100;
     private const int MealPriority = 50;
+    private const int WanderPriority = 10;
+
+    public void EnsureDefaultAutonomySchedules(RegisteredNpcData resident)
+    {
+        ApplyDefaultWanderSchedule(resident);
+        ApplyDefaultPublicMealSchedule(resident);
+    }
+
+    public void ApplyDefaultWanderSchedule(RegisteredNpcData resident)
+    {
+        resident.ReplaceScheduleEntries(
+            ResidentRoutineActivityType.WanderBetweenWaypoints,
+            new[]
+            {
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.WanderBetweenWaypoints, 0, 0, WanderPriority)
+            });
+    }
 
     public void ApplyDefaultInnkeeperSchedule(RegisteredNpcData resident)
     {
@@ -21,13 +38,23 @@ public sealed class ResidentScheduleService
             });
     }
 
+    public void ApplyDefaultPublicMealSchedule(RegisteredNpcData resident)
+    {
+        resident.ReplaceScheduleEntries(
+            ResidentRoutineActivityType.SitAtAvailablePublicSeat,
+            new[]
+            {
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAvailablePublicSeat, 12 * 60, 13 * 60, MealPriority)
+            });
+    }
+
     public void ApplyDefaultSeatMealSchedule(RegisteredNpcData resident)
     {
         resident.ReplaceScheduleEntries(
             ResidentRoutineActivityType.SitAtAssignedSeat,
             new[]
             {
-                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAssignedSeat, 12 * 60, 14 * 60, MealPriority)
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAssignedSeat, 12 * 60, 13 * 60, MealPriority + 5)
             });
     }
 
@@ -46,9 +73,14 @@ public sealed class ResidentScheduleService
         resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedSlot);
     }
 
-    public void ClearSeatSchedule(RegisteredNpcData resident)
+    public void ClearAssignedSeatSchedule(RegisteredNpcData resident)
     {
         resident.RemoveScheduleEntries(ResidentRoutineActivityType.SitAtAssignedSeat);
+    }
+
+    public void ClearPublicMealSchedule(RegisteredNpcData resident)
+    {
+        resident.RemoveScheduleEntries(ResidentRoutineActivityType.SitAtAvailablePublicSeat);
     }
 
     public void ClearBedSchedule(RegisteredNpcData resident)

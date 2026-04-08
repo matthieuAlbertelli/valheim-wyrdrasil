@@ -86,6 +86,8 @@ public sealed class RegisteredSeatData
 
     public Vector3 ApproachPosition => SeatPosition - (SeatForward * NearDepth);
     public int? AssignedRegisteredNpcId { get; private set; }
+    public int? OccupyingRegisteredNpcId { get; private set; }
+    public bool IsTemporarilyOccupied => OccupyingRegisteredNpcId.HasValue;
 
     public RegisteredSeatData(
         int id,
@@ -165,6 +167,30 @@ public sealed class RegisteredSeatData
     public void ClearAssignedRegisteredNpc()
     {
         AssignedRegisteredNpcId = null;
+    }
+
+    public bool TryOccupy(int registeredNpcId)
+    {
+        if (OccupyingRegisteredNpcId.HasValue && OccupyingRegisteredNpcId.Value != registeredNpcId)
+        {
+            return false;
+        }
+
+        OccupyingRegisteredNpcId = registeredNpcId;
+        return true;
+    }
+
+    public void ReleaseOccupant(int registeredNpcId)
+    {
+        if (OccupyingRegisteredNpcId == registeredNpcId)
+        {
+            OccupyingRegisteredNpcId = null;
+        }
+    }
+
+    public void ClearOccupant()
+    {
+        OccupyingRegisteredNpcId = null;
     }
 
     public IEnumerable<Vector3> GetApproachCandidates()
