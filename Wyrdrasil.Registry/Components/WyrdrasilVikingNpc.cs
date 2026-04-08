@@ -7,6 +7,9 @@ namespace Wyrdrasil.Registry.Components;
 
 public sealed class WyrdrasilVikingNpc : Humanoid
 {
+    private static readonly BindingFlags InstanceFlags =
+        BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+
     private Chair? _attachedChair;
     private Bed? _attachedBed;
     private bool _attached;
@@ -92,7 +95,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         _attachedChair = chair;
         _attachedBed = null;
-        SetBedAnimationState(false);
 
         AttachStart(
             chair.m_attachPoint,
@@ -118,15 +120,13 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         AttachStart(
             attachPoint,
-            null,
+            bed.gameObject,
             true,
             true,
             false,
-            string.Empty,
-            Vector3.zero,
+            "attach_bed",
+            new Vector3(0f, 0.5f, 0f),
             null);
-
-        SetBedAnimationState(true);
     }
 
     public bool IsAttachedToChair(Chair chair)
@@ -238,8 +238,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             m_animator.SetBool(_attachAnimation, false);
         }
 
-        SetBedAnimationState(false);
-
         _attachedChair = null;
         _attachedBed = null;
         ResetCloth();
@@ -265,7 +263,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         {
             var parentBody = _attachPoint.GetComponentInParent<Rigidbody>();
             m_body.useGravity = false;
-
 #pragma warning disable CS0618
             m_body.velocity = parentBody != null ? parentBody.GetPointVelocity(transform.position) : Vector3.zero;
             m_body.angularVelocity = Vector3.zero;
@@ -273,80 +270,6 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         }
 
         m_maxAirAltitude = transform.position.y;
-    }
-
-    private void SetBedAnimationState(bool isSleeping)
-    {
-        if (m_animator == null)
-        {
-            return;
-        }
-
-        TrySetAnimatorBool("sleep", isSleeping);
-        TrySetAnimatorBool("Sleep", isSleeping);
-        TrySetAnimatorBool("lying", isSleeping);
-        TrySetAnimatorBool("Lying", isSleeping);
-        TrySetAnimatorBool("lay", isSleeping);
-        TrySetAnimatorBool("Lay", isSleeping);
-
-        if (isSleeping)
-        {
-            TrySetAnimatorTrigger("sleep");
-            TrySetAnimatorTrigger("Sleep");
-            TryPlayAnimatorState("sleep");
-            TryPlayAnimatorState("Sleep");
-            TryPlayAnimatorState("lying");
-            TryPlayAnimatorState("Lying");
-        }
-    }
-
-    private bool TrySetAnimatorBool(string parameterName, bool value)
-    {
-        if (m_animator == null)
-        {
-            return false;
-        }
-
-        foreach (var parameter in m_animator.parameters)
-        {
-            if (parameter.type == AnimatorControllerParameterType.Bool && parameter.name == parameterName)
-            {
-                m_animator.SetBool(parameterName, value);
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool TrySetAnimatorTrigger(string parameterName)
-    {
-        if (m_animator == null)
-        {
-            return false;
-        }
-
-        foreach (var parameter in m_animator.parameters)
-        {
-            if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == parameterName)
-            {
-                m_animator.SetTrigger(parameterName);
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool TryPlayAnimatorState(string stateName)
-    {
-        if (m_animator == null || !m_animator.HasState(0, Animator.StringToHash(stateName)))
-        {
-            return false;
-        }
-
-        m_animator.Play(stateName);
-        return true;
     }
 
     private static void CopyDeclaredInstanceFields(Player source, WyrdrasilVikingNpc target, Type declaredOnType)
@@ -375,9 +298,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
     private static void ClearFieldIfPresent(object target, string fieldName)
     {
-        var field = target.GetType().GetField(
-            fieldName,
-            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        var field = target.GetType().GetField(fieldName, InstanceFlags);
 
         if (field == null)
         {

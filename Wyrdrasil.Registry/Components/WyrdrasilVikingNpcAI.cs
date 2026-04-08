@@ -287,7 +287,7 @@ public sealed class WyrdrasilVikingNpcAI : MonsterAI
         }
 
         _nextAttemptTime = Time.time + AttemptRetryInterval;
-        _viking.AttachToBed(_bedTarget.BedComponent, _bedTarget.SleepAttachPoint);
+        _bedTarget.BedComponent.Interact(_viking, false, false);
 
         if (_viking.IsAttached())
         {
