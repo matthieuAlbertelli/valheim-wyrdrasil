@@ -73,17 +73,14 @@
                          Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll' or '%(ReferenceCopyLocalPaths.Extension)' == '.pdb'" />
     </ItemGroup>
 
-    <Message Importance="high"
-             Text="=== Wyrdrasil deploy: export vers $(PluginDeployDir) ===" />
-
-    <Message Importance="high"
-             Text="Export: %(PluginDeployFiles.Filename)%(PluginDeployFiles.Extension)" />
+    <Message Importance="high" Text="================ Wyrdrasil Deploy ================" />
+    <Message Importance="high" Text="[Wyrdrasil][Deploy] Cible : $(PluginDeployDir)" />
+    <Message Importance="high" Text="[Wyrdrasil][Deploy] Export : %(PluginDeployFiles.Filename)%(PluginDeployFiles.Extension)" />
 
     <Copy SourceFiles="@(PluginDeployFiles)"
           DestinationFolder="$(PluginDeployDir)"
           SkipUnchangedFiles="true" />
 
-    <Message Importance="high"
-             Text="=== Wyrdrasil deploy terminé ===" />
+    <Message Importance="high" Text="==================================================" />
   </Target>
 </Project>

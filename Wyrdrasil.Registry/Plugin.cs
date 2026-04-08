@@ -7,6 +7,7 @@ using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Registry.UI;
+using Wyrdrasil.Routines;
 
 namespace Wyrdrasil.Registry;
 
@@ -27,8 +28,8 @@ public class Plugin : BaseUnityPlugin
     {
         _harmony = new Harmony(PluginGuid);
 
-        _harmony.PatchAll(typeof(Plugin).Assembly);
-        _harmony.PatchAll(typeof(Wyrdrasil.Registry.Patches.WyrdrasilBedInteractPatch).Assembly);
+        RegistryModuleBootstrap.ApplyHarmony(_harmony);
+        RoutinesModuleBootstrap.ApplyHarmony(_harmony);
 
         var modeService = new RegistryModeService(Logger);
         var buildingService = new RegistryBuildingService(Logger);
@@ -52,32 +53,110 @@ public class Plugin : BaseUnityPlugin
         var navigationService = new RegistryNpcNavigationService(Logger);
         var residentRuntimeService = new RegistryResidentRuntimeService(Logger);
         var scheduleService = new RegistryResidentScheduleService();
-        var occupationService = new RegistryResidentOccupationService(Logger, residentRuntimeService, slotService, seatService, bedService, navigationService, waypointService);
-        var residentService = new RegistryResidentService(Logger, modeService.State, modeService, slotService, seatService, bedService, residentRuntimeService, spawnService, identityGenerator, customizationApplier, scheduleService, occupationService);
+        var occupationService = new RegistryResidentOccupationService(
+            Logger,
+            residentRuntimeService,
+            slotService,
+            seatService,
+            bedService,
+            navigationService,
+            waypointService);
+
+        var residentService = new RegistryResidentService(
+            Logger,
+            modeService.State,
+            modeService,
+            slotService,
+            seatService,
+            bedService,
+            residentRuntimeService,
+            spawnService,
+            identityGenerator,
+            customizationApplier,
+            scheduleService,
+            occupationService);
 
         _worldClockService = new RegistryWorldClockService();
-        _residentRoutineService = new RegistryResidentRoutineService(Logger, _worldClockService, residentService, residentRuntimeService, occupationService);
+        _residentRoutineService = new RegistryResidentRoutineService(
+            Logger,
+            _worldClockService,
+            residentService,
+            residentRuntimeService,
+            occupationService);
 
         var diagnosticsService = new RegistryDiagnosticsService(Logger);
-        var deletionService = new RegistryDeletionService(Logger, buildingService, zoneService, slotService, seatService, bedService, waypointService, residentService);
+        var deletionService = new RegistryDeletionService(
+            Logger,
+            buildingService,
+            zoneService,
+            slotService,
+            seatService,
+            bedService,
+            waypointService,
+            residentService);
 
         var persistenceCoordinator = new WorldPersistenceCoordinator();
         var persistenceParticipants = new List<IWorldPersistenceParticipant>
         {
-            new RegistrySettlementsPersistenceParticipant(Logger, buildingService, zoneService, waypointService, slotService, seatService, bedService),
+            new RegistrySettlementsPersistenceParticipant(
+                Logger,
+                buildingService,
+                zoneService,
+                waypointService,
+                slotService,
+                seatService,
+                bedService),
+
             new RegistrySoulsPersistenceParticipant(residentService),
             new RegistryRoutinesPersistenceParticipant(_worldClockService)
         };
 
-        _persistenceService = new RegistryPersistenceService(Logger, slotService, seatService, bedService, residentService, persistenceCoordinator, persistenceParticipants);
-        var flushService = new RegistryFlushService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService, _persistenceService);
+        _persistenceService = new RegistryPersistenceService(
+            Logger,
+            slotService,
+            seatService,
+            bedService,
+            residentService,
+            persistenceCoordinator,
+            persistenceParticipants);
+
+        var flushService = new RegistryFlushService(
+            Logger,
+            buildingService,
+            zoneService,
+            slotService,
+            seatService,
+            waypointService,
+            residentService,
+            _persistenceService);
 
         var selectionService = new RegistrySelectionService(modeService.State);
         var actionRegistry = BuildActionRegistry();
-        var context = new RegistryContext(Logger, buildingService, zoneService, waypointService, slotService, seatService, bedService, spawnService, residentService, diagnosticsService, deletionService, _persistenceService, flushService, _worldClockService);
+        var context = new RegistryContext(
+            Logger,
+            buildingService,
+            zoneService,
+            waypointService,
+            slotService,
+            seatService,
+            bedService,
+            spawnService,
+            residentService,
+            diagnosticsService,
+            deletionService,
+            _persistenceService,
+            flushService,
+            _worldClockService);
+
         var hudRenderer = new RegistryHudRenderer();
 
-        _registryToolController = new RegistryToolController(modeService, selectionService, actionRegistry, context, hudRenderer);
+        _registryToolController = new RegistryToolController(
+            modeService,
+            selectionService,
+            actionRegistry,
+            context,
+            hudRenderer);
+
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
     }
 
