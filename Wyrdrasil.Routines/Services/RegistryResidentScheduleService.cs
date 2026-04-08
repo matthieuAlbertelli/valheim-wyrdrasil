@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Souls.Tool;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Routines.Services;
+
 
 public sealed class RegistryResidentScheduleService
 {

@@ -1,7 +1,8 @@
 using System.Reflection;
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Routines.Components;
+
 
 [RequireComponent(typeof(Player))]
 public sealed class WyrdrasilVikingActor : MonoBehaviour

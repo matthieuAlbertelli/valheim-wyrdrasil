@@ -8,6 +8,11 @@ using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Registry.UI;
 using Wyrdrasil.Routines;
+using Wyrdrasil.Core.Services;
+using Wyrdrasil.Routines.Services;
+using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Components;
 
 namespace Wyrdrasil.Registry;
 
@@ -46,7 +51,7 @@ public class Plugin : BaseUnityPlugin
         var equipmentGenerator = new RegistryNpcEquipmentGenerator(equipmentCatalog);
         var identityGenerator = new RegistryNpcIdentityGenerator(appearanceGenerator, equipmentGenerator);
         var customizationApplier = new RegistryNpcCustomizationApplier(Logger);
-        Wyrdrasil.Registry.Components.WyrdrasilVikingVisualBootstrap.ConfigureLogger(Logger);
+        WyrdrasilVikingVisualBootstrap.ConfigureLogger(Logger);
 
         var vikingPrefabFactory = new RegistryVikingPrefabFactory(Logger);
         var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);

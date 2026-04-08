@@ -1,8 +1,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Tool;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Routines.Components;
+
 
 /// <summary>
 /// Legacy compatibility shim.

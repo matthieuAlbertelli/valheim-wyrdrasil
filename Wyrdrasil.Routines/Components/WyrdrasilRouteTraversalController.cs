@@ -2,8 +2,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Tool;
+using Wyrdrasil.Souls.Components;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Routines.Components;
+
 
 /// <summary>
 /// Dedicated Registry route executor.

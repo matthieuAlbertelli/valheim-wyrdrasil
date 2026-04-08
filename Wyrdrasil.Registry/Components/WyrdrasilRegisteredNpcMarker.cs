@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Components;
 

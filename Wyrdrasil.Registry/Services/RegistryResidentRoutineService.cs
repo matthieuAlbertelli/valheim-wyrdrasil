@@ -3,6 +3,9 @@ using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Routines.Services;
+using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 

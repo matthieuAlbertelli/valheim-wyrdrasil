@@ -1,6 +1,8 @@
 using System;
+using Wyrdrasil.Core.Tool;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Settlements.Tool;
+
 
 [Serializable]
 public sealed class ZoneSlotSaveData

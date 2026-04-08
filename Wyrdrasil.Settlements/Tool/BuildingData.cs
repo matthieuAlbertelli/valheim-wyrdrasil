@@ -1,6 +1,7 @@
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Settlements.Tool;
+
 
 public sealed class BuildingData
 {

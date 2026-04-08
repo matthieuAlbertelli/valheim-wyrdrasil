@@ -1,8 +1,9 @@
 using HarmonyLib;
-using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Diagnostics;
+using Wyrdrasil.Souls.Components;
 
-namespace Wyrdrasil.Registry.Patches;
+namespace Wyrdrasil.Routines.Patches;
+
 
 [HarmonyPatch(typeof(Chair), nameof(Chair.Interact))]
 public static class WyrdrasilChairInteractPatch

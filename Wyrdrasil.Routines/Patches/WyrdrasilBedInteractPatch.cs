@@ -1,9 +1,10 @@
 using HarmonyLib;
 using UnityEngine;
-using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Diagnostics;
+using Wyrdrasil.Souls.Components;
 
-namespace Wyrdrasil.Registry.Patches;
+namespace Wyrdrasil.Routines.Patches;
+
 
 [HarmonyPatch(typeof(Bed), nameof(Bed.Interact))]
 public static class WyrdrasilBedInteractPatch

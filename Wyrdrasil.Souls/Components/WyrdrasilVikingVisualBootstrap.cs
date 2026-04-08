@@ -1,8 +1,9 @@
 using BepInEx.Logging;
 using UnityEngine;
-using Wyrdrasil.Registry.Services;
+using Wyrdrasil.Souls.Services;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Souls.Components;
+
 
 public sealed class WyrdrasilVikingVisualBootstrap : MonoBehaviour
 {

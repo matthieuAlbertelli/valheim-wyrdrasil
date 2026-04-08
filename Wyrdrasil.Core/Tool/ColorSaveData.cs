@@ -1,7 +1,8 @@
 using System;
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Core.Tool;
+
 
 [Serializable]
 public sealed class ColorSaveData

@@ -4,8 +4,11 @@ using System.Linq;
 using BepInEx.Logging;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Settlements.Tool;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Settlements.Services;
+
 
 public sealed class RegistrySettlementsPersistenceParticipant : IWorldPersistenceParticipant
 {

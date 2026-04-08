@@ -1,8 +1,9 @@
 using BepInEx.Logging;
 using UnityEngine;
-using Wyrdrasil.Registry.Components;
+using Wyrdrasil.Souls.Components;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Souls.Services;
+
 
 /// <summary>
 /// Builds an inactive runtime prefab from Valheim's Player prefab.

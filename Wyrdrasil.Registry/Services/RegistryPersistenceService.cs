@@ -7,6 +7,8 @@ using BepInEx;
 using BepInEx.Logging;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 

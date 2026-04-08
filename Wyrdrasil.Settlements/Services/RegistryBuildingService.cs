@@ -3,8 +3,10 @@ using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Tool;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Settlements.Services;
+
 
 public sealed class RegistryBuildingService
 {

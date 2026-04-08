@@ -2,8 +2,10 @@ using System;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Souls.Tool;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Souls.Services;
+
 
 public sealed class RegistrySpawnService
 {

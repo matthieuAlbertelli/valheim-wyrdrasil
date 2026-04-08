@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Souls.Tool;
+
 
 [Serializable]
 public sealed class RegisteredNpcSaveData

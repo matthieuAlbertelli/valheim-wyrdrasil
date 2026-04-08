@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Souls.Services;
+
 
 public sealed class RegistryNpcAppearanceCatalog
 {

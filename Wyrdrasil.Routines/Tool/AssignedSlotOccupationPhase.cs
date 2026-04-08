@@ -1,4 +1,5 @@
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Routines.Tool;
+
 
 public enum AssignedSlotOccupationPhase
 {

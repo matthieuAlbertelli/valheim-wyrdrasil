@@ -1,10 +1,13 @@
 using System.Collections.Generic;
 using BepInEx.Logging;
-using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Tool;
+using Wyrdrasil.Routines.Components;
+using Wyrdrasil.Souls.Components;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Routines.Services;
+
 
 public sealed class RegistryNpcNavigationService
 {

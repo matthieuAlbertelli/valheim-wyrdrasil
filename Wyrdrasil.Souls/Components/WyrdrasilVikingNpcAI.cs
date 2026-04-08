@@ -1,8 +1,10 @@
 using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Tool;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Souls.Components;
+
 
 public sealed class WyrdrasilVikingNpcAI : MonsterAI
 {

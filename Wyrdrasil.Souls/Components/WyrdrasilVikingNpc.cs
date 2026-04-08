@@ -3,7 +3,8 @@ using System.Reflection;
 using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Souls.Components;
+
 
 public sealed class WyrdrasilVikingNpc : Humanoid
 {

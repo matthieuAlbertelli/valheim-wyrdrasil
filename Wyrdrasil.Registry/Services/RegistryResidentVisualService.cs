@@ -1,6 +1,9 @@
 ﻿using System.Collections.Generic;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Core.Services;
+using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 

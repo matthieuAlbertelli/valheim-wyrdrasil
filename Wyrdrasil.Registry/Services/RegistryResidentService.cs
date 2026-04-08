@@ -5,6 +5,10 @@ using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Tool;
+using Wyrdrasil.Souls.Components;
 
 namespace Wyrdrasil.Registry.Services;
 

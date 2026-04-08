@@ -1,7 +1,9 @@
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Souls.Tool;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Souls.Components;
+
 
 public sealed class WyrdrasilVikingIdentityComponent : MonoBehaviour
 {

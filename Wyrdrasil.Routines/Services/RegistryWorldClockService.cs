@@ -1,7 +1,8 @@
 using System.Reflection;
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Routines.Services;
+
 
 public sealed class RegistryWorldClockService
 {

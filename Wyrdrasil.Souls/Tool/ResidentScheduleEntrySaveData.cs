@@ -1,6 +1,7 @@
 using System;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Souls.Tool;
+
 
 [Serializable]
 public sealed class ResidentScheduleEntrySaveData

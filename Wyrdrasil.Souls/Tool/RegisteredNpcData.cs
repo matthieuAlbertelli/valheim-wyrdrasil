@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Souls.Tool;
+
 
 public sealed class RegisteredNpcData
 {

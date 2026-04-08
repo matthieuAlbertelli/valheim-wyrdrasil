@@ -1,7 +1,11 @@
 using BepInEx.Logging;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Tool;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Routines.Services;
+
 
 public sealed class RegistryResidentOccupationService
 {

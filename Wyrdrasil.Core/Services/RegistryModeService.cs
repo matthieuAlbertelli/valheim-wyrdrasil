@@ -2,7 +2,8 @@ using System;
 using BepInEx.Logging;
 using Wyrdrasil.Registry.Tool;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Core.Services;
+
 
 public sealed class RegistryModeService
 {

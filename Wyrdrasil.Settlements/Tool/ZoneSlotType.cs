@@ -1,4 +1,5 @@
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Settlements.Tool;
+
 
 public enum ZoneSlotType
 {

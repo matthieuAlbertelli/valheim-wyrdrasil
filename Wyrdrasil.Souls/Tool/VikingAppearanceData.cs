@@ -1,6 +1,7 @@
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Souls.Tool;
+
 
 public sealed class VikingAppearanceData
 {

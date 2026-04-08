@@ -1,7 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Settlements.Components;
+
 
 public sealed class WyrdrasilRegisteredBedMarker : MonoBehaviour
 {

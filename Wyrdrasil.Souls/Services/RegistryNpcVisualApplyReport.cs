@@ -1,4 +1,5 @@
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Souls.Services;
+
 
 internal sealed class RegistryNpcVisualApplyReport
 {

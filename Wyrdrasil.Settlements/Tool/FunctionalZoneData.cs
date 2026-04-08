@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Settlements.Tool;
+
 
 public sealed class FunctionalZoneData
 {

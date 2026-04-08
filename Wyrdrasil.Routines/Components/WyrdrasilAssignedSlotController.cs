@@ -1,8 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Routines.Tool;
+using Wyrdrasil.Souls.Components;
 
-namespace Wyrdrasil.Registry.Components;
+namespace Wyrdrasil.Routines.Components;
+
 
 public sealed class WyrdrasilAssignedSlotController : MonoBehaviour
 {

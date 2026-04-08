@@ -2,10 +2,13 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
-using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Core.Services;
+using Wyrdrasil.Settlements.Tool;
+using Wyrdrasil.Settlements.Components;
 
-namespace Wyrdrasil.Registry.Services;
+namespace Wyrdrasil.Settlements.Services;
+
 
 public sealed class RegistrySeatService
 {
