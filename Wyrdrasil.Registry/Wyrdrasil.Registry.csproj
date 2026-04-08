@@ -1,17 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <AssemblyName>Wyrdrasil.Registry</AssemblyName>
-    <RootNamespace>Wyrdrasil.Registry</RootNamespace>
-
     <ValheimDir>C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimDir>
     <ManagedDir>$(ValheimDir)\valheim_Data\Managed</ManagedDir>
     <BepInExCoreDir>$(ValheimDir)\BepInEx\core</BepInExCoreDir>
-    <PluginDeployDir>$(ValheimDir)\BepInEx\plugins\Wyrdrasil.Registry</PluginDeployDir>
+      <AssemblyName>Wyrdrasil.Registry</AssemblyName>
+    <RootNamespace>Wyrdrasil.Registry</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
@@ -19,66 +16,74 @@
       <HintPath>$(BepInExCoreDir)\BepInEx.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="0Harmony">
       <HintPath>$(BepInExCoreDir)\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="UnityEngine">
       <HintPath>$(ManagedDir)\UnityEngine.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="UnityEngine.CoreModule">
       <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="UnityEngine.IMGUIModule">
       <HintPath>$(ManagedDir)\UnityEngine.IMGUIModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="UnityEngine.TextRenderingModule">
       <HintPath>$(ManagedDir)\UnityEngine.TextRenderingModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="UnityEngine.PhysicsModule">
       <HintPath>$(ManagedDir)\UnityEngine.PhysicsModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="assembly_valheim">
       <HintPath>$(ManagedDir)\assembly_valheim.dll</HintPath>
       <Private>false</Private>
     </Reference>
-
     <Reference Include="UnityEngine.AnimationModule">
       <HintPath>$(ManagedDir)\UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
-
+  <ItemGroup>
+    <ProjectReference Include="..\Wyrdrasil.Core\Wyrdrasil.Core.csproj" />
+    <ProjectReference Include="..\Wyrdrasil.Settlements\Wyrdrasil.Settlements.csproj" />
+    <ProjectReference Include="..\Wyrdrasil.Souls\Wyrdrasil.Souls.csproj" />
+    <ProjectReference Include="..\Wyrdrasil.Routines\Wyrdrasil.Routines.csproj" />
+  </ItemGroup>
+  <PropertyGroup>
+    <PluginDeployDir>$(ValheimDir)\BepInEx\plugins\Wyrdrasil.Registry</PluginDeployDir>
+  </PropertyGroup>
   <Target Name="DeployToValheim" AfterTargets="Build">
     <MakeDir Directories="$(PluginDeployDir)" />
 
-    <Copy
-      SourceFiles="$(TargetPath)"
-      DestinationFolder="$(PluginDeployDir)"
-      SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <PluginDeployFiles Include="$(TargetPath)" />
+      <PluginDeployFiles Include="$(TargetDir)$(AssemblyName).pdb"
+                         Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+      <PluginDeployFiles Include="@(ReferenceCopyLocalPaths)"
+                         Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll' or '%(ReferenceCopyLocalPaths.Extension)' == '.pdb'" />
+    </ItemGroup>
 
-    <Copy
-      SourceFiles="$(TargetDir)$(AssemblyName).pdb"
-      DestinationFolder="$(PluginDeployDir)"
-      SkipUnchangedFiles="true"
-      Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
+    <Message Importance="high"
+             Text="=== Wyrdrasil deploy: export vers $(PluginDeployDir) ===" />
+
+    <Message Importance="high"
+             Text="Export: %(PluginDeployFiles.Filename)%(PluginDeployFiles.Extension)" />
+
+    <Copy SourceFiles="@(PluginDeployFiles)"
+          DestinationFolder="$(PluginDeployDir)"
+          SkipUnchangedFiles="true" />
+
+    <Message Importance="high"
+             Text="=== Wyrdrasil deploy terminé ===" />
   </Target>
-
 </Project>

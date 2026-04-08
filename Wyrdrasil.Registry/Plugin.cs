@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using BepInEx;
 using HarmonyLib;
+using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.Services;
@@ -24,7 +26,9 @@ public class Plugin : BaseUnityPlugin
     private void Awake()
     {
         _harmony = new Harmony(PluginGuid);
-        _harmony.PatchAll();
+
+        _harmony.PatchAll(typeof(Plugin).Assembly);
+        _harmony.PatchAll(typeof(Wyrdrasil.Registry.Patches.WyrdrasilBedInteractPatch).Assembly);
 
         var modeService = new RegistryModeService(Logger);
         var buildingService = new RegistryBuildingService(Logger);
@@ -56,7 +60,16 @@ public class Plugin : BaseUnityPlugin
 
         var diagnosticsService = new RegistryDiagnosticsService(Logger);
         var deletionService = new RegistryDeletionService(Logger, buildingService, zoneService, slotService, seatService, bedService, waypointService, residentService);
-        _persistenceService = new RegistryPersistenceService(Logger, buildingService, zoneService, waypointService, slotService, seatService, bedService, residentService);
+
+        var persistenceCoordinator = new WorldPersistenceCoordinator();
+        var persistenceParticipants = new List<IWorldPersistenceParticipant>
+        {
+            new RegistrySettlementsPersistenceParticipant(Logger, buildingService, zoneService, waypointService, slotService, seatService, bedService),
+            new RegistrySoulsPersistenceParticipant(residentService),
+            new RegistryRoutinesPersistenceParticipant(_worldClockService)
+        };
+
+        _persistenceService = new RegistryPersistenceService(Logger, slotService, seatService, bedService, residentService, persistenceCoordinator, persistenceParticipants);
         var flushService = new RegistryFlushService(Logger, buildingService, zoneService, slotService, seatService, waypointService, residentService, _persistenceService);
 
         var selectionService = new RegistrySelectionService(modeService.State);

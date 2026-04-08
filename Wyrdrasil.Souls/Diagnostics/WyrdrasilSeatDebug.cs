@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Wyrdrasil.Registry.Diagnostics;
 
-internal static class WyrdrasilSeatDebug
+public static class WyrdrasilSeatDebug
 {
     public static bool Enabled = true;
 

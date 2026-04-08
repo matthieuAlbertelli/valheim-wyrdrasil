@@ -72,6 +72,26 @@ public sealed class RegistryWorldClockService
         _simulatedMinuteOfDay = null;
     }
 
+
+    public bool TryGetSimulatedMinuteOfDay(out int minuteOfDay)
+    {
+        if (_simulatedMinuteOfDay.HasValue)
+        {
+            minuteOfDay = _simulatedMinuteOfDay.Value;
+            return true;
+        }
+
+        minuteOfDay = 0;
+        return false;
+    }
+
+    public void RestoreSimulation(int? simulatedMinuteOfDay)
+    {
+        _simulatedMinuteOfDay = simulatedMinuteOfDay.HasValue
+            ? Mathf.Clamp(simulatedMinuteOfDay.Value, 0, 1439)
+            : null;
+    }
+
     private static bool TryGetDayFraction(EnvMan envMan, out float dayFraction)
     {
         if (GetDayFractionMethod != null)
