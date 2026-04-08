@@ -1,0 +1,35 @@
+using System;
+using System.Collections.Generic;
+using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Souls.Tool;
+
+namespace Wyrdrasil.Souls.Services;
+
+
+public sealed class NpcEquipmentGenerator
+{
+    private readonly NpcEquipmentCatalog _catalog;
+
+    public NpcEquipmentGenerator(NpcEquipmentCatalog catalog)
+    {
+        _catalog = catalog;
+    }
+
+    public VikingEquipmentData Generate(int seed, NpcRole role)
+    {
+        var random = new Random(unchecked(seed * 397) ^ (int)role);
+        var pool = GetPool(role);
+        return pool[random.Next(pool.Count)];
+    }
+
+    private IReadOnlyList<VikingEquipmentData> GetPool(NpcRole role)
+    {
+        return role switch
+        {
+            NpcRole.Innkeeper => _catalog.InnkeeperLoadouts,
+            NpcRole.Guard => _catalog.GuardLoadouts,
+            NpcRole.Blacksmith => _catalog.BlacksmithLoadouts,
+            _ => _catalog.VillagerLoadouts
+        };
+    }
+}

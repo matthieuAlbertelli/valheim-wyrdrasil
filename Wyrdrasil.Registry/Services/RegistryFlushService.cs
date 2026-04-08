@@ -6,21 +6,21 @@ namespace Wyrdrasil.Registry.Services;
 public sealed class RegistryFlushService
 {
     private readonly ManualLogSource _log;
-    private readonly RegistryBuildingService _buildingService;
-    private readonly RegistryZoneService _zoneService;
-    private readonly RegistrySlotService _slotService;
-    private readonly RegistrySeatService _seatService;
-    private readonly RegistryWaypointService _waypointService;
+    private readonly BuildingService _buildingService;
+    private readonly FunctionalZoneService _zoneService;
+    private readonly ZoneSlotService _slotService;
+    private readonly SeatService _seatService;
+    private readonly NavigationWaypointService _waypointService;
     private readonly RegistryResidentService _residentService;
     private readonly RegistryPersistenceService _persistenceService;
 
     public RegistryFlushService(
         ManualLogSource log,
-        RegistryBuildingService buildingService,
-        RegistryZoneService zoneService,
-        RegistrySlotService slotService,
-        RegistrySeatService seatService,
-        RegistryWaypointService waypointService,
+        BuildingService buildingService,
+        FunctionalZoneService zoneService,
+        ZoneSlotService slotService,
+        SeatService seatService,
+        NavigationWaypointService waypointService,
         RegistryResidentService residentService,
         RegistryPersistenceService persistenceService)
     {

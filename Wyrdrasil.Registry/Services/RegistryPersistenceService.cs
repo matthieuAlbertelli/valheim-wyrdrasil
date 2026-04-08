@@ -17,9 +17,9 @@ public sealed class RegistryPersistenceService
     private const string SaveDirectoryName = "Wyrdrasil.Registry";
 
     private readonly ManualLogSource _log;
-    private readonly RegistrySlotService _slotService;
-    private readonly RegistrySeatService _seatService;
-    private readonly RegistryBedService _bedService;
+    private readonly ZoneSlotService _slotService;
+    private readonly SeatService _seatService;
+    private readonly BedService _bedService;
     private readonly RegistryResidentService _residentService;
     private readonly WorldPersistenceCoordinator _coordinator;
     private readonly IReadOnlyList<IWorldPersistenceParticipant> _participants;
@@ -29,9 +29,9 @@ public sealed class RegistryPersistenceService
 
     public RegistryPersistenceService(
         ManualLogSource log,
-        RegistrySlotService slotService,
-        RegistrySeatService seatService,
-        RegistryBedService bedService,
+        ZoneSlotService slotService,
+        SeatService seatService,
+        BedService bedService,
         RegistryResidentService residentService,
         WorldPersistenceCoordinator coordinator,
         IReadOnlyList<IWorldPersistenceParticipant> participants)

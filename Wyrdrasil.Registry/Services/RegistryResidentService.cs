@@ -16,16 +16,16 @@ public sealed class RegistryResidentService
 {
     private readonly ManualLogSource _log;
     private readonly RegistryToolState _toolState;
-    private readonly RegistrySlotService _slotService;
-    private readonly RegistrySeatService _seatService;
-    private readonly RegistryBedService _bedService;
-    private readonly RegistryResidentRuntimeService _runtimeService;
-    private readonly RegistryNpcIdentityGenerator _identityGenerator;
-    private readonly RegistryNpcCustomizationApplier _customizationApplier;
-    private readonly RegistryResidentCatalogService _catalogService;
-    private readonly RegistryResidentVisualService _visualService;
-    private readonly RegistryResidentPresenceService _presenceService;
-    private readonly RegistryResidentAssignmentService _assignmentService;
+    private readonly ZoneSlotService _slotService;
+    private readonly SeatService _seatService;
+    private readonly BedService _bedService;
+    private readonly ResidentRuntimeService _runtimeService;
+    private readonly NpcIdentityGenerator _identityGenerator;
+    private readonly NpcCustomizationApplier _customizationApplier;
+    private readonly ResidentCatalogService _catalogService;
+    private readonly ResidentVisualService _visualService;
+    private readonly ResidentPresenceService _presenceService;
+    private readonly ResidentAssignmentService _assignmentService;
 
     public IReadOnlyList<RegisteredNpcData> RegisteredNpcs => _catalogService.RegisteredNpcs;
     public int NextRegisteredNpcId => _catalogService.NextRegisteredNpcId;
@@ -33,16 +33,16 @@ public sealed class RegistryResidentService
     public RegistryResidentService(
         ManualLogSource log,
         RegistryToolState toolState,
-        RegistrySlotService slotService,
-        RegistrySeatService seatService,
-        RegistryBedService bedService,
-        RegistryResidentRuntimeService runtimeService,
-        RegistryNpcIdentityGenerator identityGenerator,
-        RegistryNpcCustomizationApplier customizationApplier,
-        RegistryResidentCatalogService catalogService,
-        RegistryResidentVisualService visualService,
-        RegistryResidentPresenceService presenceService,
-        RegistryResidentAssignmentService assignmentService)
+        ZoneSlotService slotService,
+        SeatService seatService,
+        BedService bedService,
+        ResidentRuntimeService runtimeService,
+        NpcIdentityGenerator identityGenerator,
+        NpcCustomizationApplier customizationApplier,
+        ResidentCatalogService catalogService,
+        ResidentVisualService visualService,
+        ResidentPresenceService presenceService,
+        ResidentAssignmentService assignmentService)
     {
         _log = log;
         _toolState = toolState;

@@ -15,32 +15,32 @@ public sealed class RegistryToolController
     private const KeyCode NextActionKey = KeyCode.F10;
 
     private readonly RegistryModeService _modeService;
-    private readonly RegistrySelectionService _selectionService;
-    private readonly RegistryActionRegistry _actionRegistry;
+    private readonly ToolSelectionService _selectionService;
+    private readonly ActionRegistry _actionRegistry;
     private readonly RegistryContext _actionContext;
     private readonly RegistryPersistenceService _persistenceService;
-    private readonly RegistryZoneService _zoneService;
-    private readonly RegistryWaypointService _waypointService;
-    private readonly RegistrySlotService _slotService;
-    private readonly RegistrySeatService _seatService;
-    private readonly RegistryBedService _bedService;
+    private readonly FunctionalZoneService _zoneService;
+    private readonly NavigationWaypointService _waypointService;
+    private readonly ZoneSlotService _slotService;
+    private readonly SeatService _seatService;
+    private readonly BedService _bedService;
     private readonly RegistryResidentService _residentService;
-    private readonly RegistryWorldClockService _worldClockService;
+    private readonly WorldClockService _worldClockService;
     private readonly RegistryHudRenderer _hudRenderer;
 
     public RegistryToolController(
         RegistryModeService modeService,
-        RegistrySelectionService selectionService,
-        RegistryActionRegistry actionRegistry,
+        ToolSelectionService selectionService,
+        ActionRegistry actionRegistry,
         RegistryContext actionContext,
         RegistryPersistenceService persistenceService,
-        RegistryZoneService zoneService,
-        RegistryWaypointService waypointService,
-        RegistrySlotService slotService,
-        RegistrySeatService seatService,
-        RegistryBedService bedService,
+        FunctionalZoneService zoneService,
+        NavigationWaypointService waypointService,
+        ZoneSlotService slotService,
+        SeatService seatService,
+        BedService bedService,
         RegistryResidentService residentService,
-        RegistryWorldClockService worldClockService,
+        WorldClockService worldClockService,
         RegistryHudRenderer hudRenderer)
     {
         _modeService = modeService;

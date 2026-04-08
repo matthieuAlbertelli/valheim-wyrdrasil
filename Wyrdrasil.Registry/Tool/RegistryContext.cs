@@ -9,31 +9,31 @@ namespace Wyrdrasil.Registry.Tool;
 public sealed class RegistryContext
 {
     public ManualLogSource Log { get; }
-    public RegistryZoneService ZoneService { get; }
-    public RegistryWaypointService WaypointService { get; }
-    public RegistrySlotService SlotService { get; }
-    public RegistrySeatService SeatService { get; }
-    public RegistryBedService BedService { get; }
-    public RegistrySpawnService SpawnService { get; }
+    public FunctionalZoneService ZoneService { get; }
+    public NavigationWaypointService WaypointService { get; }
+    public ZoneSlotService SlotService { get; }
+    public SeatService SeatService { get; }
+    public BedService BedService { get; }
+    public NpcSpawnService SpawnService { get; }
     public RegistryResidentService ResidentService { get; }
-    public RegistryDiagnosticsService DiagnosticsService { get; }
+    public TargetDiagnosticsService DiagnosticsService { get; }
     public RegistryDeletionService DeletionService { get; }
     public RegistryFlushService FlushService { get; }
-    public RegistryWorldClockService WorldClockService { get; }
+    public WorldClockService WorldClockService { get; }
 
     public RegistryContext(
         ManualLogSource log,
-        RegistryZoneService zoneService,
-        RegistryWaypointService waypointService,
-        RegistrySlotService slotService,
-        RegistrySeatService seatService,
-        RegistryBedService bedService,
-        RegistrySpawnService spawnService,
+        FunctionalZoneService zoneService,
+        NavigationWaypointService waypointService,
+        ZoneSlotService slotService,
+        SeatService seatService,
+        BedService bedService,
+        NpcSpawnService spawnService,
         RegistryResidentService residentService,
-        RegistryDiagnosticsService diagnosticsService,
+        TargetDiagnosticsService diagnosticsService,
         RegistryDeletionService deletionService,
         RegistryFlushService flushService,
-        RegistryWorldClockService worldClockService)
+        WorldClockService worldClockService)
     {
         Log = log;
         ZoneService = zoneService;

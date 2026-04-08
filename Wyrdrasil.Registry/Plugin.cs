@@ -25,8 +25,8 @@ public class Plugin : BaseUnityPlugin
 
     private RegistryToolController _registryToolController = null!;
     private RegistryPersistenceService _persistenceService = null!;
-    private RegistryWorldClockService _worldClockService = null!;
-    private RegistryResidentRoutineService _residentRoutineService = null!;
+    private WorldClockService _worldClockService = null!;
+    private ResidentRoutineService _residentRoutineService = null!;
     private Harmony? _harmony;
 
     private void Awake()
@@ -37,30 +37,30 @@ public class Plugin : BaseUnityPlugin
         RoutinesModuleBootstrap.ApplyHarmony(_harmony);
 
         var modeService = new RegistryModeService(Logger);
-        var buildingService = new RegistryBuildingService(Logger);
-        var anchorPolicyService = new RegistryAnchorPolicyService();
-        var zoneService = new RegistryZoneService(Logger, modeService, buildingService);
-        var waypointService = new RegistryWaypointService(Logger, modeService, zoneService);
-        var slotService = new RegistrySlotService(Logger, modeService, zoneService, anchorPolicyService);
-        var seatService = new RegistrySeatService(Logger, modeService, zoneService, anchorPolicyService);
-        var bedService = new RegistryBedService(Logger, modeService, zoneService, anchorPolicyService);
+        var buildingService = new BuildingService(Logger);
+        var anchorPolicyService = new ZonePlacementPolicyService();
+        var zoneService = new FunctionalZoneService(Logger, modeService, buildingService);
+        var waypointService = new NavigationWaypointService(Logger, modeService, zoneService);
+        var slotService = new ZoneSlotService(Logger, modeService, zoneService, anchorPolicyService);
+        var seatService = new SeatService(Logger, modeService, zoneService, anchorPolicyService);
+        var bedService = new BedService(Logger, modeService, zoneService, anchorPolicyService);
 
-        var appearanceCatalog = new RegistryNpcAppearanceCatalog();
-        var equipmentCatalog = new RegistryNpcEquipmentCatalog();
-        var appearanceGenerator = new RegistryNpcAppearanceGenerator(appearanceCatalog);
-        var equipmentGenerator = new RegistryNpcEquipmentGenerator(equipmentCatalog);
-        var identityGenerator = new RegistryNpcIdentityGenerator(appearanceGenerator, equipmentGenerator);
-        var customizationApplier = new RegistryNpcCustomizationApplier(Logger);
+        var appearanceCatalog = new NpcAppearanceCatalog();
+        var equipmentCatalog = new NpcEquipmentCatalog();
+        var appearanceGenerator = new NpcAppearanceGenerator(appearanceCatalog);
+        var equipmentGenerator = new NpcEquipmentGenerator(equipmentCatalog);
+        var identityGenerator = new NpcIdentityGenerator(appearanceGenerator, equipmentGenerator);
+        var customizationApplier = new NpcCustomizationApplier(Logger);
         WyrdrasilVikingVisualBootstrap.ConfigureLogger(Logger);
 
-        var vikingPrefabFactory = new RegistryVikingPrefabFactory(Logger);
-        var spawnService = new RegistrySpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
-        var navigationService = new RegistryNpcNavigationService(Logger);
-        var residentRuntimeService = new RegistryResidentRuntimeService(Logger);
-        var residentCatalogService = new RegistryResidentCatalogService();
-        var residentVisualService = new RegistryResidentVisualService(modeService, residentRuntimeService);
-        var scheduleService = new RegistryResidentScheduleService();
-        var occupationService = new RegistryResidentOccupationService(
+        var vikingPrefabFactory = new VikingPrefabFactory(Logger);
+        var spawnService = new NpcSpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
+        var navigationService = new NpcNavigationService(Logger);
+        var residentRuntimeService = new ResidentRuntimeService(Logger);
+        var residentCatalogService = new ResidentCatalogService();
+        var residentVisualService = new ResidentVisualService(modeService, residentRuntimeService);
+        var scheduleService = new ResidentScheduleService();
+        var occupationService = new ResidentOccupationService(
             Logger,
             residentRuntimeService,
             slotService,
@@ -69,7 +69,7 @@ public class Plugin : BaseUnityPlugin
             navigationService,
             waypointService);
 
-        var residentPresenceService = new RegistryResidentPresenceService(
+        var residentPresenceService = new ResidentPresenceService(
             residentCatalogService,
             residentRuntimeService,
             spawnService,
@@ -79,7 +79,7 @@ public class Plugin : BaseUnityPlugin
             occupationService,
             residentVisualService);
 
-        var residentAssignmentService = new RegistryResidentAssignmentService(
+        var residentAssignmentService = new ResidentAssignmentService(
             slotService,
             seatService,
             bedService,
@@ -103,15 +103,15 @@ public class Plugin : BaseUnityPlugin
             residentPresenceService,
             residentAssignmentService);
 
-        _worldClockService = new RegistryWorldClockService();
-        _residentRoutineService = new RegistryResidentRoutineService(
+        _worldClockService = new WorldClockService();
+        _residentRoutineService = new ResidentRoutineService(
             Logger,
             _worldClockService,
             residentService,
             residentRuntimeService,
             occupationService);
 
-        var diagnosticsService = new RegistryDiagnosticsService(Logger);
+        var diagnosticsService = new TargetDiagnosticsService(Logger);
         var deletionService = new RegistryDeletionService(
             Logger,
             buildingService,
@@ -125,7 +125,7 @@ public class Plugin : BaseUnityPlugin
         var persistenceCoordinator = new WorldPersistenceCoordinator();
         var persistenceParticipants = new List<IWorldPersistenceParticipant>
         {
-            new RegistrySettlementsPersistenceParticipant(
+            new SettlementsPersistenceParticipant(
                 Logger,
                 buildingService,
                 zoneService,
@@ -135,7 +135,7 @@ public class Plugin : BaseUnityPlugin
                 bedService),
 
             new RegistrySoulsPersistenceParticipant(residentService),
-            new RegistryRoutinesPersistenceParticipant(_worldClockService)
+            new RoutinesPersistenceParticipant(_worldClockService)
         };
 
         _persistenceService = new RegistryPersistenceService(
@@ -157,7 +157,7 @@ public class Plugin : BaseUnityPlugin
             residentService,
             _persistenceService);
 
-        var selectionService = new RegistrySelectionService(modeService.State);
+        var selectionService = new ToolSelectionService(modeService.State);
         var actionRegistry = BuildActionRegistry();
         var context = new RegistryContext(
             Logger,
@@ -193,9 +193,9 @@ public class Plugin : BaseUnityPlugin
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
     }
 
-    private static RegistryActionRegistry BuildActionRegistry()
+    private static ActionRegistry BuildActionRegistry()
     {
-        var registry = new RegistryActionRegistry();
+        var registry = new ActionRegistry();
         registry.Register(new CreateTavernZoneAction());
         registry.Register(new CreateBedroomZoneAction());
         registry.Register(new CreateTavernWaypointAction());

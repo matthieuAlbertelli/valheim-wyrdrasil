@@ -6,22 +6,22 @@ namespace Wyrdrasil.Registry.Services;
 public sealed class RegistryDeletionService
 {
     private readonly ManualLogSource _log;
-    private readonly RegistryBuildingService _buildingService;
-    private readonly RegistryZoneService _zoneService;
-    private readonly RegistrySlotService _slotService;
-    private readonly RegistrySeatService _seatService;
-    private readonly RegistryBedService _bedService;
-    private readonly RegistryWaypointService _waypointService;
+    private readonly BuildingService _buildingService;
+    private readonly FunctionalZoneService _zoneService;
+    private readonly ZoneSlotService _slotService;
+    private readonly SeatService _seatService;
+    private readonly BedService _bedService;
+    private readonly NavigationWaypointService _waypointService;
     private readonly RegistryResidentService _residentService;
 
     public RegistryDeletionService(
         ManualLogSource log,
-        RegistryBuildingService buildingService,
-        RegistryZoneService zoneService,
-        RegistrySlotService slotService,
-        RegistrySeatService seatService,
-        RegistryBedService bedService,
-        RegistryWaypointService waypointService,
+        BuildingService buildingService,
+        FunctionalZoneService zoneService,
+        ZoneSlotService slotService,
+        SeatService seatService,
+        BedService bedService,
+        NavigationWaypointService waypointService,
         RegistryResidentService residentService)
     {
         _log = log;

@@ -40,7 +40,7 @@ public sealed class WyrdrasilVikingVisualBootstrap : MonoBehaviour
             return;
         }
 
-        RegistryNpcVisualStateWriter.ApplyRuntimeRefresh(gameObject, identity, _log);
+        NpcVisualStateWriter.ApplyRuntimeRefresh(gameObject, identity, _log);
         _applied = true;
     }
 }
