@@ -59,7 +59,13 @@ public class Plugin : BaseUnityPlugin
 
         var vikingPrefabFactory = new VikingPrefabFactory(Logger);
         var spawnService = new NpcSpawnService(Logger, vikingPrefabFactory, identityGenerator, customizationApplier);
-        var navigationService = new NpcNavigationService(Logger);
+
+        var occupationNavigationStrategyRegistry = new OccupationNavigationStrategyRegistry();
+        occupationNavigationStrategyRegistry.Register(new StandOccupationNavigationStrategy());
+        occupationNavigationStrategyRegistry.Register(new SeatOccupationNavigationStrategy());
+        occupationNavigationStrategyRegistry.Register(new BedOccupationNavigationStrategy());
+
+        var navigationService = new NpcNavigationService(Logger, occupationNavigationStrategyRegistry);
         var residentRuntimeService = new ResidentRuntimeService(Logger);
         var residentCatalogService = new ResidentCatalogService();
         var residentVisualService = new ResidentVisualService(modeService, residentRuntimeService);

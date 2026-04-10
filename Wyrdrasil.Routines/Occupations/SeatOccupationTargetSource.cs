@@ -29,8 +29,7 @@ public sealed class SeatOccupationTargetSource : IOccupationTargetSource
             seatData.BuildingId,
             seatData.ZoneId,
             new OccupationAnchor(seatData.ApproachPosition, seatData.SeatPosition, seatData.SeatForward),
-            OccupationUseMode.Sit,
-            chairComponent: seatData.ChairComponent);
+            OccupationExecutionProfile.Seat(seatData.ChairComponent));
 
         return true;
     }

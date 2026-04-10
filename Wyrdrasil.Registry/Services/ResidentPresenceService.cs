@@ -183,24 +183,26 @@ public sealed class ResidentPresenceService
 
     private bool IsResidentUsingAssignedTarget(RegisteredNpcData resident, OccupationTarget target, bool isAttached)
     {
-        switch (target.UseMode)
+        if (target.Execution.IsStand)
         {
-            case OccupationUseMode.Stand:
-                return isAttached;
-
-            case OccupationUseMode.Sit:
-                return TryGetBoundViking(resident, out var seatViking) &&
-                       target.ChairComponent != null &&
-                       seatViking.IsAttachedToChair(target.ChairComponent);
-
-            case OccupationUseMode.Lie:
-                return TryGetBoundViking(resident, out var bedViking) &&
-                       target.BedComponent != null &&
-                       bedViking.IsAttachedToBed(target.BedComponent);
-
-            default:
-                return false;
+            return isAttached;
         }
+
+        if (target.Execution.IsSeat)
+        {
+            return TryGetBoundViking(resident, out var seatViking) &&
+                   target.Execution.ChairComponent != null &&
+                   seatViking.IsAttachedToChair(target.Execution.ChairComponent);
+        }
+
+        if (target.Execution.IsBed)
+        {
+            return TryGetBoundViking(resident, out var bedViking) &&
+                   target.Execution.BedComponent != null &&
+                   bedViking.IsAttachedToBed(target.Execution.BedComponent);
+        }
+
+        return false;
     }
 
     private bool TryGetBoundViking(RegisteredNpcData resident, out WyrdrasilVikingNpc viking)
@@ -254,7 +256,7 @@ public sealed class ResidentPresenceService
 
         var spawnPosition = target.Anchor.ApproachPosition;
         var lookTarget = target.Anchor.UsePosition;
-        if (target.UseMode == OccupationUseMode.Stand && (lookTarget - spawnPosition).sqrMagnitude <= 0.0001f)
+        if (target.Execution.IsStand && (lookTarget - spawnPosition).sqrMagnitude <= 0.0001f)
         {
             lookTarget = GetPlayerLookTargetOrFallback(spawnPosition);
         }

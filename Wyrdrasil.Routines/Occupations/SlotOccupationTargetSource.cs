@@ -29,7 +29,7 @@ public sealed class SlotOccupationTargetSource : IOccupationTargetSource
             slotData.BuildingId,
             slotData.ZoneId,
             new OccupationAnchor(slotData.Position, slotData.Position, default),
-            OccupationUseMode.Stand);
+            OccupationExecutionProfile.Stand());
 
         return true;
     }

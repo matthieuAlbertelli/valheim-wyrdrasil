@@ -62,5 +62,6 @@
     <Compile Remove="Occupations\AssignedBedOccupationResolver.cs" />
     <Compile Remove="Occupations\AssignedSeatOccupationResolver.cs" />
     <Compile Remove="Occupations\PublicSeatOccupationResolver.cs" />
+    <Compile Remove="Occupations\OccupationUseMode.cs" />
   </ItemGroup>
 </Project>

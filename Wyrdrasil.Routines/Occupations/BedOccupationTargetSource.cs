@@ -29,9 +29,7 @@ public sealed class BedOccupationTargetSource : IOccupationTargetSource
             bedData.BuildingId,
             bedData.ZoneId,
             new OccupationAnchor(bedData.ApproachPosition, bedData.SleepPosition, bedData.SleepForward),
-            OccupationUseMode.Lie,
-            bedComponent: bedData.BedComponent,
-            attachPoint: bedData.SleepAttachPoint);
+            OccupationExecutionProfile.Bed(bedData.BedComponent, bedData.SleepAttachPoint));
 
         return true;
     }

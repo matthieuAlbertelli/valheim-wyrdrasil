@@ -10,10 +10,7 @@ public sealed class OccupationTarget
     public int BuildingId { get; }
     public int? ZoneId { get; }
     public OccupationAnchor Anchor { get; }
-    public OccupationUseMode UseMode { get; }
-    public Chair? ChairComponent { get; }
-    public Bed? BedComponent { get; }
-    public Transform? AttachPoint { get; }
+    public OccupationExecutionProfile Execution { get; }
 
     public OccupationTarget(
         OccupationTargetRef reference,
@@ -21,19 +18,13 @@ public sealed class OccupationTarget
         int buildingId,
         int? zoneId,
         OccupationAnchor anchor,
-        OccupationUseMode useMode,
-        Chair? chairComponent = null,
-        Bed? bedComponent = null,
-        Transform? attachPoint = null)
+        OccupationExecutionProfile execution)
     {
         Reference = reference;
         DisplayName = displayName;
         BuildingId = buildingId;
         ZoneId = zoneId;
         Anchor = anchor;
-        UseMode = useMode;
-        ChairComponent = chairComponent;
-        BedComponent = bedComponent;
-        AttachPoint = attachPoint;
+        Execution = execution;
     }
 }
