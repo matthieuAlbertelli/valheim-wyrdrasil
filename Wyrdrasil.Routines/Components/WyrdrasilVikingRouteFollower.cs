@@ -1,10 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
-using Wyrdrasil.Registry.Tool;
-using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Routines.Components;
-
 
 /// <summary>
 /// Legacy compatibility shim.
@@ -36,10 +33,28 @@ public sealed class WyrdrasilVikingRouteFollower : MonoBehaviour
         enabled = false;
     }
 
-    public void ConfigureRouteToSeat(IReadOnlyList<Vector3> routePoints, RegisteredSeatData seat)
+    public void ConfigureRouteToSeat(
+        IReadOnlyList<Vector3> routePoints,
+        Vector3 approachPosition,
+        Vector3 seatUsePosition,
+        Vector3 seatFacingDirection,
+        Chair? chairComponent)
     {
         EnsureController();
-        _controller!.ConfigureRouteToSeat(routePoints, seat);
+        _controller!.ConfigureRouteToSeat(routePoints, approachPosition, seatUsePosition, seatFacingDirection, chairComponent);
+        enabled = false;
+    }
+
+    public void ConfigureRouteToBed(
+        IReadOnlyList<Vector3> routePoints,
+        Vector3 approachPosition,
+        Vector3 bedUsePosition,
+        Vector3 bedFacingDirection,
+        Bed? bedComponent,
+        Transform? bedAttachPoint)
+    {
+        EnsureController();
+        _controller!.ConfigureRouteToBed(routePoints, approachPosition, bedUsePosition, bedFacingDirection, bedComponent, bedAttachPoint);
         enabled = false;
     }
 

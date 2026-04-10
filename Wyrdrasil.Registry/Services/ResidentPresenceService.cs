@@ -169,7 +169,7 @@ public sealed class ResidentPresenceService
             return false;
         }
 
-        _occupationService.TryOccupyAssignedSlot(resident);
+        _occupationService.TryStartOccupation(resident, ResidentRoutineActivityType.WorkAtAssignedSlot);
         return true;
     }
 
@@ -198,7 +198,7 @@ public sealed class ResidentPresenceService
             return false;
         }
 
-        _occupationService.TryOccupyAssignedSeat(resident);
+        _occupationService.TryStartOccupation(resident, ResidentRoutineActivityType.SitAtAssignedSeat);
         return true;
     }
 
@@ -227,7 +227,7 @@ public sealed class ResidentPresenceService
             return false;
         }
 
-        _occupationService.TryOccupyAssignedBed(resident);
+        _occupationService.TryStartOccupation(resident, ResidentRoutineActivityType.SleepAtAssignedBed);
         return true;
     }
 

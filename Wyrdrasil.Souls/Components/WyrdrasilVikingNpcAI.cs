@@ -1,7 +1,5 @@
 using System.Reflection;
 using UnityEngine;
-using Wyrdrasil.Registry.Tool;
-using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Souls.Components
 {
@@ -49,8 +47,13 @@ namespace Wyrdrasil.Souls.Components
         private Vector3 _steeringFacingDirection;
         private bool _hasSteeringTarget;
 
-        private RegisteredSeatData? _seatTarget;
-        private RegisteredBedData? _bedTarget;
+        private Chair? _seatChairComponent;
+        private Vector3 _seatUsePosition;
+        private Vector3 _seatFacingDirection;
+        private Bed? _bedComponent;
+        private Transform? _bedAttachPoint;
+        private Vector3 _bedUsePosition;
+        private Vector3 _bedFacingDirection;
         private bool _travelLocked;
 
         private Vector3 _approachPoint;
@@ -85,8 +88,8 @@ namespace Wyrdrasil.Souls.Components
         {
             _travelLocked = true;
             _hasSteeringTarget = false;
-            _seatTarget = null;
-            _bedTarget = null;
+            ClearSeatTarget();
+            ClearBedTarget();
             _mode = NavigationMode.Idle;
             StopMoving();
             ZeroVelocity();
@@ -115,8 +118,8 @@ namespace Wyrdrasil.Souls.Components
                 ? facingDirection.normalized
                 : transform.forward;
 
-            _seatTarget = null;
-            _bedTarget = null;
+            ClearSeatTarget();
+            ClearBedTarget();
             _hasSteeringTarget = true;
             _mode = NavigationMode.Steering;
             enabled = true;
@@ -125,26 +128,46 @@ namespace Wyrdrasil.Souls.Components
         public void ClearSteering()
         {
             _hasSteeringTarget = false;
-            _seatTarget = null;
-            _bedTarget = null;
+            ClearSeatTarget();
+            ClearBedTarget();
             _mode = _viking != null && _viking.IsAttached() ? NavigationMode.Seated : NavigationMode.Idle;
             StopMoving();
             ZeroVelocity();
         }
 
-        public void StartSeatApproach(RegisteredSeatData seat, bool arrivedFromWaypointRoute = false)
+        public void StartSeatApproach(
+            Vector3 approachPosition,
+            Vector3 seatUsePosition,
+            Vector3 seatFacingDirection,
+            Chair? chairComponent,
+            bool arrivedFromWaypointRoute = false)
         {
-            StartOccupiedAnchorApproach(seat.ApproachPosition, arrivedFromWaypointRoute);
-            _seatTarget = seat;
-            _bedTarget = null;
+            StartOccupiedAnchorApproach(approachPosition, arrivedFromWaypointRoute);
+            _seatChairComponent = chairComponent;
+            _seatUsePosition = seatUsePosition;
+            _seatFacingDirection = seatFacingDirection.sqrMagnitude > 0.0001f
+                ? seatFacingDirection.normalized
+                : transform.forward;
+            ClearBedTarget();
             _mode = NavigationMode.SeatApproach;
         }
 
-        public void StartBedApproach(RegisteredBedData bed, bool arrivedFromWaypointRoute = false)
+        public void StartBedApproach(
+            Vector3 approachPosition,
+            Vector3 bedUsePosition,
+            Vector3 bedFacingDirection,
+            Bed? bedComponent,
+            Transform? bedAttachPoint,
+            bool arrivedFromWaypointRoute = false)
         {
-            StartOccupiedAnchorApproach(bed.ApproachPosition, arrivedFromWaypointRoute);
-            _seatTarget = null;
-            _bedTarget = bed;
+            StartOccupiedAnchorApproach(approachPosition, arrivedFromWaypointRoute);
+            ClearSeatTarget();
+            _bedComponent = bedComponent;
+            _bedAttachPoint = bedAttachPoint;
+            _bedUsePosition = bedUsePosition;
+            _bedFacingDirection = bedFacingDirection.sqrMagnitude > 0.0001f
+                ? bedFacingDirection.normalized
+                : transform.forward;
             _mode = NavigationMode.BedApproach;
         }
 
@@ -164,7 +187,7 @@ namespace Wyrdrasil.Souls.Components
 
             if (_viking.IsAttached())
             {
-                _mode = _bedTarget != null ? NavigationMode.Sleeping : NavigationMode.Seated;
+                _mode = _bedComponent != null ? NavigationMode.Sleeping : NavigationMode.Seated;
                 StopMoving();
                 ZeroVelocity();
                 return true;
@@ -246,7 +269,7 @@ namespace Wyrdrasil.Souls.Components
 
         private void UpdateSeatApproach(float dt)
         {
-            if (_seatTarget == null)
+            if (_seatChairComponent == null)
             {
                 _mode = NavigationMode.Idle;
                 return;
@@ -266,7 +289,7 @@ namespace Wyrdrasil.Souls.Components
 
         private void UpdateSeatAttempt(float dt)
         {
-            if (_seatTarget == null || _viking == null || _seatTarget.ChairComponent == null)
+            if (_seatChairComponent == null || _viking == null)
             {
                 _mode = NavigationMode.Idle;
                 return;
@@ -274,7 +297,7 @@ namespace Wyrdrasil.Souls.Components
 
             StopMoving();
             ZeroVelocity();
-            RotateTowards(_seatTarget.SeatForward, dt);
+            RotateTowards(_seatFacingDirection, dt);
 
             if (Time.time < _nextAttemptTime)
             {
@@ -282,7 +305,7 @@ namespace Wyrdrasil.Souls.Components
             }
 
             _nextAttemptTime = Time.time + AttemptRetryInterval;
-            _seatTarget.ChairComponent.Interact(_viking, false, false);
+            _seatChairComponent.Interact(_viking, false, false);
 
             if (_viking.IsAttached())
             {
@@ -292,7 +315,7 @@ namespace Wyrdrasil.Souls.Components
 
         private void UpdateBedApproach(float dt)
         {
-            if (_bedTarget == null)
+            if (_bedComponent == null || _bedAttachPoint == null)
             {
                 _mode = NavigationMode.Idle;
                 return;
@@ -312,7 +335,7 @@ namespace Wyrdrasil.Souls.Components
 
         private void UpdateBedAttempt(float dt)
         {
-            if (_bedTarget == null || _viking == null || _bedTarget.BedComponent == null || _bedTarget.SleepAttachPoint == null)
+            if (_bedComponent == null || _bedAttachPoint == null || _viking == null)
             {
                 _mode = NavigationMode.Idle;
                 return;
@@ -320,7 +343,7 @@ namespace Wyrdrasil.Souls.Components
 
             StopMoving();
             ZeroVelocity();
-            RotateTowards(_bedTarget.SleepForward, dt);
+            RotateTowards(_bedFacingDirection, dt);
 
             if (Time.time < _nextAttemptTime)
             {
@@ -328,7 +351,7 @@ namespace Wyrdrasil.Souls.Components
             }
 
             _nextAttemptTime = Time.time + AttemptRetryInterval;
-            _bedTarget.BedComponent.Interact(_viking, false, false);
+            _bedComponent.Interact(_viking, false, false);
 
             if (_viking.IsAttached())
             {
@@ -416,7 +439,6 @@ namespace Wyrdrasil.Souls.Components
             delta.y = 0f;
             return delta.magnitude;
         }
-
 
         private void ResolveNativeLocomotionFields()
         {
@@ -537,16 +559,6 @@ namespace Wyrdrasil.Souls.Components
                 return;
             }
 
-            RestoreNativeLocomotionDefaults();
-        }
-
-        private void RestoreNativeLocomotionDefaults()
-        {
-            if (!_nativeLocomotionDefaultsCaptured || _nativeLocomotionOwner == null)
-            {
-                return;
-            }
-
             if (_nativeSpeedField != null)
             {
                 _nativeSpeedField.SetValue(_nativeLocomotionOwner, _defaultNativeSpeed);
@@ -583,12 +595,6 @@ namespace Wyrdrasil.Souls.Components
             }
         }
 
-        protected override void OnDisable()
-        {
-            RestoreNativeLocomotionDefaults();
-            base.OnDisable();
-        }
-
         private void ZeroVelocity()
         {
             if (_rigidbody == null)
@@ -596,8 +602,23 @@ namespace Wyrdrasil.Souls.Components
                 return;
             }
 
-            _rigidbody.linearVelocity = Vector3.zero;
+            _rigidbody.velocity = Vector3.zero;
             _rigidbody.angularVelocity = Vector3.zero;
+        }
+
+        private void ClearSeatTarget()
+        {
+            _seatChairComponent = null;
+            _seatUsePosition = Vector3.zero;
+            _seatFacingDirection = Vector3.forward;
+        }
+
+        private void ClearBedTarget()
+        {
+            _bedComponent = null;
+            _bedAttachPoint = null;
+            _bedUsePosition = Vector3.zero;
+            _bedFacingDirection = Vector3.forward;
         }
     }
 }

@@ -121,7 +121,7 @@ public sealed class ResidentRoutineService
             return;
         }
 
-        var applied = ApplyActivity(resident, desiredActivity);
+        var applied = _occupationService.TryStartOccupation(resident, desiredActivity);
         if (applied)
         {
             _appliedActivitiesByResidentId[resident.Id] = desiredActivity;
@@ -143,26 +143,8 @@ public sealed class ResidentRoutineService
         return bestEntry?.ActivityType ?? ResidentRoutineActivityType.None;
     }
 
-    private bool ApplyActivity(RegisteredNpcData resident, ResidentRoutineActivityType activityType)
-    {
-        return activityType switch
-        {
-            ResidentRoutineActivityType.WanderBetweenWaypoints => _occupationService.TryStartOrContinueWandering(resident),
-            ResidentRoutineActivityType.WorkAtAssignedSlot => _occupationService.TryOccupyAssignedSlot(resident),
-            ResidentRoutineActivityType.SitAtAvailablePublicSeat => _occupationService.TryOccupyAvailablePublicSeat(resident),
-            ResidentRoutineActivityType.SitAtAssignedSeat => _occupationService.TryOccupyAssignedSeat(resident),
-            ResidentRoutineActivityType.SleepAtAssignedBed => _occupationService.TryOccupyAssignedBed(resident),
-            _ => false
-        };
-    }
-
     private void ContinueActivity(RegisteredNpcData resident, ResidentRoutineActivityType activityType)
     {
-        switch (activityType)
-        {
-            case ResidentRoutineActivityType.WanderBetweenWaypoints:
-                _occupationService.TryStartOrContinueWandering(resident);
-                break;
-        }
+        _occupationService.ContinueOccupation(resident, activityType);
     }
 }

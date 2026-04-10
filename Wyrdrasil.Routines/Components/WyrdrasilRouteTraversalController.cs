@@ -1,12 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
-// using Wyrdrasil.Registry.Diagnostics;
-// using Wyrdrasil.Registry.Tool;
-using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Components;
 
 namespace Wyrdrasil.Routines.Components;
-
 
 /// <summary>
 /// Dedicated Registry route executor.
@@ -45,8 +41,17 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
 
     private Humanoid? _humanoid;
     private WyrdrasilVikingNpcAI? _ai;
-    private RegisteredSeatData? _seatTarget;
-    private RegisteredBedData? _bedTarget;
+    private bool _hasSeatHandoff;
+    private Vector3 _seatApproachPosition;
+    private Vector3 _seatUsePosition;
+    private Vector3 _seatFacingDirection;
+    private Chair? _seatChairComponent;
+    private bool _hasBedHandoff;
+    private Vector3 _bedApproachPosition;
+    private Vector3 _bedUsePosition;
+    private Vector3 _bedFacingDirection;
+    private Bed? _bedComponent;
+    private Transform? _bedAttachPoint;
     private Vector3 _finalDestination;
     private Vector3 _finalFacingDirection;
     private float _finalStopDistance;
@@ -77,8 +82,8 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         _routePoints.Clear();
         AppendRoutePoints(routePoints);
 
-        _seatTarget = null;
-        _bedTarget = null;
+        ClearSeatHandoff();
+        ClearBedHandoff();
         _finalDestination = finalDestination;
         _finalStopDistance = Mathf.Max(finalStopDistance, FinalDestinationReachRadius);
         _finalFacingDirection = finalFacingDirection.sqrMagnitude > 0.0001f
@@ -94,20 +99,23 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         enabled = true;
     }
 
-    public void ConfigureRouteToSeat(IReadOnlyList<Vector3> routePoints, RegisteredSeatData seat)
+    public void ConfigureRouteToSeat(
+        IReadOnlyList<Vector3> routePoints,
+        Vector3 approachPosition,
+        Vector3 seatUsePosition,
+        Vector3 seatFacingDirection,
+        Chair? chairComponent)
     {
         PrepareForTraversal();
 
         _routePoints.Clear();
         AppendRoutePoints(routePoints);
 
-        _seatTarget = seat;
-        _bedTarget = null;
+        ConfigureSeatHandoff(approachPosition, seatUsePosition, seatFacingDirection, chairComponent);
+        ClearBedHandoff();
         _finalDestination = Vector3.zero;
         _finalStopDistance = 0f;
-        _finalFacingDirection = seat.SeatForward.sqrMagnitude > 0.0001f
-            ? seat.SeatForward.normalized
-            : transform.forward;
+        _finalFacingDirection = _seatFacingDirection;
 
         ResetTraversalState();
 
@@ -123,20 +131,24 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         }
     }
 
-    public void ConfigureRouteToBed(IReadOnlyList<Vector3> routePoints, RegisteredBedData bed)
+    public void ConfigureRouteToBed(
+        IReadOnlyList<Vector3> routePoints,
+        Vector3 approachPosition,
+        Vector3 bedUsePosition,
+        Vector3 bedFacingDirection,
+        Bed? bedComponent,
+        Transform? bedAttachPoint)
     {
         PrepareForTraversal();
 
         _routePoints.Clear();
         AppendRoutePoints(routePoints);
 
-        _seatTarget = null;
-        _bedTarget = bed;
+        ClearSeatHandoff();
+        ConfigureBedHandoff(approachPosition, bedUsePosition, bedFacingDirection, bedComponent, bedAttachPoint);
         _finalDestination = Vector3.zero;
         _finalStopDistance = 0f;
-        _finalFacingDirection = bed.SleepForward.sqrMagnitude > 0.0001f
-            ? bed.SleepForward.normalized
-            : transform.forward;
+        _finalFacingDirection = _bedFacingDirection;
 
         ResetTraversalState();
 
@@ -155,8 +167,8 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
     public void ReleaseControl()
     {
         _routePoints.Clear();
-        _seatTarget = null;
-        _bedTarget = null;
+        ClearSeatHandoff();
+        ClearBedHandoff();
         _currentRouteIndex = 0;
         _announcedRouteIndex = -1;
         _finalTargetIssued = false;
@@ -278,13 +290,13 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
 
     private void HandleRouteCompletion()
     {
-        if (_seatTarget != null)
+        if (_hasSeatHandoff)
         {
             StartSeatHandoff();
             return;
         }
 
-        if (_bedTarget != null)
+        if (_hasBedHandoff)
         {
             StartBedHandoff();
             return;
@@ -296,28 +308,28 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
 
     private void StartSeatHandoff()
     {
-        if (_ai == null || _seatTarget == null)
+        if (_ai == null || !_hasSeatHandoff)
         {
             _mode = TraversalMode.None;
             enabled = false;
             return;
         }
 
-        _ai.StartSeatApproach(_seatTarget, true);
+        _ai.StartSeatApproach(_seatApproachPosition, _seatUsePosition, _seatFacingDirection, _seatChairComponent, true);
         _mode = TraversalMode.None;
         enabled = false;
     }
 
     private void StartBedHandoff()
     {
-        if (_ai == null || _bedTarget == null)
+        if (_ai == null || !_hasBedHandoff)
         {
             _mode = TraversalMode.None;
             enabled = false;
             return;
         }
 
-        _ai.StartBedApproach(_bedTarget, true);
+        _ai.StartBedApproach(_bedApproachPosition, _bedUsePosition, _bedFacingDirection, _bedComponent, _bedAttachPoint, true);
         _mode = TraversalMode.None;
         enabled = false;
     }
@@ -468,5 +480,43 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         var verticalDistance = Mathf.Abs(delta.y);
         delta.y = 0f;
         return delta.magnitude <= arrivalRadius && verticalDistance <= VerticalArrivalTolerance;
+    }
+
+    private void ConfigureSeatHandoff(Vector3 approachPosition, Vector3 usePosition, Vector3 facingDirection, Chair? chairComponent)
+    {
+        _hasSeatHandoff = true;
+        _seatApproachPosition = approachPosition;
+        _seatUsePosition = usePosition;
+        _seatFacingDirection = facingDirection.sqrMagnitude > 0.0001f ? facingDirection.normalized : transform.forward;
+        _seatChairComponent = chairComponent;
+    }
+
+    private void ClearSeatHandoff()
+    {
+        _hasSeatHandoff = false;
+        _seatApproachPosition = Vector3.zero;
+        _seatUsePosition = Vector3.zero;
+        _seatFacingDirection = Vector3.forward;
+        _seatChairComponent = null;
+    }
+
+    private void ConfigureBedHandoff(Vector3 approachPosition, Vector3 usePosition, Vector3 facingDirection, Bed? bedComponent, Transform? bedAttachPoint)
+    {
+        _hasBedHandoff = true;
+        _bedApproachPosition = approachPosition;
+        _bedUsePosition = usePosition;
+        _bedFacingDirection = facingDirection.sqrMagnitude > 0.0001f ? facingDirection.normalized : transform.forward;
+        _bedComponent = bedComponent;
+        _bedAttachPoint = bedAttachPoint;
+    }
+
+    private void ClearBedHandoff()
+    {
+        _hasBedHandoff = false;
+        _bedApproachPosition = Vector3.zero;
+        _bedUsePosition = Vector3.zero;
+        _bedFacingDirection = Vector3.forward;
+        _bedComponent = null;
+        _bedAttachPoint = null;
     }
 }

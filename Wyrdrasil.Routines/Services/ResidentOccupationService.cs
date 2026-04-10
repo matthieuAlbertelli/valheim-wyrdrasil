@@ -1,15 +1,13 @@
 using System.Collections.Generic;
 using System.Linq;
-using BepInEx.Logging;
 using UnityEngine;
-using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Routines.Occupations;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Services;
-
 
 public sealed class ResidentOccupationService
 {
@@ -39,135 +37,59 @@ public sealed class ResidentOccupationService
         }
     }
 
-    private readonly ManualLogSource _log;
     private readonly ResidentRuntimeService _runtimeService;
-    private readonly ZoneSlotService _slotService;
-    private readonly SeatService _seatService;
-    private readonly BedService _bedService;
-    private readonly NpcNavigationService _navigationService;
     private readonly NavigationWaypointService _waypointService;
+    private readonly NpcNavigationService _navigationService;
+    private readonly OccupationExecutionService _executionService;
+    private readonly OccupationResolverRegistry _resolverRegistry;
     private readonly Dictionary<int, WanderState> _wanderStatesByResidentId = new();
 
     public ResidentOccupationService(
-        ManualLogSource log,
         ResidentRuntimeService runtimeService,
-        ZoneSlotService slotService,
-        SeatService seatService,
-        BedService bedService,
+        NavigationWaypointService waypointService,
         NpcNavigationService navigationService,
-        NavigationWaypointService waypointService)
+        OccupationExecutionService executionService,
+        OccupationResolverRegistry resolverRegistry)
     {
-        _log = log;
         _runtimeService = runtimeService;
-        _slotService = slotService;
-        _seatService = seatService;
-        _bedService = bedService;
-        _navigationService = navigationService;
         _waypointService = waypointService;
+        _navigationService = navigationService;
+        _executionService = executionService;
+        _resolverRegistry = resolverRegistry;
     }
 
-    public bool TryOccupyAssignedSlot(RegisteredNpcData resident)
+    public bool TryStartOccupation(RegisteredNpcData resident, ResidentRoutineActivityType activityType)
     {
-        if (!resident.AssignedSlotId.HasValue)
+        if (activityType == ResidentRoutineActivityType.WanderBetweenWaypoints)
+        {
+            return TryStartOrContinueWandering(resident);
+        }
+
+        if (!_resolverRegistry.TryGetResolver(activityType, out var resolver))
         {
             return false;
         }
 
-        if (!_slotService.TryGetSlotById(resident.AssignedSlotId.Value, out var slotData))
+        if (!resolver.TryResolve(resident, out var target))
         {
             return false;
         }
 
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
+        if (_executionService.TryExecute(resident, target))
         {
-            return false;
-        }
-
-        if (_waypointService.TryBuildRoute(character.transform.position, slotData.Position, out var routePoints) && routePoints.Count > 0)
-        {
-            _navigationService.NavigateAlongRouteToPosition(character, routePoints, slotData.Position);
             return true;
         }
 
-        _navigationService.NavigateDirectlyToPosition(character, slotData.Position);
-        return true;
+        resolver.Release(resident);
+        return false;
     }
 
-    public bool TryOccupyAssignedSeat(RegisteredNpcData resident)
+    public void ContinueOccupation(RegisteredNpcData resident, ResidentRoutineActivityType activityType)
     {
-        if (!resident.AssignedSeatId.HasValue)
+        if (activityType == ResidentRoutineActivityType.WanderBetweenWaypoints)
         {
-            return false;
+            TryStartOrContinueWandering(resident);
         }
-
-        if (!_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
-        {
-            return false;
-        }
-
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-        {
-            return false;
-        }
-
-        if (_waypointService.TryBuildRoute(character.transform.position, seatData.ApproachPosition, out var routePoints) && routePoints.Count > 0)
-        {
-            _navigationService.NavigateAlongRouteToSeat(character, routePoints, seatData);
-            return true;
-        }
-
-        _navigationService.NavigateDirectlyToSeat(character, seatData);
-        return true;
-    }
-
-    public bool TryOccupyAvailablePublicSeat(RegisteredNpcData resident)
-    {
-        if (!_seatService.TryReservePublicTavernSeat(resident.Id, out var seatData) || seatData == null)
-        {
-            return false;
-        }
-
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-        {
-            _seatService.ReleasePublicSeatOccupation(resident.Id);
-            return false;
-        }
-
-        if (_waypointService.TryBuildRoute(character.transform.position, seatData.ApproachPosition, out var routePoints) && routePoints.Count > 0)
-        {
-            _navigationService.NavigateAlongRouteToSeat(character, routePoints, seatData);
-            return true;
-        }
-
-        _navigationService.NavigateDirectlyToSeat(character, seatData);
-        return true;
-    }
-
-    public bool TryOccupyAssignedBed(RegisteredNpcData resident)
-    {
-        if (!resident.AssignedBedId.HasValue)
-        {
-            return false;
-        }
-
-        if (!_bedService.TryGetBedById(resident.AssignedBedId.Value, out var bedData))
-        {
-            return false;
-        }
-
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-        {
-            return false;
-        }
-
-        if (_waypointService.TryBuildRoute(character.transform.position, bedData.ApproachPosition, out var routePoints) && routePoints.Count > 0)
-        {
-            _navigationService.NavigateAlongRouteToBed(character, routePoints, bedData);
-            return true;
-        }
-
-        _navigationService.NavigateDirectlyToBed(character, bedData);
-        return true;
     }
 
     public bool TryStartOrContinueWandering(RegisteredNpcData resident)
@@ -224,7 +146,11 @@ public sealed class ResidentOccupationService
     public void ReleaseOccupation(RegisteredNpcData resident, bool detachIfAttached = true)
     {
         _wanderStatesByResidentId.Remove(resident.Id);
-        _seatService.ReleasePublicSeatOccupation(resident.Id);
+
+        foreach (var resolver in _resolverRegistry.Resolvers)
+        {
+            resolver.Release(resident);
+        }
 
         if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
         {

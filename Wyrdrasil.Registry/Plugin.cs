@@ -9,6 +9,7 @@ using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Registry.UI;
 using Wyrdrasil.Routines;
+using Wyrdrasil.Routines.Occupations;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Components;
@@ -62,14 +63,23 @@ public class Plugin : BaseUnityPlugin
         var residentVisualService = new ResidentVisualService(modeService, residentRuntimeService);
         var scheduleService = new ResidentScheduleService();
 
-        var occupationService = new ResidentOccupationService(
-            Logger,
+        var occupationResolverRegistry = new OccupationResolverRegistry();
+        occupationResolverRegistry.Register(new AssignedSlotOccupationResolver(slotService));
+        occupationResolverRegistry.Register(new AssignedSeatOccupationResolver(seatService));
+        occupationResolverRegistry.Register(new PublicSeatOccupationResolver(seatService));
+        occupationResolverRegistry.Register(new AssignedBedOccupationResolver(bedService));
+
+        var occupationExecutionService = new OccupationExecutionService(
             residentRuntimeService,
-            slotService,
-            seatService,
-            bedService,
+            waypointService,
+            navigationService);
+
+        var occupationService = new ResidentOccupationService(
+            residentRuntimeService,
+            waypointService,
             navigationService,
-            waypointService);
+            occupationExecutionService,
+            occupationResolverRegistry);
 
         var residentPresenceService = new ResidentPresenceService(
             residentCatalogService,
