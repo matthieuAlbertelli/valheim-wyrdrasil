@@ -58,4 +58,9 @@
     <ProjectReference Include="..\Wyrdrasil.Settlements\Wyrdrasil.Settlements.csproj" />
     <ProjectReference Include="..\Wyrdrasil.Souls\Wyrdrasil.Souls.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Occupations\AssignedBedOccupationResolver.cs" />
+    <Compile Remove="Occupations\AssignedSeatOccupationResolver.cs" />
+    <Compile Remove="Occupations\PublicSeatOccupationResolver.cs" />
+  </ItemGroup>
 </Project>

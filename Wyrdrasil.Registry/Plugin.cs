@@ -3,6 +3,7 @@ using BepInEx;
 using HarmonyLib;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Core.Services;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.Services;
@@ -14,6 +15,7 @@ using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Components;
 using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry;
 
@@ -63,11 +65,33 @@ public class Plugin : BaseUnityPlugin
         var residentVisualService = new ResidentVisualService(modeService, residentRuntimeService);
         var scheduleService = new ResidentScheduleService();
 
+        var occupationTargetCatalog = new OccupationTargetCatalog();
+        occupationTargetCatalog.Register(new SlotOccupationTargetSource(slotService));
+        occupationTargetCatalog.Register(new SeatOccupationTargetSource(seatService));
+        occupationTargetCatalog.Register(new BedOccupationTargetSource(bedService));
+
+        var occupationClaimRegistry = new OccupationClaimRegistry();
+        occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(seatService, occupationTargetCatalog));
+
         var occupationResolverRegistry = new OccupationResolverRegistry();
-        occupationResolverRegistry.Register(new AssignedSlotOccupationResolver(slotService));
-        occupationResolverRegistry.Register(new AssignedSeatOccupationResolver(seatService));
-        occupationResolverRegistry.Register(new PublicSeatOccupationResolver(seatService));
-        occupationResolverRegistry.Register(new AssignedBedOccupationResolver(bedService));
+        occupationResolverRegistry.Register(new AssignedOccupationResolver(
+            ResidentRoutineActivityType.WorkAtAssignedSlot,
+            ResidentAssignmentPurpose.Work,
+            OccupationTargetKind.Slot,
+            occupationTargetCatalog));
+        occupationResolverRegistry.Register(new AssignedOccupationResolver(
+            ResidentRoutineActivityType.SitAtAssignedSeat,
+            ResidentAssignmentPurpose.Meal,
+            OccupationTargetKind.Seat,
+            occupationTargetCatalog));
+        occupationResolverRegistry.Register(new AssignedOccupationResolver(
+            ResidentRoutineActivityType.SleepAtAssignedBed,
+            ResidentAssignmentPurpose.Sleep,
+            OccupationTargetKind.Bed,
+            occupationTargetCatalog));
+        occupationResolverRegistry.Register(new ClaimedOccupationResolver(
+            ResidentRoutineActivityType.SitAtAvailablePublicSeat,
+            occupationClaimRegistry));
 
         var occupationExecutionService = new OccupationExecutionService(
             residentRuntimeService,
