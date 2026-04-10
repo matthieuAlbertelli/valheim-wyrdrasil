@@ -583,9 +583,10 @@ namespace Wyrdrasil.Souls.Components
             }
         }
 
-        private void OnDisable()
+        protected override void OnDisable()
         {
             RestoreNativeLocomotionDefaults();
+            base.OnDisable();
         }
 
         private void ZeroVelocity()

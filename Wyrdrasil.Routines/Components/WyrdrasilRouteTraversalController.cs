@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
-using Wyrdrasil.Registry.Diagnostics;
-using Wyrdrasil.Registry.Tool;
+// using Wyrdrasil.Registry.Diagnostics;
+// using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Components;
 
@@ -56,7 +56,6 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
     private bool _finalTargetIssued;
     private float _bestDistanceToCurrentWaypoint = float.MaxValue;
     private float _waypointNoProgressTimer;
-    private string _consumeReason = "unknown";
     private TraversalMode _mode = TraversalMode.None;
 
     public bool IsTraversalActive => enabled && _mode != TraversalMode.None;
@@ -163,7 +162,6 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         _finalTargetIssued = false;
         _bestDistanceToCurrentWaypoint = float.MaxValue;
         _waypointNoProgressTimer = 0f;
-        _consumeReason = "unknown";
         _mode = TraversalMode.None;
 
         if (_ai != null)
@@ -205,7 +203,6 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
         _finalTargetIssued = false;
         _bestDistanceToCurrentWaypoint = float.MaxValue;
         _waypointNoProgressTimer = 0f;
-        _consumeReason = "unknown";
         SkipAlreadyReachedWaypoints();
     }
 
@@ -231,7 +228,6 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
             _announcedRouteIndex = _currentRouteIndex;
             _bestDistanceToCurrentWaypoint = float.MaxValue;
             _waypointNoProgressTimer = 0f;
-            _consumeReason = "unknown";
 
             var steeringStopDistance = _currentRouteIndex == 0
                 ? InitialWaypointSteeringStopDistance
@@ -342,20 +338,17 @@ public sealed class WyrdrasilRouteTraversalController : MonoBehaviour
 
         if (HasReachedPoint(waypoint, GetConsumeRadius()))
         {
-            _consumeReason = "capture";
             return true;
         }
 
         if (HasCrossedSegmentGate(_currentSegmentStart, waypoint))
         {
-            _consumeReason = "segment-gate";
             return true;
         }
 
         if (_waypointNoProgressTimer >= GetNoProgressTimeout() &&
             HasReachedPoint(waypoint, GetRelaxedConsumeRadius()))
         {
-            _consumeReason = "relaxed";
             return true;
         }
 
