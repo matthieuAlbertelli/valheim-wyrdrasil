@@ -43,6 +43,7 @@ public sealed class ResidentOccupationService
     private readonly OccupationExecutionService _executionService;
     private readonly OccupationResolverRegistry _resolverRegistry;
     private readonly Dictionary<int, WanderState> _wanderStatesByResidentId = new();
+    private readonly Dictionary<int, OccupationSession> _sessionsByResidentId = new();
 
     public ResidentOccupationService(
         ResidentRuntimeService runtimeService,
@@ -75,8 +76,9 @@ public sealed class ResidentOccupationService
             return false;
         }
 
-        if (_executionService.TryExecute(resident, target))
+        if (_executionService.TryBeginExecution(resident, target, out var phase))
         {
+            _sessionsByResidentId[resident.Id] = new OccupationSession(activityType, target, phase);
             return true;
         }
 
@@ -89,7 +91,23 @@ public sealed class ResidentOccupationService
         if (activityType == ResidentRoutineActivityType.WanderBetweenWaypoints)
         {
             TryStartOrContinueWandering(resident);
+            return;
         }
+
+        if (!_sessionsByResidentId.TryGetValue(resident.Id, out var session) || session.ActivityType != activityType)
+        {
+            TryStartOccupation(resident, activityType);
+            return;
+        }
+
+        if (!_executionService.TryContinueExecution(resident, session.Target, session.Phase, out var nextPhase) ||
+            nextPhase == OccupationPhase.None)
+        {
+            ReleaseOccupation(resident, true);
+            return;
+        }
+
+        session.Phase = nextPhase;
     }
 
     public bool TryStartOrContinueWandering(RegisteredNpcData resident)
@@ -147,14 +165,19 @@ public sealed class ResidentOccupationService
     {
         _wanderStatesByResidentId.Remove(resident.Id);
 
+        if (_sessionsByResidentId.TryGetValue(resident.Id, out var session))
+        {
+            _executionService.ReleaseExecution(resident, session.Target, detachIfAttached);
+            _sessionsByResidentId.Remove(resident.Id);
+        }
+        else
+        {
+            _executionService.ReleaseResidentNavigation(resident, detachIfAttached);
+        }
+
         foreach (var resolver in _resolverRegistry.Resolvers)
         {
             resolver.Release(resident);
-        }
-
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-        {
-            _navigationService.ReleaseOccupation(character, detachIfAttached);
         }
     }
 
