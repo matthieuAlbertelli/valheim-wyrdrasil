@@ -78,7 +78,7 @@ public sealed class ResidentOccupationService
 
         if (_executionService.TryBeginExecution(resident, target, out var phase))
         {
-            _sessionsByResidentId[resident.Id] = new OccupationSession(activityType, target, phase);
+            _sessionsByResidentId[resident.Id] = new OccupationSession(activityType, target, phase, Time.time);
             return true;
         }
 
@@ -100,14 +100,14 @@ public sealed class ResidentOccupationService
             return;
         }
 
-        if (!_executionService.TryContinueExecution(resident, session.Target, session.Phase, out var nextPhase) ||
+        if (!_executionService.TryContinueExecution(resident, session, out var nextPhase) ||
             nextPhase == OccupationPhase.None)
         {
             ReleaseOccupation(resident, true);
             return;
         }
 
-        session.Phase = nextPhase;
+        session.SetPhase(nextPhase, Time.time);
     }
 
     public bool TryStartOrContinueWandering(RegisteredNpcData resident)
@@ -167,7 +167,7 @@ public sealed class ResidentOccupationService
 
         if (_sessionsByResidentId.TryGetValue(resident.Id, out var session))
         {
-            _executionService.ReleaseExecution(resident, session.Target, detachIfAttached);
+            _executionService.ReleaseExecution(resident, session, detachIfAttached);
             _sessionsByResidentId.Remove(resident.Id);
         }
         else

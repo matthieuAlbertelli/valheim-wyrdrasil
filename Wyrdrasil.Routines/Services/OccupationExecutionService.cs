@@ -1,3 +1,4 @@
+using UnityEngine;
 using Wyrdrasil.Routines.Occupations;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Components;
@@ -12,17 +13,20 @@ public sealed class OccupationExecutionService
     private readonly NavigationWaypointService _waypointService;
     private readonly NpcNavigationService _navigationService;
     private readonly OccupationLifecycleStrategyRegistry _lifecycleStrategyRegistry;
+    private readonly OccupationSustainStrategyRegistry _sustainStrategyRegistry;
 
     public OccupationExecutionService(
         ResidentRuntimeService runtimeService,
         NavigationWaypointService waypointService,
         NpcNavigationService navigationService,
-        OccupationLifecycleStrategyRegistry lifecycleStrategyRegistry)
+        OccupationLifecycleStrategyRegistry lifecycleStrategyRegistry,
+        OccupationSustainStrategyRegistry sustainStrategyRegistry)
     {
         _runtimeService = runtimeService;
         _waypointService = waypointService;
         _navigationService = navigationService;
         _lifecycleStrategyRegistry = lifecycleStrategyRegistry;
+        _sustainStrategyRegistry = sustainStrategyRegistry;
     }
 
     public bool TryBeginExecution(RegisteredNpcData resident, OccupationTarget target, out OccupationPhase phase)
@@ -39,30 +43,67 @@ public sealed class OccupationExecutionService
         return phase != OccupationPhase.None;
     }
 
-    public bool TryContinueExecution(RegisteredNpcData resident, OccupationTarget target, OccupationPhase currentPhase, out OccupationPhase nextPhase)
+    public bool TryContinueExecution(RegisteredNpcData resident, OccupationSession session, out OccupationPhase nextPhase)
     {
         nextPhase = OccupationPhase.None;
+        var target = session.Target;
 
         if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character) ||
-            !_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var strategy))
+            !_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var lifecycleStrategy))
         {
             return false;
         }
 
-        nextPhase = strategy.Continue(this, resident, character, target, currentPhase);
+        if (session.Phase == OccupationPhase.Sustain &&
+            _sustainStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var sustainStrategy))
+        {
+            var now = Time.time;
+            if (!session.ShouldRunSustainTick(sustainStrategy.TickIntervalSeconds, now))
+            {
+                nextPhase = OccupationPhase.Sustain;
+                return true;
+            }
+
+            switch (sustainStrategy.Sustain(this, resident, character, target, session))
+            {
+                case OccupationSustainResult.Continue:
+                    session.RegisterSustainTick(now);
+                    nextPhase = OccupationPhase.Sustain;
+                    return true;
+
+                case OccupationSustainResult.Complete:
+                    session.RegisterSustainTick(now);
+                    nextPhase = OccupationPhase.None;
+                    return true;
+
+                case OccupationSustainResult.Abort:
+                default:
+                    nextPhase = OccupationPhase.None;
+                    return true;
+            }
+        }
+
+        nextPhase = lifecycleStrategy.Continue(this, resident, character, target, session.Phase);
         return true;
     }
 
-    public void ReleaseExecution(RegisteredNpcData resident, OccupationTarget target, bool detachIfAttached = true)
+    public void ReleaseExecution(RegisteredNpcData resident, OccupationSession session, bool detachIfAttached = true)
     {
+        var target = session.Target;
+
         if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
         {
             return;
         }
 
-        if (_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var strategy))
+        if (_sustainStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var sustainStrategy))
         {
-            strategy.Release(this, resident, character, target);
+            sustainStrategy.Release(this, resident, character, target, session);
+        }
+
+        if (_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var lifecycleStrategy))
+        {
+            lifecycleStrategy.Release(this, resident, character, target);
         }
 
         _navigationService.ReleaseOccupation(character, detachIfAttached);

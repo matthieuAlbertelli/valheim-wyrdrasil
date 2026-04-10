@@ -70,6 +70,11 @@ public class Plugin : BaseUnityPlugin
         occupationLifecycleStrategyRegistry.Register(new SeatOccupationLifecycleStrategy());
         occupationLifecycleStrategyRegistry.Register(new BedOccupationLifecycleStrategy());
 
+        var occupationSustainStrategyRegistry = new OccupationSustainStrategyRegistry();
+        occupationSustainStrategyRegistry.Register(new PassiveStandOccupationSustainStrategy());
+        occupationSustainStrategyRegistry.Register(new PassiveSeatOccupationSustainStrategy());
+        occupationSustainStrategyRegistry.Register(new PassiveBedOccupationSustainStrategy());
+
         var navigationService = new NpcNavigationService(Logger, occupationNavigationStrategyRegistry);
         var residentRuntimeService = new ResidentRuntimeService(Logger);
         var residentCatalogService = new ResidentCatalogService();
@@ -108,7 +113,8 @@ public class Plugin : BaseUnityPlugin
             residentRuntimeService,
             waypointService,
             navigationService,
-            occupationLifecycleStrategyRegistry);
+            occupationLifecycleStrategyRegistry,
+            occupationSustainStrategyRegistry);
 
         var occupationService = new ResidentOccupationService(
             residentRuntimeService,
