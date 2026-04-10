@@ -1,7 +1,8 @@
+using System.Collections.Generic;
 using System.Linq;
 using Wyrdrasil.Core.Persistence;
-using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
@@ -16,7 +17,7 @@ public sealed class RegistrySoulsPersistenceParticipant : IWorldPersistenceParti
     }
 
     public string ModuleId => "souls";
-    public int SchemaVersion => 1;
+    public int SchemaVersion => 3;
 
     public void ResetForWorldChange()
     {
@@ -65,9 +66,7 @@ public sealed class RegistrySoulsPersistenceParticipant : IWorldPersistenceParti
             Id = data.Id,
             DisplayName = data.DisplayName,
             Role = data.Role,
-            AssignedSlotId = data.AssignedSlotId,
-            AssignedSeatId = data.AssignedSeatId,
-            AssignedBedId = data.AssignedBedId,
+            Assignments = data.Assignments.Select(FromAssignmentData).ToList(),
             Identity = FromIdentityData(data.Identity),
             PresenceSnapshot = FromPresenceSnapshotData(data.PresenceSnapshot),
             ScheduleEntries = data.ScheduleEntries.Select(FromScheduleEntryData).ToList()
@@ -78,24 +77,56 @@ public sealed class RegistrySoulsPersistenceParticipant : IWorldPersistenceParti
     {
         var resident = new RegisteredNpcData(data.Id, data.DisplayName, ToIdentityData(data.Identity));
         resident.SetRole(data.Role);
+        resident.SetAssignments(ToResidentAssignments(data));
+        resident.SetScheduleEntries(data.ScheduleEntries.Select(ToScheduleEntryData));
+        ApplyPresenceSnapshotSaveData(resident.PresenceSnapshot, data.PresenceSnapshot);
+        return resident;
+    }
+
+    private static IEnumerable<ResidentAssignmentData> ToResidentAssignments(RegisteredNpcSaveData data)
+    {
+        if (data.Assignments != null && data.Assignments.Count > 0)
+        {
+            foreach (var assignment in data.Assignments)
+            {
+                yield return new ResidentAssignmentData(
+                    assignment.Purpose,
+                    new OccupationTargetRef(assignment.TargetKind, assignment.TargetId));
+            }
+
+            yield break;
+        }
+
         if (data.AssignedSlotId.HasValue)
         {
-            resident.AssignSlot(data.AssignedSlotId.Value);
+            yield return new ResidentAssignmentData(
+                ResidentAssignmentPurpose.Work,
+                new OccupationTargetRef(OccupationTargetKind.Slot, data.AssignedSlotId.Value));
         }
 
         if (data.AssignedSeatId.HasValue)
         {
-            resident.AssignSeat(data.AssignedSeatId.Value);
+            yield return new ResidentAssignmentData(
+                ResidentAssignmentPurpose.Meal,
+                new OccupationTargetRef(OccupationTargetKind.Seat, data.AssignedSeatId.Value));
         }
 
         if (data.AssignedBedId.HasValue)
         {
-            resident.AssignBed(data.AssignedBedId.Value);
+            yield return new ResidentAssignmentData(
+                ResidentAssignmentPurpose.Sleep,
+                new OccupationTargetRef(OccupationTargetKind.Bed, data.AssignedBedId.Value));
         }
+    }
 
-        resident.SetScheduleEntries(data.ScheduleEntries.Select(ToScheduleEntryData));
-        ApplyPresenceSnapshotSaveData(resident.PresenceSnapshot, data.PresenceSnapshot);
-        return resident;
+    private static ResidentAssignmentSaveData FromAssignmentData(ResidentAssignmentData data)
+    {
+        return new ResidentAssignmentSaveData
+        {
+            Purpose = data.Purpose,
+            TargetKind = data.Target.TargetKind,
+            TargetId = data.Target.TargetId
+        };
     }
 
     private static ResidentScheduleEntrySaveData FromScheduleEntryData(ResidentScheduleEntryData data)
@@ -120,7 +151,9 @@ public sealed class RegistrySoulsPersistenceParticipant : IWorldPersistenceParti
         {
             RestoreMode = data.RestoreMode,
             WorldPosition = Float3SaveData.FromVector3(data.WorldPosition),
-            WorldYawDegrees = data.WorldYawDegrees
+            WorldYawDegrees = data.WorldYawDegrees,
+            HasAssignedPurpose = data.AssignedPurpose.HasValue,
+            AssignedPurpose = data.AssignedPurpose ?? default
         };
     }
 
@@ -131,18 +164,47 @@ public sealed class RegistrySoulsPersistenceParticipant : IWorldPersistenceParti
             case ResidentRestoreMode.WorldPosition:
                 target.SetWorldPosition(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
                 break;
-            case ResidentRestoreMode.AssignedSlotAnchor:
-                target.SetAssignedSlotAnchor(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
-                break;
-            case ResidentRestoreMode.AssignedSeatAnchor:
-                target.SetAssignedSeatAnchor(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
-                break;
-            case ResidentRestoreMode.AssignedBedAnchor:
-                target.SetAssignedBedAnchor(saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
+            case ResidentRestoreMode.AssignedTargetAnchor:
+                if (saveData.HasAssignedPurpose)
+                {
+                    target.SetAssignedTargetAnchor(saveData.AssignedPurpose, saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
+                }
+                else
+                {
+                    target.Clear();
+                }
+
                 break;
             default:
-                target.Clear();
+                if (TryMapLegacyRestoreMode(saveData.RestoreMode, out var legacyPurpose))
+                {
+                    target.SetAssignedTargetAnchor(legacyPurpose, saveData.WorldPosition.ToVector3(), saveData.WorldYawDegrees);
+                }
+                else
+                {
+                    target.Clear();
+                }
+
                 break;
+        }
+    }
+
+    private static bool TryMapLegacyRestoreMode(ResidentRestoreMode restoreMode, out ResidentAssignmentPurpose purpose)
+    {
+        switch (restoreMode)
+        {
+            case (ResidentRestoreMode)2:
+                purpose = ResidentAssignmentPurpose.Work;
+                return true;
+            case (ResidentRestoreMode)3:
+                purpose = ResidentAssignmentPurpose.Meal;
+                return true;
+            case (ResidentRestoreMode)4:
+                purpose = ResidentAssignmentPurpose.Sleep;
+                return true;
+            default:
+                purpose = default;
+                return false;
         }
     }
 

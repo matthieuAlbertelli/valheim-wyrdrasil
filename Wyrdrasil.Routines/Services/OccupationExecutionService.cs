@@ -1,4 +1,4 @@
-﻿using Wyrdrasil.Routines.Occupations;
+using Wyrdrasil.Routines.Occupations;
 using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Souls.Tool;
 using Wyrdrasil.Settlements.Services;

@@ -1,7 +1,6 @@
 ﻿using System.Linq;
-using Wyrdrasil.Registry.Components;
 using UnityEngine;
-using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Routines.Occupations;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Settlements.Tool;
@@ -16,32 +15,29 @@ public sealed class ResidentPresenceService
     private readonly ResidentCatalogService _catalogService;
     private readonly ResidentRuntimeService _runtimeService;
     private readonly NpcSpawnService _spawnService;
-    private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
-    private readonly BedService _bedService;
     private readonly NavigationWaypointService _waypointService;
     private readonly ResidentOccupationService _occupationService;
+    private readonly OccupationResolverRegistry _occupationResolverRegistry;
     private readonly ResidentVisualService _visualService;
 
     public ResidentPresenceService(
         ResidentCatalogService catalogService,
         ResidentRuntimeService runtimeService,
         NpcSpawnService spawnService,
-        ZoneSlotService slotService,
         SeatService seatService,
-        BedService bedService,
         NavigationWaypointService waypointService,
         ResidentOccupationService occupationService,
+        OccupationResolverRegistry occupationResolverRegistry,
         ResidentVisualService visualService)
     {
         _catalogService = catalogService;
         _runtimeService = runtimeService;
         _spawnService = spawnService;
-        _slotService = slotService;
         _seatService = seatService;
-        _bedService = bedService;
         _waypointService = waypointService;
         _occupationService = occupationService;
+        _occupationResolverRegistry = occupationResolverRegistry;
         _visualService = visualService;
     }
 
@@ -63,15 +59,9 @@ public sealed class ResidentPresenceService
                 continue;
             }
 
-            if (IsAttachedToAssignedBed(resident))
+            if (TryCaptureAssignedTargetAnchor(resident, ResidentAssignmentPurpose.Sleep, isAttached, worldPosition, worldYawDegrees) ||
+                TryCaptureAssignedTargetAnchor(resident, ResidentAssignmentPurpose.Meal, isAttached, worldPosition, worldYawDegrees))
             {
-                resident.PresenceSnapshot.SetAssignedBedAnchor(worldPosition, worldYawDegrees);
-                continue;
-            }
-
-            if (IsAttachedToAssignedSeat(resident))
-            {
-                resident.PresenceSnapshot.SetAssignedSeatAnchor(worldPosition, worldYawDegrees);
                 continue;
             }
 
@@ -81,9 +71,8 @@ public sealed class ResidentPresenceService
                 continue;
             }
 
-            if (resident.AssignedSlotId.HasValue && isAttached)
+            if (TryCaptureAssignedTargetAnchor(resident, ResidentAssignmentPurpose.Work, isAttached, worldPosition, worldYawDegrees))
             {
-                resident.PresenceSnapshot.SetAssignedSlotAnchor(worldPosition, worldYawDegrees);
                 continue;
             }
 
@@ -116,16 +105,12 @@ public sealed class ResidentPresenceService
                     RestoreResidentAtWorldPosition(resident);
                     break;
 
-                case ResidentRestoreMode.AssignedSeatAnchor:
-                    RestoreResidentAtAssignedSeat(resident);
-                    break;
+                case ResidentRestoreMode.AssignedTargetAnchor:
+                    if (resident.PresenceSnapshot.AssignedPurpose.HasValue)
+                    {
+                        RestoreResidentAtAssignedTarget(resident, resident.PresenceSnapshot.AssignedPurpose.Value);
+                    }
 
-                case ResidentRestoreMode.AssignedSlotAnchor:
-                    RestoreResidentAtAssignedSlot(resident);
-                    break;
-
-                case ResidentRestoreMode.AssignedBedAnchor:
-                    RestoreResidentAtAssignedBed(resident);
                     break;
             }
         }
@@ -146,66 +131,39 @@ public sealed class ResidentPresenceService
 
     public bool TryRespawnResidentAssignedToSlot(ZoneSlotData slotData)
     {
-        if (!slotData.AssignedRegisteredNpcId.HasValue ||
-            !_catalogService.TryGetResidentById(slotData.AssignedRegisteredNpcId.Value, out var resident))
-        {
-            return false;
-        }
-
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
-        {
-            return false;
-        }
-
-        if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
-        {
-            return false;
-        }
-
-        var spawnPosition = slotData.Position;
-        var spawnRotation = BuildFacingRotation(spawnPosition, GetPlayerLookTargetOrFallback(spawnPosition));
-        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _))
-        {
-            return false;
-        }
-
-        _occupationService.TryStartOccupation(resident, ResidentRoutineActivityType.WorkAtAssignedSlot);
-        return true;
+        return TryRespawnResidentAssignedToTarget(slotData.AssignedRegisteredNpcId, ResidentAssignmentPurpose.Work);
     }
 
     public bool TryRespawnResidentAssignedToSeat(RegisteredSeatData seatData)
     {
-        if (!seatData.AssignedRegisteredNpcId.HasValue ||
-            !_catalogService.TryGetResidentById(seatData.AssignedRegisteredNpcId.Value, out var resident))
-        {
-            return false;
-        }
-
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
-        {
-            return false;
-        }
-
-        if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
-        {
-            return false;
-        }
-
-        var spawnPosition = seatData.ApproachPosition;
-        var spawnRotation = BuildFacingRotation(spawnPosition, seatData.SeatPosition);
-        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _))
-        {
-            return false;
-        }
-
-        _occupationService.TryStartOccupation(resident, ResidentRoutineActivityType.SitAtAssignedSeat);
-        return true;
+        return TryRespawnResidentAssignedToTarget(seatData.AssignedRegisteredNpcId, ResidentAssignmentPurpose.Meal);
     }
 
     public bool TryRespawnResidentAssignedToBed(RegisteredBedData bedData)
     {
-        if (!bedData.AssignedRegisteredNpcId.HasValue ||
-            !_catalogService.TryGetResidentById(bedData.AssignedRegisteredNpcId.Value, out var resident))
+        return TryRespawnResidentAssignedToTarget(bedData.AssignedRegisteredNpcId, ResidentAssignmentPurpose.Sleep);
+    }
+
+    private bool TryCaptureAssignedTargetAnchor(
+        RegisteredNpcData resident,
+        ResidentAssignmentPurpose purpose,
+        bool isAttached,
+        Vector3 worldPosition,
+        float worldYawDegrees)
+    {
+        if (!TryResolveAssignedOccupationTarget(resident, purpose, out _, out var target) ||
+            !IsResidentUsingAssignedTarget(resident, target, isAttached))
+        {
+            return false;
+        }
+
+        resident.PresenceSnapshot.SetAssignedTargetAnchor(purpose, worldPosition, worldYawDegrees);
+        return true;
+    }
+
+    private bool TryRespawnResidentAssignedToTarget(int? residentId, ResidentAssignmentPurpose purpose)
+    {
+        if (!residentId.HasValue || !_catalogService.TryGetResidentById(residentId.Value, out var resident))
         {
             return false;
         }
@@ -220,40 +178,41 @@ public sealed class ResidentPresenceService
             return false;
         }
 
-        var spawnPosition = bedData.ApproachPosition;
-        var spawnRotation = BuildFacingRotation(spawnPosition, bedData.SleepPosition);
-        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _))
-        {
-            return false;
-        }
-
-        _occupationService.TryStartOccupation(resident, ResidentRoutineActivityType.SleepAtAssignedBed);
-        return true;
+        return RestoreResidentAtAssignedTarget(resident, purpose);
     }
 
-    private bool IsAttachedToAssignedSeat(RegisteredNpcData resident)
+    private bool IsResidentUsingAssignedTarget(RegisteredNpcData resident, OccupationTarget target, bool isAttached)
     {
-        if (!resident.AssignedSeatId.HasValue)
+        switch (target.UseMode)
         {
-            return false;
+            case OccupationUseMode.Stand:
+                return isAttached;
+
+            case OccupationUseMode.Sit:
+                return TryGetBoundViking(resident, out var seatViking) &&
+                       target.ChairComponent != null &&
+                       seatViking.IsAttachedToChair(target.ChairComponent);
+
+            case OccupationUseMode.Lie:
+                return TryGetBoundViking(resident, out var bedViking) &&
+                       target.BedComponent != null &&
+                       bedViking.IsAttachedToBed(target.BedComponent);
+
+            default:
+                return false;
+        }
+    }
+
+    private bool TryGetBoundViking(RegisteredNpcData resident, out WyrdrasilVikingNpc viking)
+    {
+        if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character) && character is WyrdrasilVikingNpc typedViking)
+        {
+            viking = typedViking;
+            return true;
         }
 
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-        {
-            return false;
-        }
-
-        if (character is not WyrdrasilVikingNpc viking)
-        {
-            return false;
-        }
-
-        if (!_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData) || seatData.ChairComponent == null)
-        {
-            return false;
-        }
-
-        return viking.IsAttachedToChair(seatData.ChairComponent);
+        viking = null!;
+        return false;
     }
 
     private bool TryGetPublicSeatRestoreAnchor(RegisteredNpcData resident, out Vector3 worldPosition, out float worldYawDegrees)
@@ -266,12 +225,7 @@ public sealed class ResidentPresenceService
             return false;
         }
 
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-        {
-            return false;
-        }
-
-        if (character is not WyrdrasilVikingNpc viking ||
+        if (!TryGetBoundViking(resident, out var viking) ||
             seatData.ChairComponent == null ||
             !viking.IsAttachedToChair(seatData.ChairComponent))
         {
@@ -284,31 +238,6 @@ public sealed class ResidentPresenceService
         return true;
     }
 
-    private bool IsAttachedToAssignedBed(RegisteredNpcData resident)
-    {
-        if (!resident.AssignedBedId.HasValue)
-        {
-            return false;
-        }
-
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
-        {
-            return false;
-        }
-
-        if (character is not WyrdrasilVikingNpc viking)
-        {
-            return false;
-        }
-
-        if (!_bedService.TryGetBedById(resident.AssignedBedId.Value, out var bedData) || bedData.BedComponent == null)
-        {
-            return false;
-        }
-
-        return viking.IsAttachedToBed(bedData.BedComponent);
-    }
-
     private void RestoreResidentAtWorldPosition(RegisteredNpcData resident)
     {
         var spawnPosition = ResolveSafeWorldSpawnPosition(resident.PresenceSnapshot.WorldPosition);
@@ -316,49 +245,65 @@ public sealed class ResidentPresenceService
         TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _);
     }
 
-    private void RestoreResidentAtAssignedSeat(RegisteredNpcData resident)
+    private bool RestoreResidentAtAssignedTarget(RegisteredNpcData resident, ResidentAssignmentPurpose purpose)
     {
-        if (!resident.AssignedSeatId.HasValue)
+        if (!TryResolveAssignedOccupationTarget(resident, purpose, out var activityType, out var target))
         {
-            return;
+            return false;
         }
 
-        if (!_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
+        var spawnPosition = target.Anchor.ApproachPosition;
+        var lookTarget = target.Anchor.UsePosition;
+        if (target.UseMode == OccupationUseMode.Stand && (lookTarget - spawnPosition).sqrMagnitude <= 0.0001f)
         {
-            return;
+            lookTarget = GetPlayerLookTargetOrFallback(spawnPosition);
         }
 
-        TryRespawnResidentAssignedToSeat(seatData);
+        var spawnRotation = BuildFacingRotation(spawnPosition, lookTarget);
+        if (!TrySpawnAndBindResident(resident, spawnPosition, spawnRotation, out _))
+        {
+            return false;
+        }
+
+        _occupationService.TryStartOccupation(resident, activityType);
+        return true;
     }
 
-    private void RestoreResidentAtAssignedSlot(RegisteredNpcData resident)
+    private bool TryResolveAssignedOccupationTarget(
+        RegisteredNpcData resident,
+        ResidentAssignmentPurpose purpose,
+        out ResidentRoutineActivityType activityType,
+        out OccupationTarget target)
     {
-        if (!resident.AssignedSlotId.HasValue)
+        if (!TryGetAssignedActivityType(purpose, out activityType) ||
+            !_occupationResolverRegistry.TryGetResolver(activityType, out var resolver) ||
+            !resolver.TryResolve(resident, out target))
         {
-            return;
+            activityType = default;
+            target = null!;
+            return false;
         }
 
-        if (!_slotService.TryGetSlotById(resident.AssignedSlotId.Value, out var slotData))
-        {
-            return;
-        }
-
-        TryRespawnResidentAssignedToSlot(slotData);
+        return true;
     }
 
-    private void RestoreResidentAtAssignedBed(RegisteredNpcData resident)
+    private static bool TryGetAssignedActivityType(ResidentAssignmentPurpose purpose, out ResidentRoutineActivityType activityType)
     {
-        if (!resident.AssignedBedId.HasValue)
+        switch (purpose)
         {
-            return;
+            case ResidentAssignmentPurpose.Work:
+                activityType = ResidentRoutineActivityType.WorkAtAssignedSlot;
+                return true;
+            case ResidentAssignmentPurpose.Meal:
+                activityType = ResidentRoutineActivityType.SitAtAssignedSeat;
+                return true;
+            case ResidentAssignmentPurpose.Sleep:
+                activityType = ResidentRoutineActivityType.SleepAtAssignedBed;
+                return true;
+            default:
+                activityType = default;
+                return false;
         }
-
-        if (!_bedService.TryGetBedById(resident.AssignedBedId.Value, out var bedData))
-        {
-            return;
-        }
-
-        TryRespawnResidentAssignedToBed(bedData);
     }
 
     private Vector3 ResolveSafeWorldSpawnPosition(Vector3 preferredPosition)

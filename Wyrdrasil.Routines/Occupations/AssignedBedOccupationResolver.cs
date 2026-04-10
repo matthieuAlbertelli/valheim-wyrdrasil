@@ -1,4 +1,5 @@
-﻿using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;
@@ -16,8 +17,8 @@ public sealed class AssignedBedOccupationResolver : IOccupationResolver
 
     public bool TryResolve(RegisteredNpcData resident, out OccupationTarget target)
     {
-        if (!resident.AssignedBedId.HasValue ||
-            !_bedService.TryGetBedById(resident.AssignedBedId.Value, out var bedData))
+        if (!resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Sleep, OccupationTargetKind.Bed, out var bedId) ||
+            !_bedService.TryGetBedById(bedId, out var bedData))
         {
             target = null!;
             return false;

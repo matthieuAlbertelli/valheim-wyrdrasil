@@ -5,6 +5,7 @@ using System.Linq;
 using System.Xml.Serialization;
 using BepInEx;
 using BepInEx.Logging;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Settlements.Services;
@@ -193,30 +194,35 @@ public sealed class RegistryPersistenceService
     {
         foreach (var resident in _residentService.RegisteredNpcs)
         {
-            if (resident.AssignedSlotId.HasValue)
+            foreach (var assignment in resident.Assignments.ToArray())
             {
-                if (!_slotService.TryRestoreAssignment(resident.AssignedSlotId.Value, resident.Id))
+                if (TryRestoreAssignment(resident, assignment))
                 {
-                    _log.LogWarning($"Resident #{resident.Id} references missing slot #{resident.AssignedSlotId.Value}. Clearing slot assignment.");
-                    resident.ClearAssignedSlot();
-                    if (resident.Role == NpcRole.Innkeeper)
-                    {
-                        resident.SetRole(NpcRole.Villager);
-                    }
+                    continue;
+                }
+
+                _log.LogWarning($"Resident #{resident.Id} references missing {assignment.Target.TargetKind.ToString().ToLowerInvariant()} #{assignment.Target.TargetId}. Clearing {assignment.Purpose} assignment.");
+                resident.ClearAssignment(assignment.Purpose);
+                if (assignment.Purpose == ResidentAssignmentPurpose.Work && resident.Role == NpcRole.Innkeeper)
+                {
+                    resident.SetRole(NpcRole.Villager);
                 }
             }
+        }
+    }
 
-            if (resident.AssignedSeatId.HasValue && !_seatService.TryRestoreAssignment(resident.AssignedSeatId.Value, resident.Id))
-            {
-                _log.LogWarning($"Resident #{resident.Id} references missing seat #{resident.AssignedSeatId.Value}. Clearing seat assignment.");
-                resident.ClearAssignedSeat();
-            }
-
-            if (resident.AssignedBedId.HasValue && !_bedService.TryRestoreAssignment(resident.AssignedBedId.Value, resident.Id))
-            {
-                _log.LogWarning($"Resident #{resident.Id} references missing bed #{resident.AssignedBedId.Value}. Clearing bed assignment.");
-                resident.ClearAssignedBed();
-            }
+    private bool TryRestoreAssignment(RegisteredNpcData resident, ResidentAssignmentData assignment)
+    {
+        switch (assignment.Target.TargetKind)
+        {
+            case OccupationTargetKind.Slot:
+                return _slotService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id);
+            case OccupationTargetKind.Seat:
+                return _seatService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id);
+            case OccupationTargetKind.Bed:
+                return _bedService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id);
+            default:
+                return false;
         }
     }
 

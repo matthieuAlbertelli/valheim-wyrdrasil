@@ -1,4 +1,5 @@
-﻿using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;
@@ -16,8 +17,8 @@ public sealed class AssignedSlotOccupationResolver : IOccupationResolver
 
     public bool TryResolve(RegisteredNpcData resident, out OccupationTarget target)
     {
-        if (!resident.AssignedSlotId.HasValue ||
-            !_slotService.TryGetSlotById(resident.AssignedSlotId.Value, out var slotData))
+        if (!resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Work, OccupationTargetKind.Slot, out var slotId) ||
+            !_slotService.TryGetSlotById(slotId, out var slotData))
         {
             target = null!;
             return false;

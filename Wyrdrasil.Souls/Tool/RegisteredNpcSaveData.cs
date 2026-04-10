@@ -13,6 +13,7 @@ public sealed class RegisteredNpcSaveData
     public int? AssignedSlotId;
     public int? AssignedSeatId;
     public int? AssignedBedId;
+    public List<ResidentAssignmentSaveData> Assignments = new();
     public VikingIdentitySaveData Identity = new();
     public ResidentPresenceSnapshotSaveData PresenceSnapshot = new();
     public List<ResidentScheduleEntrySaveData> ScheduleEntries = new();

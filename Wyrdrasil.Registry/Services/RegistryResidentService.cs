@@ -321,7 +321,7 @@ public sealed class RegistryResidentService
         resident.ClearAssignedSeat();
         _scheduleService.ClearAssignedSeatSchedule(resident);
 
-        if (resident.PresenceSnapshot.RestoreMode == ResidentRestoreMode.AssignedSeatAnchor)
+        if (resident.PresenceSnapshot.IsAssignedTargetAnchor(ResidentAssignmentPurpose.Meal))
         {
             resident.PresenceSnapshot.SetWorldPosition(
                 resident.PresenceSnapshot.WorldPosition,

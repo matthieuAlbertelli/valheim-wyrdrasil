@@ -85,11 +85,10 @@ public class Plugin : BaseUnityPlugin
             residentCatalogService,
             residentRuntimeService,
             spawnService,
-            slotService,
             seatService,
-            bedService,
             waypointService,
             occupationService,
+            occupationResolverRegistry,
             residentVisualService);
 
         var residentAssignmentService = new ResidentAssignmentService(

@@ -1,9 +1,10 @@
 ﻿using System.Linq;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
-using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Settlements.Tool;
+using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
@@ -50,9 +51,7 @@ public sealed class ResidentAssignmentService
         if (_catalogService.TryGetResidentById(previousResidentId.Value, out resident))
         {
             _occupationService.ReleaseOccupation(resident, false);
-            resident.ClearAssignedSlot();
-            resident.SetRole(NpcRole.Villager);
-            _scheduleService.ClearSlotSchedule(resident);
+            ClearWorkAssignment(resident, clearRole: true);
             _visualService.UpdateMarker(resident);
         }
 
@@ -70,8 +69,7 @@ public sealed class ResidentAssignmentService
         if (_catalogService.TryGetResidentById(previousResidentId.Value, out resident))
         {
             _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedSeat();
-            _scheduleService.ClearAssignedSeatSchedule(resident);
+            ClearMealAssignment(resident);
             _visualService.UpdateMarker(resident);
         }
 
@@ -89,8 +87,7 @@ public sealed class ResidentAssignmentService
         if (_catalogService.TryGetResidentById(previousResidentId.Value, out resident))
         {
             _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedBed();
-            _scheduleService.ClearBedSchedule(resident);
+            ClearSleepAssignment(resident);
             _visualService.UpdateMarker(resident);
         }
 
@@ -102,8 +99,7 @@ public sealed class ResidentAssignmentService
         DetachIfAttached(targetCharacter);
         _slotService.ClearAssignmentForResident(resident.Id);
         _seatService.ClearAssignmentForResident(resident.Id);
-        resident.ClearAssignedSeat();
-        _scheduleService.ClearAssignedSeatSchedule(resident);
+        ClearMealAssignment(resident);
         _scheduleService.EnsureDefaultAutonomySchedules(resident);
 
         if (!_slotService.TryAssignInnkeeperSlot(resident.Id, out slotData) || slotData == null)
@@ -112,7 +108,7 @@ public sealed class ResidentAssignmentService
         }
 
         resident.SetRole(NpcRole.Innkeeper);
-        resident.AssignSlot(slotData.Id);
+        resident.SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.Slot, slotData.Id));
         _scheduleService.ApplyDefaultInnkeeperSchedule(resident);
         _visualService.UpdateMarker(resident);
         return true;
@@ -128,14 +124,14 @@ public sealed class ResidentAssignmentService
     {
         DetachIfAttached(targetCharacter);
         _bedService.ClearAssignmentForResident(resident.Id);
-        resident.ClearAssignedBed();
+        ClearSleepAssignment(resident);
 
         if (!_bedService.TryAssignBed(resident.Id, out bedData) || bedData == null)
         {
             return false;
         }
 
-        resident.AssignBed(bedData.Id);
+        resident.SetAssignment(ResidentAssignmentPurpose.Sleep, new OccupationTargetRef(OccupationTargetKind.Bed, bedData.Id));
         _scheduleService.ApplyDefaultBedSleepSchedule(resident);
         _visualService.UpdateMarker(resident);
         return true;
@@ -143,18 +139,15 @@ public sealed class ResidentAssignmentService
 
     public bool TryForceAssignToSlot(RegisteredNpcData resident, ZoneSlotData slotData)
     {
-        if (resident.AssignedSlotId == slotData.Id)
+        if (resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Work, OccupationTargetKind.Slot, out var slotId) && slotId == slotData.Id)
         {
             return true;
         }
 
         _slotService.ClearAssignmentForResident(resident.Id);
         _seatService.ClearAssignmentForResident(resident.Id);
-        resident.ClearAssignedSeat();
-        resident.ClearAssignedSlot();
-        resident.SetRole(NpcRole.Villager);
-        _scheduleService.ClearAssignedSeatSchedule(resident);
-        _scheduleService.ClearSlotSchedule(resident);
+        ClearMealAssignment(resident);
+        ClearWorkAssignment(resident, clearRole: true);
         _visualService.UpdateMarker(resident);
         DetachResidentIfBound(resident);
 
@@ -165,14 +158,12 @@ public sealed class ResidentAssignmentService
 
         if (previousResidentId.HasValue && previousResidentId.Value != resident.Id && _catalogService.TryGetResidentById(previousResidentId.Value, out var displacedResident))
         {
-            displacedResident.ClearAssignedSlot();
-            displacedResident.SetRole(NpcRole.Villager);
-            _scheduleService.ClearSlotSchedule(displacedResident);
+            ClearWorkAssignment(displacedResident, clearRole: true);
             _visualService.UpdateMarker(displacedResident);
         }
 
         resident.SetRole(NpcRole.Innkeeper);
-        resident.AssignSlot(resolvedSlot.Id);
+        resident.SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.Slot, resolvedSlot.Id));
         _scheduleService.ApplyDefaultInnkeeperSchedule(resident);
         _visualService.UpdateMarker(resident);
         return true;
@@ -185,14 +176,13 @@ public sealed class ResidentAssignmentService
             return false;
         }
 
-        if (resident.AssignedSeatId == seatData.Id)
+        if (resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Meal, OccupationTargetKind.Seat, out var seatId) && seatId == seatData.Id)
         {
             return true;
         }
 
         _seatService.ClearAssignmentForResident(resident.Id);
-        resident.ClearAssignedSeat();
-        _scheduleService.ClearAssignedSeatSchedule(resident);
+        ClearMealAssignment(resident);
         _visualService.UpdateMarker(resident);
         DetachResidentIfBound(resident);
 
@@ -204,12 +194,11 @@ public sealed class ResidentAssignmentService
         if (previousResidentId.HasValue && previousResidentId.Value != resident.Id && _catalogService.TryGetResidentById(previousResidentId.Value, out var displacedResident))
         {
             _occupationService.ReleaseOccupation(displacedResident);
-            displacedResident.ClearAssignedSeat();
-            _scheduleService.ClearAssignedSeatSchedule(displacedResident);
+            ClearMealAssignment(displacedResident);
             _visualService.UpdateMarker(displacedResident);
         }
 
-        resident.AssignSeat(resolvedSeat.Id);
+        resident.SetAssignment(ResidentAssignmentPurpose.Meal, new OccupationTargetRef(OccupationTargetKind.Seat, resolvedSeat.Id));
         _scheduleService.ApplyDefaultSeatMealSchedule(resident);
         _visualService.UpdateMarker(resident);
         return true;
@@ -217,14 +206,13 @@ public sealed class ResidentAssignmentService
 
     public bool TryForceAssignToBed(RegisteredNpcData resident, RegisteredBedData bedData)
     {
-        if (resident.AssignedBedId == bedData.Id)
+        if (resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Sleep, OccupationTargetKind.Bed, out var bedId) && bedId == bedData.Id)
         {
             return true;
         }
 
         _bedService.ClearAssignmentForResident(resident.Id);
-        resident.ClearAssignedBed();
-        _scheduleService.ClearBedSchedule(resident);
+        ClearSleepAssignment(resident);
         _visualService.UpdateMarker(resident);
         DetachResidentIfBound(resident);
 
@@ -236,12 +224,11 @@ public sealed class ResidentAssignmentService
         if (previousResidentId.HasValue && previousResidentId.Value != resident.Id && _catalogService.TryGetResidentById(previousResidentId.Value, out var displacedResident))
         {
             _occupationService.ReleaseOccupation(displacedResident);
-            displacedResident.ClearAssignedBed();
-            _scheduleService.ClearBedSchedule(displacedResident);
+            ClearSleepAssignment(displacedResident);
             _visualService.UpdateMarker(displacedResident);
         }
 
-        resident.AssignBed(resolvedBed.Id);
+        resident.SetAssignment(ResidentAssignmentPurpose.Sleep, new OccupationTargetRef(OccupationTargetKind.Bed, resolvedBed.Id));
         _scheduleService.ApplyDefaultBedSleepSchedule(resident);
         _visualService.UpdateMarker(resident);
         return true;
@@ -249,35 +236,65 @@ public sealed class ResidentAssignmentService
 
     public void HandleDeletedSlot(int slotId)
     {
-        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate => candidate.AssignedSlotId == slotId))
+        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
+                     HasAssignmentTarget(candidate, ResidentAssignmentPurpose.Work, OccupationTargetKind.Slot, slotId)))
         {
-            resident.ClearAssignedSlot();
-            resident.SetRole(NpcRole.Villager);
-            _scheduleService.ClearSlotSchedule(resident);
+            ClearWorkAssignment(resident, clearRole: true);
             _visualService.UpdateMarker(resident);
         }
     }
 
     public void HandleDeletedSeat(int seatId)
     {
-        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate => candidate.AssignedSeatId == seatId))
+        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
+                     HasAssignmentTarget(candidate, ResidentAssignmentPurpose.Meal, OccupationTargetKind.Seat, seatId)))
         {
             _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedSeat();
-            _scheduleService.ClearAssignedSeatSchedule(resident);
+            ClearMealAssignment(resident);
             _visualService.UpdateMarker(resident);
         }
     }
 
     public void HandleDeletedBed(int bedId)
     {
-        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate => candidate.AssignedBedId == bedId))
+        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
+                     HasAssignmentTarget(candidate, ResidentAssignmentPurpose.Sleep, OccupationTargetKind.Bed, bedId)))
         {
             _occupationService.ReleaseOccupation(resident);
-            resident.ClearAssignedBed();
-            _scheduleService.ClearBedSchedule(resident);
+            ClearSleepAssignment(resident);
             _visualService.UpdateMarker(resident);
         }
+    }
+
+    private static bool HasAssignmentTarget(
+        RegisteredNpcData resident,
+        ResidentAssignmentPurpose purpose,
+        OccupationTargetKind targetKind,
+        int targetId)
+    {
+        return resident.TryGetAssignedTargetId(purpose, targetKind, out var assignedTargetId) && assignedTargetId == targetId;
+    }
+
+    private void ClearWorkAssignment(RegisteredNpcData resident, bool clearRole)
+    {
+        resident.ClearAssignment(ResidentAssignmentPurpose.Work);
+        _scheduleService.ClearSlotSchedule(resident);
+        if (clearRole && resident.Role == NpcRole.Innkeeper)
+        {
+            resident.SetRole(NpcRole.Villager);
+        }
+    }
+
+    private void ClearMealAssignment(RegisteredNpcData resident)
+    {
+        resident.ClearAssignment(ResidentAssignmentPurpose.Meal);
+        _scheduleService.ClearAssignedSeatSchedule(resident);
+    }
+
+    private void ClearSleepAssignment(RegisteredNpcData resident)
+    {
+        resident.ClearAssignment(ResidentAssignmentPurpose.Sleep);
+        _scheduleService.ClearBedSchedule(resident);
     }
 
     private void DetachResidentIfBound(RegisteredNpcData resident)

@@ -1,4 +1,4 @@
-﻿namespace Wyrdrasil.Routines.Occupations;
+namespace Wyrdrasil.Core.Tool;
 
 public enum OccupationTargetKind
 {

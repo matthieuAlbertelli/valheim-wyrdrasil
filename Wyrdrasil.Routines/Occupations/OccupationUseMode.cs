@@ -1,4 +1,4 @@
-﻿namespace Wyrdrasil.Routines.Occupations;
+namespace Wyrdrasil.Routines.Occupations;
 
 public enum OccupationUseMode
 {

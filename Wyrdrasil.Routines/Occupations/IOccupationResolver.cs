@@ -1,4 +1,4 @@
-﻿using Wyrdrasil.Souls.Tool;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;
 

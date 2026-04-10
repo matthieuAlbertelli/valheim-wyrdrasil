@@ -1,4 +1,5 @@
-﻿using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;

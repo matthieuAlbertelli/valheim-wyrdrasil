@@ -1,4 +1,5 @@
-﻿using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;
@@ -16,8 +17,8 @@ public sealed class AssignedSeatOccupationResolver : IOccupationResolver
 
     public bool TryResolve(RegisteredNpcData resident, out OccupationTarget target)
     {
-        if (!resident.AssignedSeatId.HasValue ||
-            !_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
+        if (!resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Meal, OccupationTargetKind.Seat, out var seatId) ||
+            !_seatService.TryGetSeatById(seatId, out var seatData))
         {
             target = null!;
             return false;
