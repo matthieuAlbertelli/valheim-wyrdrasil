@@ -23,6 +23,9 @@ public sealed class RegisteredNpcData
     public int? AssignedBedId => TryGetAssignedTargetId(ResidentAssignmentPurpose.Sleep, OccupationTargetKind.Bed, out var targetId)
         ? targetId
         : (int?)null;
+    public int? AssignedCraftStationId => TryGetAssignedTargetId(ResidentAssignmentPurpose.Work, OccupationTargetKind.CraftStation, out var craftStationId)
+        ? craftStationId
+        : (int?)null;
     public ResidentPresenceSnapshotData PresenceSnapshot { get; } = new();
     public IReadOnlyList<ResidentScheduleEntryData> ScheduleEntries => _scheduleEntries;
     public IReadOnlyList<ResidentAssignmentData> Assignments => _assignments;
@@ -117,6 +120,7 @@ public sealed class RegisteredNpcData
     }
 
     public void AssignSlot(int slotId) => SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.Slot, slotId));
+    public void AssignCraftStation(int craftStationId) => SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.CraftStation, craftStationId));
     public void ClearAssignedSlot() => ClearAssignment(ResidentAssignmentPurpose.Work);
     public void AssignSeat(int seatId) => SetAssignment(ResidentAssignmentPurpose.Meal, new OccupationTargetRef(OccupationTargetKind.Seat, seatId));
     public void ClearAssignedSeat() => ClearAssignment(ResidentAssignmentPurpose.Meal);

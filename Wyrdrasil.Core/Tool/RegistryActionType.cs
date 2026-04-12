@@ -14,9 +14,11 @@ public enum RegistryActionType
     CreateInnkeeperSlot,
     DesignateSeatFurniture,
     DesignateBedFurniture,
+    DesignateCraftStationFurniture,
     DeleteSlot,
     DeleteDesignatedSeat,
     DeleteDesignatedBed,
+    DeleteDesignatedCraftStation,
 
     RegisterNpc,
     AssignInnkeeperRole,
@@ -31,6 +33,7 @@ public enum RegistryActionType
     SpawnTestViking,
 
     InspectTargetNpcAi,
+    EditTargetCraftStationAnchor,
     SimulateNoon,
     SimulateNight,
     ClearTimeSimulation,

@@ -24,8 +24,10 @@ public sealed class RegistryToolController
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
+    private readonly CraftStationService _craftStationService;
     private readonly RegistryResidentService _residentService;
     private readonly WorldClockService _worldClockService;
+    private readonly CraftStationAnchorEditorService _craftStationAnchorEditorService;
     private readonly RegistryHudRenderer _hudRenderer;
 
     public RegistryToolController(
@@ -39,8 +41,10 @@ public sealed class RegistryToolController
         ZoneSlotService slotService,
         SeatService seatService,
         BedService bedService,
+        CraftStationService craftStationService,
         RegistryResidentService residentService,
         WorldClockService worldClockService,
+        CraftStationAnchorEditorService craftStationAnchorEditorService,
         RegistryHudRenderer hudRenderer)
     {
         _modeService = modeService;
@@ -53,8 +57,10 @@ public sealed class RegistryToolController
         _slotService = slotService;
         _seatService = seatService;
         _bedService = bedService;
+        _craftStationService = craftStationService;
         _residentService = residentService;
         _worldClockService = worldClockService;
+        _craftStationAnchorEditorService = craftStationAnchorEditorService;
         _hudRenderer = hudRenderer;
     }
 
@@ -95,6 +101,17 @@ public sealed class RegistryToolController
         }
 
         selectedAction = _modeService.State.SelectedAction;
+
+        if (_craftStationAnchorEditorService.IsEditing)
+        {
+            _craftStationAnchorEditorService.Update(out var shouldSave);
+            if (shouldSave)
+            {
+                _persistenceService.SaveWorldState();
+            }
+            return;
+        }
+
         var isDeleteAction = IsDeleteAction(selectedAction);
 
         if (!isDeleteAction && Input.GetMouseButtonDown(0))
@@ -132,7 +149,10 @@ public sealed class RegistryToolController
             _residentService.RegisteredNpcs.Count,
             _zoneService.GetPendingZoneAuthoringSnapshot(),
             _worldClockService.GetClockLabel(),
-            _worldClockService.GetClockModeLabel());
+            _worldClockService.GetClockModeLabel(),
+            _craftStationAnchorEditorService.IsEditing,
+            _craftStationAnchorEditorService.StatusLabel,
+            _craftStationAnchorEditorService.ControlsLabel);
     }
 
     private void HandleZoneAuthoringInputs()
@@ -203,6 +223,14 @@ public sealed class RegistryToolController
             return;
         }
 
+        if (_craftStationService.TryGetCraftStationAtCrosshair(out _))
+        {
+            _slotService.SetPendingForceAssignTarget(null);
+            _seatService.SetPendingForceAssignTarget(null);
+            _bedService.SetPendingForceAssignTarget(null);
+            return;
+        }
+
         _slotService.SetPendingForceAssignTarget(null);
         _seatService.SetPendingForceAssignTarget(null);
         _bedService.SetPendingForceAssignTarget(null);
@@ -214,6 +242,7 @@ public sealed class RegistryToolController
                actionType == RegistryActionType.DeleteSlot ||
                actionType == RegistryActionType.DeleteNavigationWaypoint ||
                actionType == RegistryActionType.DeleteDesignatedSeat ||
-               actionType == RegistryActionType.DeleteDesignatedBed;
+               actionType == RegistryActionType.DeleteDesignatedBed ||
+               actionType == RegistryActionType.DeleteDesignatedCraftStation;
     }
 }

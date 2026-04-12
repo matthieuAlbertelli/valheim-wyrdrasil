@@ -14,9 +14,11 @@ public sealed class RegistryContext
     public ZoneSlotService SlotService { get; }
     public SeatService SeatService { get; }
     public BedService BedService { get; }
+    public CraftStationService CraftStationService { get; }
     public NpcSpawnService SpawnService { get; }
     public RegistryResidentService ResidentService { get; }
     public TargetDiagnosticsService DiagnosticsService { get; }
+    public CraftStationAnchorEditorService CraftStationAnchorEditorService { get; }
     public RegistryDeletionService DeletionService { get; }
     public RegistryFlushService FlushService { get; }
     public WorldClockService WorldClockService { get; }
@@ -28,9 +30,11 @@ public sealed class RegistryContext
         ZoneSlotService slotService,
         SeatService seatService,
         BedService bedService,
+        CraftStationService craftStationService,
         NpcSpawnService spawnService,
         RegistryResidentService residentService,
         TargetDiagnosticsService diagnosticsService,
+        CraftStationAnchorEditorService craftStationAnchorEditorService,
         RegistryDeletionService deletionService,
         RegistryFlushService flushService,
         WorldClockService worldClockService)
@@ -41,9 +45,11 @@ public sealed class RegistryContext
         SlotService = slotService;
         SeatService = seatService;
         BedService = bedService;
+        CraftStationService = craftStationService;
         SpawnService = spawnService;
         ResidentService = residentService;
         DiagnosticsService = diagnosticsService;
+        CraftStationAnchorEditorService = craftStationAnchorEditorService;
         DeletionService = deletionService;
         FlushService = flushService;
         WorldClockService = worldClockService;

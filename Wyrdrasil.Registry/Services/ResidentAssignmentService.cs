@@ -14,6 +14,7 @@ public sealed class ResidentAssignmentService
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
+    private readonly CraftStationService _craftStationService;
     private readonly ResidentRuntimeService _runtimeService;
     private readonly ResidentScheduleService _scheduleService;
     private readonly ResidentOccupationService _occupationService;
@@ -24,6 +25,7 @@ public sealed class ResidentAssignmentService
         ZoneSlotService slotService,
         SeatService seatService,
         BedService bedService,
+        CraftStationService craftStationService,
         ResidentRuntimeService runtimeService,
         ResidentScheduleService scheduleService,
         ResidentOccupationService occupationService,
@@ -33,6 +35,7 @@ public sealed class ResidentAssignmentService
         _slotService = slotService;
         _seatService = seatService;
         _bedService = bedService;
+        _craftStationService = craftStationService;
         _runtimeService = runtimeService;
         _scheduleService = scheduleService;
         _occupationService = occupationService;
@@ -98,8 +101,10 @@ public sealed class ResidentAssignmentService
     {
         DetachIfAttached(targetCharacter);
         _slotService.ClearAssignmentForResident(resident.Id);
+        _craftStationService.ClearAssignmentForResident(resident.Id);
         _seatService.ClearAssignmentForResident(resident.Id);
         ClearMealAssignment(resident);
+        ClearWorkAssignment(resident, clearRole: false);
         _scheduleService.EnsureDefaultAutonomySchedules(resident);
 
         if (!_slotService.TryAssignInnkeeperSlot(resident.Id, out slotData) || slotData == null)
@@ -145,6 +150,7 @@ public sealed class ResidentAssignmentService
         }
 
         _slotService.ClearAssignmentForResident(resident.Id);
+        _craftStationService.ClearAssignmentForResident(resident.Id);
         _seatService.ClearAssignmentForResident(resident.Id);
         ClearMealAssignment(resident);
         ClearWorkAssignment(resident, clearRole: true);
@@ -234,6 +240,37 @@ public sealed class ResidentAssignmentService
         return true;
     }
 
+    public bool TryForceAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData)
+    {
+        if (resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Work, OccupationTargetKind.CraftStation, out var craftStationId) && craftStationId == craftStationData.Id)
+        {
+            return true;
+        }
+
+        _slotService.ClearAssignmentForResident(resident.Id);
+        _craftStationService.ClearAssignmentForResident(resident.Id);
+        ClearWorkAssignment(resident, clearRole: true);
+        _visualService.UpdateMarker(resident);
+        DetachResidentIfBound(resident);
+
+        if (!_craftStationService.ForceAssignCraftStation(craftStationData.Id, resident.Id, out var previousResidentId, out var resolvedCraftStation) || resolvedCraftStation == null)
+        {
+            return false;
+        }
+
+        if (previousResidentId.HasValue && previousResidentId.Value != resident.Id && _catalogService.TryGetResidentById(previousResidentId.Value, out var displacedResident))
+        {
+            _occupationService.ReleaseOccupation(displacedResident);
+            ClearWorkAssignment(displacedResident, clearRole: false);
+            _visualService.UpdateMarker(displacedResident);
+        }
+
+        resident.SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.CraftStation, resolvedCraftStation.Id));
+        _scheduleService.ApplyDefaultCraftStationWorkSchedule(resident);
+        _visualService.UpdateMarker(resident);
+        return true;
+    }
+
     public void HandleDeletedSlot(int slotId)
     {
         foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
@@ -266,6 +303,17 @@ public sealed class ResidentAssignmentService
         }
     }
 
+    public void HandleDeletedCraftStation(int craftStationId)
+    {
+        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
+                     HasAssignmentTarget(candidate, ResidentAssignmentPurpose.Work, OccupationTargetKind.CraftStation, craftStationId)))
+        {
+            _occupationService.ReleaseOccupation(resident);
+            ClearWorkAssignment(resident, clearRole: false);
+            _visualService.UpdateMarker(resident);
+        }
+    }
+
     private static bool HasAssignmentTarget(
         RegisteredNpcData resident,
         ResidentAssignmentPurpose purpose,
@@ -279,6 +327,7 @@ public sealed class ResidentAssignmentService
     {
         resident.ClearAssignment(ResidentAssignmentPurpose.Work);
         _scheduleService.ClearSlotSchedule(resident);
+        _scheduleService.ClearCraftStationSchedule(resident);
         if (clearRole && resident.Role == NpcRole.Innkeeper)
         {
             resident.SetRole(NpcRole.Villager);

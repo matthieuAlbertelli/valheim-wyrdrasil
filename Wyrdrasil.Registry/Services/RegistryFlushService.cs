@@ -10,6 +10,8 @@ public sealed class RegistryFlushService
     private readonly FunctionalZoneService _zoneService;
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
+    private readonly BedService _bedService;
+    private readonly CraftStationService _craftStationService;
     private readonly NavigationWaypointService _waypointService;
     private readonly RegistryResidentService _residentService;
     private readonly RegistryPersistenceService _persistenceService;
@@ -20,6 +22,8 @@ public sealed class RegistryFlushService
         FunctionalZoneService zoneService,
         ZoneSlotService slotService,
         SeatService seatService,
+        BedService bedService,
+        CraftStationService craftStationService,
         NavigationWaypointService waypointService,
         RegistryResidentService residentService,
         RegistryPersistenceService persistenceService)
@@ -29,6 +33,8 @@ public sealed class RegistryFlushService
         _zoneService = zoneService;
         _slotService = slotService;
         _seatService = seatService;
+        _bedService = bedService;
+        _craftStationService = craftStationService;
         _waypointService = waypointService;
         _residentService = residentService;
         _persistenceService = persistenceService;
@@ -39,6 +45,8 @@ public sealed class RegistryFlushService
         _residentService.ClearAllResidents();
         _waypointService.ClearAllWaypoints();
         _seatService.ClearAllSeats();
+        _bedService.ClearAllBeds();
+        _craftStationService.ClearAllCraftStations();
         _slotService.ClearAllSlots();
         _zoneService.ClearAllZones();
         _buildingService.ClearAllBuildings();

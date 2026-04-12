@@ -1,4 +1,4 @@
-﻿using Wyrdrasil.Core.Tool;
+﻿﻿using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Services;
 
 namespace Wyrdrasil.Routines.Occupations;
@@ -28,7 +28,7 @@ public sealed class SlotOccupationTargetSource : IOccupationTargetSource
             $"Slot #{slotData.Id}",
             slotData.BuildingId,
             slotData.ZoneId,
-            new OccupationAnchor(slotData.Position, slotData.Position, default),
+            new OccupationAnchor(slotData.Position, slotData.Position, slotData.FacingDirection),
             OccupationExecutionProfile.Stand());
 
         return true;

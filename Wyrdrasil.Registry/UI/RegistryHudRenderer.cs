@@ -24,7 +24,10 @@ public sealed class RegistryHudRenderer
         int residentCount,
         PendingZoneAuthoringSnapshot? pendingZoneAuthoring,
         string worldClockLabel,
-        string worldClockModeLabel)
+        string worldClockModeLabel,
+        bool isCraftAnchorEditorActive,
+        string craftAnchorEditorStatus,
+        string craftAnchorEditorControls)
     {
         if (!state.IsRegistryModeEnabled)
         {
@@ -74,11 +77,19 @@ public sealed class RegistryHudRenderer
 
         if (state.SelectedCategory == RegistryCategory.Diagnostics)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Diagnostics temps : sélectionne une action pour simuler midi, 22h00 ou arrêter la simulation.", _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Diagnostics : inspection IA, édition anchor craft, simulation temps et flush registre.", _hintStyle!);
             nextLineY += 24f;
         }
 
-        GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Astuce : avec 'Force assign', vise d'abord un PNJ enregistré, puis vise un slot, un siège ou un lit.", _hintStyle!);
+        if (isCraftAnchorEditorActive)
+        {
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), craftAnchorEditorStatus, _textStyle!);
+            nextLineY += 24f;
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), craftAnchorEditorControls, _hintStyle!);
+            nextLineY += 24f;
+        }
+
+        GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Astuce : avec 'Force assign', vise d'abord un PNJ enregistré, puis vise un slot, un siège, un lit ou un poste d'artisanat.", _hintStyle!);
         nextLineY += 24f;
         GUI.Label(new Rect(35f, nextLineY, 820f, 20f), $"{toggleKey} : mode | {nextCategoryKey} : catégorie | {nextActionKey} : action | Clic gauche : créer/éditer | Clic droit : supprimer/annuler auteur", _hintStyle!);
     }
@@ -112,9 +123,11 @@ public sealed class RegistryHudRenderer
         RegistryActionType.CreateInnkeeperSlot => "Créer slot : Aubergiste",
         RegistryActionType.DesignateSeatFurniture => "Désigner un siège dans le monde",
         RegistryActionType.DesignateBedFurniture => "Désigner un lit dans le monde",
+        RegistryActionType.DesignateCraftStationFurniture => "Désigner un poste d'artisanat dans le monde",
         RegistryActionType.DeleteSlot => "Supprimer slot : Aubergiste",
         RegistryActionType.DeleteDesignatedSeat => "Supprimer siège désigné",
         RegistryActionType.DeleteDesignatedBed => "Supprimer lit désigné",
+        RegistryActionType.DeleteDesignatedCraftStation => "Supprimer poste d'artisanat désigné",
         RegistryActionType.RegisterNpc => "Enregistrer PNJ visé",
         RegistryActionType.AssignInnkeeperRole => "Assigner rôle : Aubergiste",
         RegistryActionType.AssignSeat => "Assigner un siège désigné au PNJ visé",
@@ -127,6 +140,7 @@ public sealed class RegistryHudRenderer
         RegistryActionType.RespawnAssignedResident => "Respawn résident assigné à l'anchor visé",
         RegistryActionType.SpawnTestViking => "Faire apparaître PNJ test",
         RegistryActionType.InspectTargetNpcAi => "Inspecter IA du PNJ visé",
+        RegistryActionType.EditTargetCraftStationAnchor => "Diagnostic : éditer anchor du poste d'artisanat visé",
         RegistryActionType.SimulateNoon => "Diagnostic : simuler midi",
         RegistryActionType.SimulateNight => "Diagnostic : simuler 22h00",
         RegistryActionType.ClearTimeSimulation => "Diagnostic : arrêter la simulation temps",

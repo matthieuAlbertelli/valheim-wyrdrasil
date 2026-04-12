@@ -4,5 +4,6 @@ public enum OccupationTargetKind
 {
     Slot,
     Seat,
-    Bed
+    Bed,
+    CraftStation
 }

@@ -12,4 +12,5 @@ public sealed class ZoneSlotSaveData
     public int ZoneId;
     public ZoneSlotType SlotType;
     public Float3SaveData Position = new();
+    public Float3SaveData FacingDirection = new();
 }

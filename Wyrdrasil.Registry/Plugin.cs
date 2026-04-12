@@ -5,6 +5,7 @@ using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Core.Services;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Actions;
+using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Tool;
@@ -48,6 +49,7 @@ public class Plugin : BaseUnityPlugin
         var slotService = new ZoneSlotService(Logger, modeService, zoneService, anchorPolicyService);
         var seatService = new SeatService(Logger, modeService, zoneService, anchorPolicyService);
         var bedService = new BedService(Logger, modeService, zoneService, anchorPolicyService);
+        var craftStationService = new CraftStationService(Logger, modeService, zoneService);
 
         var appearanceCatalog = new NpcAppearanceCatalog();
         var equipmentCatalog = new NpcEquipmentCatalog();
@@ -64,16 +66,19 @@ public class Plugin : BaseUnityPlugin
         occupationNavigationStrategyRegistry.Register(new StandOccupationNavigationStrategy());
         occupationNavigationStrategyRegistry.Register(new SeatOccupationNavigationStrategy());
         occupationNavigationStrategyRegistry.Register(new BedOccupationNavigationStrategy());
+        occupationNavigationStrategyRegistry.Register(new CraftStationOccupationNavigationStrategy());
 
         var occupationLifecycleStrategyRegistry = new OccupationLifecycleStrategyRegistry();
         occupationLifecycleStrategyRegistry.Register(new StandOccupationLifecycleStrategy());
         occupationLifecycleStrategyRegistry.Register(new SeatOccupationLifecycleStrategy());
         occupationLifecycleStrategyRegistry.Register(new BedOccupationLifecycleStrategy());
+        occupationLifecycleStrategyRegistry.Register(new CraftStationOccupationLifecycleStrategy());
 
         var occupationSustainStrategyRegistry = new OccupationSustainStrategyRegistry();
         occupationSustainStrategyRegistry.Register(new PassiveStandOccupationSustainStrategy());
         occupationSustainStrategyRegistry.Register(new PassiveSeatOccupationSustainStrategy());
         occupationSustainStrategyRegistry.Register(new PassiveBedOccupationSustainStrategy());
+        occupationSustainStrategyRegistry.Register(new CraftStationOccupationSustainStrategy());
 
         var navigationService = new NpcNavigationService(Logger, occupationNavigationStrategyRegistry);
         var residentRuntimeService = new ResidentRuntimeService(Logger);
@@ -85,6 +90,7 @@ public class Plugin : BaseUnityPlugin
         occupationTargetCatalog.Register(new SlotOccupationTargetSource(slotService));
         occupationTargetCatalog.Register(new SeatOccupationTargetSource(seatService));
         occupationTargetCatalog.Register(new BedOccupationTargetSource(bedService));
+        occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(craftStationService));
 
         var occupationClaimRegistry = new OccupationClaimRegistry();
         occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(seatService, occupationTargetCatalog));
@@ -104,6 +110,11 @@ public class Plugin : BaseUnityPlugin
             ResidentRoutineActivityType.SleepAtAssignedBed,
             ResidentAssignmentPurpose.Sleep,
             OccupationTargetKind.Bed,
+            occupationTargetCatalog));
+        occupationResolverRegistry.Register(new AssignedOccupationResolver(
+            ResidentRoutineActivityType.WorkAtAssignedCraftStation,
+            ResidentAssignmentPurpose.Work,
+            OccupationTargetKind.CraftStation,
             occupationTargetCatalog));
         occupationResolverRegistry.Register(new ClaimedOccupationResolver(
             ResidentRoutineActivityType.SitAtAvailablePublicSeat,
@@ -137,6 +148,7 @@ public class Plugin : BaseUnityPlugin
             slotService,
             seatService,
             bedService,
+            craftStationService,
             residentRuntimeService,
             scheduleService,
             occupationService,
@@ -149,6 +161,7 @@ public class Plugin : BaseUnityPlugin
             slotService,
             seatService,
             bedService,
+            craftStationService,
             residentRuntimeService,
             identityGenerator,
             customizationApplier,
@@ -167,6 +180,7 @@ public class Plugin : BaseUnityPlugin
             occupationService);
 
         _diagnosticsService = new TargetDiagnosticsService(Logger);
+        var craftStationAnchorEditorService = new CraftStationAnchorEditorService(Logger, craftStationService);
         var deletionService = new RegistryDeletionService(
             Logger,
             buildingService,
@@ -174,6 +188,7 @@ public class Plugin : BaseUnityPlugin
             slotService,
             seatService,
             bedService,
+            craftStationService,
             waypointService,
             residentService);
 
@@ -187,7 +202,8 @@ public class Plugin : BaseUnityPlugin
                 waypointService,
                 slotService,
                 seatService,
-                bedService),
+                bedService,
+                craftStationService),
 
             new RegistrySoulsPersistenceParticipant(residentService),
             new RoutinesPersistenceParticipant(_worldClockService)
@@ -198,6 +214,7 @@ public class Plugin : BaseUnityPlugin
             slotService,
             seatService,
             bedService,
+            craftStationService,
             residentService,
             _residentRoutineService,
             persistenceCoordinator,
@@ -209,6 +226,8 @@ public class Plugin : BaseUnityPlugin
             zoneService,
             slotService,
             seatService,
+            bedService,
+            craftStationService,
             waypointService,
             residentService,
             _persistenceService);
@@ -223,9 +242,11 @@ public class Plugin : BaseUnityPlugin
             slotService,
             seatService,
             bedService,
+            craftStationService,
             spawnService,
             residentService,
             _diagnosticsService,
+            craftStationAnchorEditorService,
             deletionService,
             flushService,
             _worldClockService);
@@ -243,8 +264,10 @@ public class Plugin : BaseUnityPlugin
             slotService,
             seatService,
             bedService,
+            craftStationService,
             residentService,
             _worldClockService,
+            craftStationAnchorEditorService,
             hudRenderer);
 
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
@@ -262,9 +285,11 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new CreateInnkeeperSlotAction());
         registry.Register(new DesignateSeatFurnitureAction());
         registry.Register(new DesignateBedFurnitureAction());
+        registry.Register(new DesignateCraftStationFurnitureAction());
         registry.Register(new DeleteSlotAction());
         registry.Register(new DeleteDesignatedSeatAction());
         registry.Register(new DeleteDesignatedBedAction());
+        registry.Register(new DeleteDesignatedCraftStationAction());
         registry.Register(new SpawnTestVikingAction());
         registry.Register(new RegisterNpcAction());
         registry.Register(new AssignInnkeeperRoleAction());
@@ -277,6 +302,7 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new DespawnTargetResidentAction());
         registry.Register(new RespawnAssignedResidentAction());
         registry.Register(new InspectTargetNpcAiAction());
+        registry.Register(new EditTargetCraftStationAnchorAction());
         registry.Register(new SimulateNoonAction());
         registry.Register(new SimulateNightAction());
         registry.Register(new ClearTimeSimulationAction());
@@ -287,6 +313,7 @@ public class Plugin : BaseUnityPlugin
 
     private void Update()
     {
+        WyrdrasilPlayerCraftDebugMonitor.EnsureAttached(Player.m_localPlayer);
         _persistenceService.Update();
         _residentRoutineService.Update();
         _registryToolController.Update();

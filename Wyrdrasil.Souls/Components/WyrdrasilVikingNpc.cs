@@ -1,5 +1,7 @@
 using System;
 using System.Reflection;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 
@@ -13,6 +15,8 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
     private Chair? _attachedChair;
     private Bed? _attachedBed;
+    private bool _workbenchAnimatorProbeLogged;
+    private bool _workbenchPoseRequested;
     private bool _attached;
     private bool _attachedToShip;
     private Transform? _attachPoint;
@@ -128,6 +132,91 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             "attach_bed",
             new Vector3(0f, 0.5f, 0f),
             null);
+    }
+
+
+    public bool TryEnterWorkbenchPose()
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        if (!_workbenchAnimatorProbeLogged)
+        {
+            _workbenchAnimatorProbeLogged = true;
+            WyrdrasilSeatDebug.Log(this, $"WorkbenchAnimatorProbe parameters=[{DescribeAnimatorParameters()}] clips=[{DescribeAnimatorClips()}]");
+        }
+
+        if (IsInWorkbenchPose())
+        {
+            return true;
+        }
+
+        if (_workbenchPoseRequested)
+        {
+            return false;
+        }
+
+        var attempted = false;
+        attempted |= TrySetAnimatorInt("crafting", 0);
+        attempted |= TrySetAnimatorTrigger("interact");
+
+        if (!attempted)
+        {
+            attempted |= TrySetAnimatorBool("Workbench", true);
+            attempted |= TrySetAnimatorBool("workbench", true);
+            attempted |= TrySetAnimatorBool("Crafting", true);
+            attempted |= TrySetAnimatorBool("crafting", true);
+            attempted |= TrySetAnimatorBool("Craft", true);
+            attempted |= TrySetAnimatorBool("craft", true);
+            attempted |= TrySetAnimatorTrigger("Workbench");
+            attempted |= TrySetAnimatorTrigger("workbench");
+            attempted |= TrySetAnimatorTrigger("Crafting");
+            attempted |= TrySetAnimatorTrigger("crafting");
+            attempted |= TrySetAnimatorTrigger("Craft");
+            attempted |= TrySetAnimatorTrigger("craft");
+        }
+
+        if (attempted)
+        {
+            _workbenchPoseRequested = true;
+        }
+
+        WyrdrasilSeatDebug.Log(this, $"TryEnterWorkbenchPose attempted={attempted} animator={DescribeAnimatorState()}");
+        return attempted;
+    }
+
+    public void TryExitWorkbenchPose()
+    {
+        if (m_animator == null)
+        {
+            return;
+        }
+
+        _ = TrySetAnimatorBool("Workbench", false);
+        _ = TrySetAnimatorBool("workbench", false);
+        _ = TrySetAnimatorBool("Crafting", false);
+        _ = TrySetAnimatorBool("crafting", false);
+        _ = TrySetAnimatorBool("Craft", false);
+        _ = TrySetAnimatorBool("craft", false);
+
+        var played = TryPlayAnimatorState("IdleTweaked") ||
+                     TryPlayAnimatorState("idle") ||
+                     TryPlayAnimatorState("Idle");
+
+        WyrdrasilSeatDebug.Log(this, $"TryExitWorkbenchPose played={played} animator={DescribeAnimatorState()}");
+    }
+
+    public bool IsInWorkbenchPose()
+    {
+        return m_animator != null &&
+               (IsAnimatorStateActive("Workbench") ||
+                IsAnimatorStateActive("workbench") ||
+                IsAnimatorStateActive("Crafting") ||
+                IsAnimatorStateActive("crafting") ||
+                IsAnimatorStateActive("Craft") ||
+                IsAnimatorStateActive("craft"));
     }
 
     public bool IsAttachedToChair(Chair chair)
@@ -415,6 +504,183 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         {
             field.SetValue(target, null);
         }
+    }
+
+
+    private bool TrySetAnimatorBool(string parameterName, bool value)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        foreach (var parameter in m_animator.parameters)
+        {
+            if (parameter.type == AnimatorControllerParameterType.Bool && parameter.name == parameterName)
+            {
+                m_animator.SetBool(parameterName, value);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TrySetAnimatorTrigger(string parameterName)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        foreach (var parameter in m_animator.parameters)
+        {
+            if (parameter.type == AnimatorControllerParameterType.Trigger && parameter.name == parameterName)
+            {
+                m_animator.SetTrigger(parameterName);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TrySetAnimatorInt(string parameterName, int value)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        foreach (var parameter in m_animator.parameters)
+        {
+            if (parameter.type == AnimatorControllerParameterType.Int && parameter.name == parameterName)
+            {
+                m_animator.SetInteger(parameterName, value);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryPlayAnimatorState(string stateName)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        foreach (var candidateStateName in GetAnimatorStateCandidates(stateName))
+        {
+            if (!m_animator.HasState(0, Animator.StringToHash(candidateStateName)))
+            {
+                continue;
+            }
+
+            m_animator.CrossFadeInFixedTime(candidateStateName, 0.05f, 0, 0f);
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsAnimatorStateActive(string stateName)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        var stateInfo = m_animator.GetCurrentAnimatorStateInfo(0);
+        foreach (var candidateStateName in GetAnimatorStateCandidates(stateName))
+        {
+            var stateHash = Animator.StringToHash(candidateStateName);
+            if (stateInfo.shortNameHash == stateHash || stateInfo.fullPathHash == stateHash)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string[] GetAnimatorStateCandidates(string stateName)
+    {
+        if (stateName.IndexOf('.') >= 0)
+        {
+            return new[] { stateName };
+        }
+
+        return new[]
+        {
+            stateName,
+            $"Base Layer.{stateName}"
+        };
+    }
+
+    private bool IsAnimatorClipActive(string clipName)
+    {
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        foreach (var clipInfo in m_animator.GetCurrentAnimatorClipInfo(0))
+        {
+            if (clipInfo.clip != null && clipInfo.clip.name == clipName)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private string DescribeAnimatorState()
+    {
+        if (m_animator == null)
+        {
+            return "animator=null";
+        }
+
+        var stateInfo = m_animator.GetCurrentAnimatorStateInfo(0);
+        return $"fullHash={stateInfo.fullPathHash} shortHash={stateInfo.shortNameHash} normalizedTime={stateInfo.normalizedTime:0.00}";
+    }
+
+    private string DescribeAnimatorParameters()
+    {
+        if (m_animator == null || m_animator.parameters == null || m_animator.parameters.Length == 0)
+        {
+            return "<none>";
+        }
+
+        var parts = new List<string>();
+        foreach (var parameter in m_animator.parameters)
+        {
+            parts.Add($"{parameter.name}:{parameter.type}");
+        }
+
+        return string.Join(", ", parts.ToArray());
+    }
+
+    private string DescribeAnimatorClips()
+    {
+        if (m_animator == null || m_animator.runtimeAnimatorController == null || m_animator.runtimeAnimatorController.animationClips == null)
+        {
+            return "<none>";
+        }
+
+        var names = new HashSet<string>();
+        foreach (var clip in m_animator.runtimeAnimatorController.animationClips)
+        {
+            if (clip != null && !string.IsNullOrEmpty(clip.name))
+            {
+                names.Add(clip.name);
+            }
+        }
+
+        return names.Count == 0 ? "<none>" : string.Join(", ", names.ToArray());
     }
 
     private static Transform? FindChildRecursive(Transform root, string childName)

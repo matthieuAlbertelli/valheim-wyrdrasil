@@ -38,6 +38,16 @@ public sealed class ResidentScheduleService
             });
     }
 
+    public void ApplyDefaultCraftStationWorkSchedule(RegisteredNpcData resident)
+    {
+        resident.ReplaceScheduleEntries(
+            ResidentRoutineActivityType.WorkAtAssignedCraftStation,
+            new[]
+            {
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.WorkAtAssignedCraftStation, 10 * 60, 22 * 60, WorkPriority)
+            });
+    }
+
     public void ApplyDefaultPublicMealSchedule(RegisteredNpcData resident)
     {
         resident.ReplaceScheduleEntries(
@@ -71,6 +81,11 @@ public sealed class ResidentScheduleService
     public void ClearSlotSchedule(RegisteredNpcData resident)
     {
         resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedSlot);
+    }
+
+    public void ClearCraftStationSchedule(RegisteredNpcData resident)
+    {
+        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedCraftStation);
     }
 
     public void ClearAssignedSeatSchedule(RegisteredNpcData resident)

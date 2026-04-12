@@ -19,8 +19,10 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
+    private readonly CraftStationService _craftStationService;
     private readonly List<RegisteredSeatSaveData> _pendingSeatResolutions = new();
     private readonly List<RegisteredBedSaveData> _pendingBedResolutions = new();
+    private readonly List<RegisteredCraftStationSaveData> _pendingCraftStationResolutions = new();
 
     public SettlementsPersistenceParticipant(
         ManualLogSource log,
@@ -29,7 +31,8 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
         NavigationWaypointService waypointService,
         ZoneSlotService slotService,
         SeatService seatService,
-        BedService bedService)
+        BedService bedService,
+        CraftStationService craftStationService)
     {
         _log = log;
         _buildingService = buildingService;
@@ -38,15 +41,17 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
         _slotService = slotService;
         _seatService = seatService;
         _bedService = bedService;
+        _craftStationService = craftStationService;
     }
 
     public string ModuleId => "settlements";
-    public int SchemaVersion => 1;
+    public int SchemaVersion => 2;
 
     public void ResetForWorldChange()
     {
         _pendingSeatResolutions.Clear();
         _pendingBedResolutions.Clear();
+        _pendingCraftStationResolutions.Clear();
     }
 
     public string CapturePayload()
@@ -58,7 +63,8 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
             NextWaypointId = _waypointService.NextWaypointId,
             NextSlotId = _slotService.NextSlotId,
             NextSeatId = Math.Max(_seatService.NextSeatId, _pendingSeatResolutions.Count > 0 ? _pendingSeatResolutions.Max(seat => seat.Id) + 1 : _seatService.NextSeatId),
-            NextBedId = Math.Max(_bedService.NextBedId, _pendingBedResolutions.Count > 0 ? _pendingBedResolutions.Max(bed => bed.Id) + 1 : _bedService.NextBedId)
+            NextBedId = Math.Max(_bedService.NextBedId, _pendingBedResolutions.Count > 0 ? _pendingBedResolutions.Max(bed => bed.Id) + 1 : _bedService.NextBedId),
+            NextCraftStationId = Math.Max(_craftStationService.NextCraftStationId, _pendingCraftStationResolutions.Count > 0 ? _pendingCraftStationResolutions.Max(station => station.Id) + 1 : _craftStationService.NextCraftStationId)
         };
 
         foreach (var building in _buildingService.Buildings)
@@ -137,6 +143,27 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
             }
         }
 
+        var serializedCraftStationIds = new HashSet<int>();
+        foreach (var craftStation in _craftStationService.CraftStations)
+        {
+            if (craftStation == null)
+            {
+                continue;
+            }
+
+            var craftStationSave = FromRegisteredCraftStationData(craftStation);
+            saveData.CraftStations.Add(craftStationSave);
+            serializedCraftStationIds.Add(craftStation.Id);
+        }
+
+        foreach (var pendingCraftStation in _pendingCraftStationResolutions)
+        {
+            if (serializedCraftStationIds.Add(pendingCraftStation.Id))
+            {
+                saveData.CraftStations.Add(pendingCraftStation);
+            }
+        }
+
         return WorldPersistenceCoordinator.SerializePayload(saveData);
     }
 
@@ -153,6 +180,7 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
             _slotService.LoadSlots(Array.Empty<ZoneSlotData>(), 1);
             _seatService.LoadSeats(Array.Empty<RegisteredSeatData>(), 1);
             _bedService.LoadBeds(Array.Empty<RegisteredBedData>(), 1);
+            _craftStationService.LoadCraftStations(Array.Empty<RegisteredCraftStationData>(), 1);
             return;
         }
 
@@ -190,6 +218,21 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
         }
 
         _bedService.LoadBeds(resolvedBeds, saveData.NextBedId);
+
+        var resolvedCraftStations = new List<RegisteredCraftStationData>();
+        foreach (var craftStationSave in saveData.CraftStations)
+        {
+            if (_craftStationService.TryResolveCraftStationFromSave(craftStationSave, out var craftStationData))
+            {
+                resolvedCraftStations.Add(craftStationData);
+            }
+            else
+            {
+                _pendingCraftStationResolutions.Add(craftStationSave);
+            }
+        }
+
+        _craftStationService.LoadCraftStations(resolvedCraftStations, saveData.NextCraftStationId);
     }
 
     public bool RetryDeferredResolutions()
@@ -254,7 +297,35 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
 
         if (resolvedAny)
         {
-            _log.LogInfo($"Resolved deferred settlement anchors. Remaining unresolved seats={_pendingSeatResolutions.Count}, beds={_pendingBedResolutions.Count}.");
+            _log.LogInfo($"Resolved deferred settlement anchors. Remaining unresolved seats={_pendingSeatResolutions.Count}, beds={_pendingBedResolutions.Count}, craftStations={_pendingCraftStationResolutions.Count}.");
+        }
+
+        if (_pendingCraftStationResolutions.Count > 0)
+        {
+            var resolvedCraftStationData = new List<RegisteredCraftStationData>();
+            var stillPendingCraftStations = new List<RegisteredCraftStationSaveData>();
+            foreach (var pendingCraftStation in _pendingCraftStationResolutions)
+            {
+                if (_craftStationService.TryResolveCraftStationFromSave(pendingCraftStation, out var craftStationData))
+                {
+                    resolvedCraftStationData.Add(craftStationData);
+                }
+                else
+                {
+                    stillPendingCraftStations.Add(pendingCraftStation);
+                }
+            }
+
+            if (resolvedCraftStationData.Count > 0)
+            {
+                var mergedCraftStations = _craftStationService.CraftStations.ToList();
+                mergedCraftStations.AddRange(resolvedCraftStationData.Where(candidate => mergedCraftStations.All(existing => existing.Id != candidate.Id)));
+                _craftStationService.LoadCraftStations(mergedCraftStations, Math.Max(_craftStationService.NextCraftStationId, mergedCraftStations.Count + 1));
+                resolvedAny = true;
+            }
+
+            _pendingCraftStationResolutions.Clear();
+            _pendingCraftStationResolutions.AddRange(stillPendingCraftStations);
         }
 
         return resolvedAny;
@@ -323,7 +394,13 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
 
     private static ZoneSlotData ToZoneSlotData(ZoneSlotSaveData data)
     {
-        return new ZoneSlotData(data.Id, data.BuildingId, data.ZoneId, data.SlotType, data.Position.ToVector3());
+        return new ZoneSlotData(
+            data.Id,
+            data.BuildingId,
+            data.ZoneId,
+            data.SlotType,
+            data.Position.ToVector3(),
+            data.FacingDirection.ToVector3());
     }
 
     private static RegisteredSeatSaveData FromRegisteredSeatData(RegisteredSeatData data)
@@ -353,4 +430,21 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
             SleepForward = Float3SaveData.FromVector3(data.SleepForward)
         };
     }
+
+    private static RegisteredCraftStationSaveData FromRegisteredCraftStationData(RegisteredCraftStationData data)
+    {
+        return new RegisteredCraftStationSaveData
+        {
+            Id = data.Id,
+            BuildingId = data.BuildingId,
+            ZoneId = data.ZoneId,
+            DisplayName = data.DisplayName,
+            PersistentFurnitureId = data.PersistentFurnitureId,
+            ApproachPosition = Float3SaveData.FromVector3(data.ApproachPosition),
+            UsePosition = Float3SaveData.FromVector3(data.UsePosition),
+            UseForward = Float3SaveData.FromVector3(data.UseForward),
+            AssignedRegisteredNpcId = data.AssignedRegisteredNpcId
+        };
+    }
+
 }

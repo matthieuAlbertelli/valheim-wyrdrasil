@@ -22,9 +22,11 @@ public sealed class ToolSelectionService
         RegistryActionType.CreateInnkeeperSlot,
         RegistryActionType.DesignateSeatFurniture,
         RegistryActionType.DesignateBedFurniture,
+        RegistryActionType.DesignateCraftStationFurniture,
         RegistryActionType.DeleteSlot,
         RegistryActionType.DeleteDesignatedSeat,
-        RegistryActionType.DeleteDesignatedBed
+        RegistryActionType.DeleteDesignatedBed,
+        RegistryActionType.DeleteDesignatedCraftStation
     };
 
     private static readonly RegistryActionType[] ResidentActions =
@@ -43,6 +45,7 @@ public sealed class ToolSelectionService
     private static readonly RegistryActionType[] DiagnosticActions =
     {
         RegistryActionType.InspectTargetNpcAi,
+        RegistryActionType.EditTargetCraftStationAnchor,
         RegistryActionType.SimulateNoon,
         RegistryActionType.SimulateNight,
         RegistryActionType.ClearTimeSimulation,

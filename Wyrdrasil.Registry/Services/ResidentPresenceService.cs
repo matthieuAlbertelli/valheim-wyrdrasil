@@ -1,5 +1,6 @@
 ﻿using System.Linq;
 using UnityEngine;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Routines.Occupations;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
@@ -144,6 +145,11 @@ public sealed class ResidentPresenceService
         return TryRespawnResidentAssignedToTarget(bedData.AssignedRegisteredNpcId, ResidentAssignmentPurpose.Sleep);
     }
 
+    public bool TryRespawnResidentAssignedToCraftStation(RegisteredCraftStationData craftStationData)
+    {
+        return TryRespawnResidentAssignedToTarget(craftStationData.AssignedRegisteredNpcId, ResidentAssignmentPurpose.Work);
+    }
+
     private bool TryCaptureAssignedTargetAnchor(
         RegisteredNpcData resident,
         ResidentAssignmentPurpose purpose,
@@ -277,7 +283,7 @@ public sealed class ResidentPresenceService
         out ResidentRoutineActivityType activityType,
         out OccupationTarget target)
     {
-        if (!TryGetAssignedActivityType(purpose, out activityType) ||
+        if (!TryGetAssignedActivityType(resident, purpose, out activityType) ||
             !_occupationResolverRegistry.TryGetResolver(activityType, out var resolver) ||
             !resolver.TryResolve(resident, out target))
         {
@@ -289,23 +295,34 @@ public sealed class ResidentPresenceService
         return true;
     }
 
-    private static bool TryGetAssignedActivityType(ResidentAssignmentPurpose purpose, out ResidentRoutineActivityType activityType)
+    private static bool TryGetAssignedActivityType(RegisteredNpcData resident, ResidentAssignmentPurpose purpose, out ResidentRoutineActivityType activityType)
     {
         switch (purpose)
         {
             case ResidentAssignmentPurpose.Work:
-                activityType = ResidentRoutineActivityType.WorkAtAssignedSlot;
-                return true;
+                if (resident.TryGetAssignedTarget(ResidentAssignmentPurpose.Work, out var workTarget))
+                {
+                    switch (workTarget.TargetKind)
+                    {
+                        case OccupationTargetKind.Slot:
+                            activityType = ResidentRoutineActivityType.WorkAtAssignedSlot;
+                            return true;
+                        case OccupationTargetKind.CraftStation:
+                            activityType = ResidentRoutineActivityType.WorkAtAssignedCraftStation;
+                            return true;
+                    }
+                }
+                break;
             case ResidentAssignmentPurpose.Meal:
                 activityType = ResidentRoutineActivityType.SitAtAssignedSeat;
                 return true;
             case ResidentAssignmentPurpose.Sleep:
                 activityType = ResidentRoutineActivityType.SleepAtAssignedBed;
                 return true;
-            default:
-                activityType = default;
-                return false;
         }
+
+        activityType = default;
+        return false;
     }
 
     private Vector3 ResolveSafeWorldSpawnPosition(Vector3 preferredPosition)

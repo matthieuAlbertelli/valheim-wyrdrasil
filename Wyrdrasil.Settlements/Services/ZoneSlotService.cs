@@ -234,7 +234,8 @@ public sealed class ZoneSlotService
             return;
         }
 
-        var slotData = new ZoneSlotData(_nextSlotId++, zone.BuildingId, zone.Id, slotType, placementPoint);
+        var facingDirection = ResolvePlacementFacingDirection();
+        var slotData = new ZoneSlotData(_nextSlotId++, zone.BuildingId, zone.Id, slotType, placementPoint, facingDirection);
         _slots.Add(slotData);
         CreateSlotWorldObject(slotData);
         _log.LogInfo($"Created {slotType} slot #{slotData.Id} in zone #{zone.Id} (building #{zone.BuildingId}) at {slotData.Position}.");
@@ -244,6 +245,23 @@ public sealed class ZoneSlotService
     {
         _visualsVisible = isEnabled;
         foreach (var marker in _markers.Values) marker.SetVisualizationVisible(isEnabled);
+    }
+
+
+    private static Vector3 ResolvePlacementFacingDirection()
+    {
+        var activeCamera = Camera.main;
+        if (activeCamera != null)
+        {
+            var direction = activeCamera.transform.forward;
+            direction.y = 0f;
+            if (direction.sqrMagnitude > 0.0001f)
+            {
+                return direction.normalized;
+            }
+        }
+
+        return Vector3.forward;
     }
 
     private void CreateSlotWorldObject(ZoneSlotData slotData)

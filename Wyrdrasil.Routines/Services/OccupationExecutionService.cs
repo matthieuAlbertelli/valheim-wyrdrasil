@@ -134,6 +134,27 @@ public sealed class OccupationExecutionService
         return _navigationService.IsNavigationActive(character);
     }
 
+    public bool IsNearUsePosition(Character character, OccupationTarget target, float maxDistance)
+    {
+        var delta = target.Anchor.UsePosition - character.transform.position;
+        delta.y = 0f;
+        return delta.sqrMagnitude <= maxDistance * maxDistance;
+    }
+
+    public bool IsNearApproachPosition(Character character, OccupationTarget target, float maxDistance)
+    {
+        var delta = target.Anchor.ApproachPosition - character.transform.position;
+        delta.y = 0f;
+        return delta.sqrMagnitude <= maxDistance * maxDistance;
+    }
+
+    public float GetHorizontalDistance(Character character, Vector3 position)
+    {
+        var delta = position - character.transform.position;
+        delta.y = 0f;
+        return delta.magnitude;
+    }
+
     public bool IsOccupyingTarget(Character character, OccupationTarget target)
     {
         if (target.Execution.IsStand)
@@ -149,6 +170,12 @@ public sealed class OccupationExecutionService
             }
 
             return character is Humanoid seatHumanoid && seatHumanoid.IsAttached();
+        }
+
+        if (target.Execution.IsCraftStation)
+        {
+            return (IsNearUsePosition(character, target, 1.35f) || IsNearApproachPosition(character, target, 0.95f)) &&
+                   !_navigationService.IsNavigationActive(character);
         }
 
         if (target.Execution.IsBed)

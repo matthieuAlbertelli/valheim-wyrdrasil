@@ -11,6 +11,7 @@ public sealed class RegistryDeletionService
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
+    private readonly CraftStationService _craftStationService;
     private readonly NavigationWaypointService _waypointService;
     private readonly RegistryResidentService _residentService;
 
@@ -21,6 +22,7 @@ public sealed class RegistryDeletionService
         ZoneSlotService slotService,
         SeatService seatService,
         BedService bedService,
+        CraftStationService craftStationService,
         NavigationWaypointService waypointService,
         RegistryResidentService residentService)
     {
@@ -30,6 +32,7 @@ public sealed class RegistryDeletionService
         _slotService = slotService;
         _seatService = seatService;
         _bedService = bedService;
+        _craftStationService = craftStationService;
         _waypointService = waypointService;
         _residentService = residentService;
     }
@@ -58,6 +61,12 @@ public sealed class RegistryDeletionService
         foreach (var bedId in deletedBedIds)
         {
             _residentService.HandleDeletedBed(bedId);
+        }
+
+        var deletedCraftStationIds = _craftStationService.DeleteCraftStationsInZone(zone.Id);
+        foreach (var craftStationId in deletedCraftStationIds)
+        {
+            _residentService.HandleDeletedCraftStation(craftStationId);
         }
 
         if (_zoneService.DeleteZone(zone.Id, out var deletedZone))
@@ -109,6 +118,18 @@ public sealed class RegistryDeletionService
         }
 
         _log.LogWarning("Cannot delete designated bed: no registered bed furniture was found under the crosshair.");
+    }
+
+    public void DeleteDesignatedCraftStationAtCrosshair()
+    {
+        if (_craftStationService.DeleteCraftStationAtCrosshair(out var craftStationId))
+        {
+            _residentService.HandleDeletedCraftStation(craftStationId);
+            _log.LogInfo($"Deleted designated craft station #{craftStationId}.");
+            return;
+        }
+
+        _log.LogWarning("Cannot delete designated craft station: no registered craft station furniture was found under the crosshair.");
     }
 
     public void DeleteNavigationWaypointAtCrosshair()

@@ -21,6 +21,7 @@ public sealed class RegistryResidentService
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
+    private readonly CraftStationService _craftStationService;
     private readonly ResidentRuntimeService _runtimeService;
     private readonly NpcIdentityGenerator _identityGenerator;
     private readonly NpcCustomizationApplier _customizationApplier;
@@ -39,6 +40,7 @@ public sealed class RegistryResidentService
         ZoneSlotService slotService,
         SeatService seatService,
         BedService bedService,
+        CraftStationService craftStationService,
         ResidentRuntimeService runtimeService,
         NpcIdentityGenerator identityGenerator,
         NpcCustomizationApplier customizationApplier,
@@ -53,6 +55,7 @@ public sealed class RegistryResidentService
         _slotService = slotService;
         _seatService = seatService;
         _bedService = bedService;
+        _craftStationService = craftStationService;
         _runtimeService = runtimeService;
         _identityGenerator = identityGenerator;
         _customizationApplier = customizationApplier;
@@ -159,11 +162,16 @@ public sealed class RegistryResidentService
             return;
         }
 
+        var crosshairDescription = DescribeCrosshairTarget();
+        _log.LogInfo($"Force assign resolution for resident #{pendingResident.Id}: target={crosshairDescription}.");
+
         if (_slotService.TryGetSlotAtCrosshair(out var slotData))
         {
+            _log.LogInfo($"Force assign matched innkeeper slot #{slotData.Id}.");
             if (_assignmentService.TryForceAssignToSlot(pendingResident, slotData))
             {
                 _toolState.ClearPendingResidentForceAssign();
+                _log.LogInfo($"Force assign completed: resident #{pendingResident.Id} -> slot #{slotData.Id}.");
             }
 
             return;
@@ -171,9 +179,11 @@ public sealed class RegistryResidentService
 
         if (_seatService.TryGetSeatAtCrosshair(out var seatData))
         {
+            _log.LogInfo($"Force assign matched seat #{seatData.Id} (usage={seatData.UsageType}).");
             if (_assignmentService.TryForceAssignToSeat(pendingResident, seatData))
             {
                 _toolState.ClearPendingResidentForceAssign();
+                _log.LogInfo($"Force assign completed: resident #{pendingResident.Id} -> seat #{seatData.Id}.");
             }
             else
             {
@@ -185,15 +195,58 @@ public sealed class RegistryResidentService
 
         if (_bedService.TryGetBedAtCrosshair(out var bedData))
         {
+            _log.LogInfo($"Force assign matched bed #{bedData.Id}.");
             if (_assignmentService.TryForceAssignToBed(pendingResident, bedData))
             {
                 _toolState.ClearPendingResidentForceAssign();
+                _log.LogInfo($"Force assign completed: resident #{pendingResident.Id} -> bed #{bedData.Id}.");
             }
 
             return;
         }
 
-        _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: target an innkeeper slot, a designated seat, a designated bed, or another registered resident.");
+        if (_craftStationService.TryGetCraftStationAtCrosshair(out var craftStationData))
+        {
+            _log.LogInfo($"Force assign matched craft station #{craftStationData.Id} ('{craftStationData.DisplayName}').");
+            if (_assignmentService.TryForceAssignToCraftStation(pendingResident, craftStationData))
+            {
+                _toolState.ClearPendingResidentForceAssign();
+                _log.LogInfo($"Force assign completed: resident #{pendingResident.Id} -> craft station #{craftStationData.Id}.");
+            }
+            else
+            {
+                _log.LogWarning($"Force assign rejected for resident #{pendingResident.Id} on craft station #{craftStationData.Id}.");
+            }
+
+            return;
+        }
+
+        _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: target an innkeeper slot, a designated seat, a designated bed, a designated craft station, or another registered resident. Crosshair={crosshairDescription}.");
+    }
+
+
+    private string DescribeCrosshairTarget()
+    {
+        var activeCamera = Camera.main;
+        if (activeCamera == null)
+        {
+            return "camera=null";
+        }
+
+        var ray = new Ray(activeCamera.transform.position, activeCamera.transform.forward);
+        if (!Physics.Raycast(ray, out var hitInfo, 100f, ~0, QueryTriggerInteraction.Ignore))
+        {
+            return "raycast=none";
+        }
+
+        var hitObject = hitInfo.collider != null ? hitInfo.collider.gameObject : null;
+        var hitName = hitObject != null ? hitObject.name : "null";
+        var station = hitInfo.collider != null ? hitInfo.collider.GetComponentInParent<CraftingStation>() : null;
+        var chair = hitInfo.collider != null ? hitInfo.collider.GetComponentInParent<Chair>() : null;
+        var bed = hitInfo.collider != null ? hitInfo.collider.GetComponentInParent<Bed>() : null;
+        var character = hitInfo.collider != null ? hitInfo.collider.GetComponentInParent<Character>() : null;
+
+        return $"hit='{hitName}' point={hitInfo.point} craftingStation={(station != null ? station.gameObject.name : "null")} chair={(chair != null ? chair.gameObject.name : "null")} bed={(bed != null ? bed.gameObject.name : "null")} character={(character != null ? character.gameObject.name : "null")}";
     }
 
     public void ClearTargetInnkeeperSlotAssignmentAtCrosshair()
@@ -269,7 +322,13 @@ public sealed class RegistryResidentService
             return;
         }
 
-        _log.LogWarning("Cannot respawn resident: the targeted object is neither a registered innkeeper slot, designated seat, nor designated bed.");
+        if (_craftStationService.TryGetCraftStationAtCrosshair(out var craftStationData))
+        {
+            _presenceService.TryRespawnResidentAssignedToCraftStation(craftStationData);
+            return;
+        }
+
+        _log.LogWarning("Cannot respawn resident: the targeted object is neither a registered innkeeper slot, designated seat, designated bed, nor designated craft station.");
     }
 
     public void AssignInnkeeperRoleAtCrosshair()
@@ -344,6 +403,11 @@ public sealed class RegistryResidentService
     public void HandleDeletedBed(int bedId)
     {
         _assignmentService.HandleDeletedBed(bedId);
+    }
+
+    public void HandleDeletedCraftStation(int craftStationId)
+    {
+        _assignmentService.HandleDeletedCraftStation(craftStationId);
     }
 
     private bool TryGetTargetCharacter(out Character targetCharacter)

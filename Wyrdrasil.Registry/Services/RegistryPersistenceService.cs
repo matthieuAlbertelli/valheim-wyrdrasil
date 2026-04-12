@@ -5,8 +5,8 @@ using System.Linq;
 using System.Xml.Serialization;
 using BepInEx;
 using BepInEx.Logging;
-using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Core.Persistence;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Souls.Tool;
@@ -21,6 +21,7 @@ public sealed class RegistryPersistenceService
     private readonly ZoneSlotService _slotService;
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
+    private readonly CraftStationService _craftStationService;
     private readonly RegistryResidentService _residentService;
     private readonly ResidentRoutineService _residentRoutineService;
     private readonly WorldPersistenceCoordinator _coordinator;
@@ -34,6 +35,7 @@ public sealed class RegistryPersistenceService
         ZoneSlotService slotService,
         SeatService seatService,
         BedService bedService,
+        CraftStationService craftStationService,
         RegistryResidentService residentService,
         ResidentRoutineService residentRoutineService,
         WorldPersistenceCoordinator coordinator,
@@ -43,6 +45,7 @@ public sealed class RegistryPersistenceService
         _slotService = slotService;
         _seatService = seatService;
         _bedService = bedService;
+        _craftStationService = craftStationService;
         _residentService = residentService;
         _residentRoutineService = residentRoutineService;
         _coordinator = coordinator;
@@ -213,17 +216,14 @@ public sealed class RegistryPersistenceService
 
     private bool TryRestoreAssignment(RegisteredNpcData resident, ResidentAssignmentData assignment)
     {
-        switch (assignment.Target.TargetKind)
+        return assignment.Target.TargetKind switch
         {
-            case OccupationTargetKind.Slot:
-                return _slotService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id);
-            case OccupationTargetKind.Seat:
-                return _seatService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id);
-            case OccupationTargetKind.Bed:
-                return _bedService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id);
-            default:
-                return false;
-        }
+            OccupationTargetKind.Slot => _slotService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
+            OccupationTargetKind.Seat => _seatService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
+            OccupationTargetKind.Bed => _bedService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
+            OccupationTargetKind.CraftStation => _craftStationService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
+            _ => false
+        };
     }
 
     private static string GetCurrentWorldKeyOrEmpty()
