@@ -40,10 +40,18 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
             return OccupationPhase.None;
         }
 
-        SnapToWorkPose(character, target.Plan.EngagePosition);
-        _posePendingStatesByResidentId[resident.Id] = new PosePendingState(Time.time);
-        WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> EnterPose direct snap engage={target.Plan.EngagePosition}");
-        return OccupationPhase.EnterPose;
+        var facingDirection = GetActorFacingDirection(target.Plan.FacingDirection);
+        GetOrCreateEngagedPoseController(character).Engage(target.Plan.EngagePosition, facingDirection);
+
+        if (character is WyrdrasilVikingNpc)
+        {
+            _posePendingStatesByResidentId[resident.Id] = new PosePendingState(Time.time);
+            WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> EnterPose engaged-pose engage={target.Plan.EngagePosition} facing={FormatDirection(facingDirection)}");
+            return OccupationPhase.EnterPose;
+        }
+
+        WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> Sustain engaged-pose engage={target.Plan.EngagePosition} facing={FormatDirection(facingDirection)}");
+        return OccupationPhase.Sustain;
     }
 
     public OccupationPhase Continue(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationPhase currentPhase)
@@ -81,7 +89,7 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
                     return OccupationPhase.None;
                 }
 
-                SnapToWorkPose(character, target.Plan.EngagePosition);
+                SnapToWorkPose(character, target.Plan.EngagePosition, GetActorFacingDirection(target.Plan.FacingDirection));
                 _posePendingStatesByResidentId[resident.Id] = new PosePendingState(Time.time);
                 WyrdrasilOccupationDebug.LogCraftStation(character, $"AwaitNavigationStop -> EnterPose snapped engage={target.Plan.EngagePosition} captureDistance={captureDistance:0.000}");
                 return OccupationPhase.EnterPose;
@@ -104,7 +112,15 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
                 if (viking.IsInWorkbenchPose())
                 {
                     ClearPendingPoseState(resident.Id);
-                    WyrdrasilOccupationDebug.LogCraftStation(character, "EnterPose -> Sustain confirmed");
+                    var targetFacing = GetActorFacingDirection(target.Plan.FacingDirection);
+                    var visualForward = viking.GetWorkbenchPoseReferenceForward();
+                    var rootForward = character.transform.forward;
+                    rootForward.y = 0f;
+                    if (rootForward.sqrMagnitude > 0.0001f)
+                    {
+                        rootForward.Normalize();
+                    }
+                    WyrdrasilOccupationDebug.LogCraftStation(character, $"EnterPose -> Sustain confirmed targetFacing={FormatDirection(targetFacing)} visualForward={FormatDirection(visualForward)} rootForward={FormatDirection(rootForward)}");
                     return OccupationPhase.Sustain;
                 }
 
@@ -138,6 +154,7 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
     {
         ClearPendingPoseState(resident.Id);
         ExitTravelLock(character);
+        GetOrCreateEngagedPoseController(character).Disengage();
 
         if (character is WyrdrasilVikingNpc viking)
         {
@@ -158,7 +175,29 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
             return Vector3.forward;
         }
 
-        return -anchorFacingDirection.normalized;
+        return anchorFacingDirection.normalized;
+    }
+
+    private static WyrdrasilEngagedPoseController GetOrCreateEngagedPoseController(Character character)
+    {
+        if (!character.TryGetComponent<WyrdrasilEngagedPoseController>(out var controller))
+        {
+            controller = character.gameObject.AddComponent<WyrdrasilEngagedPoseController>();
+        }
+
+        return controller;
+    }
+
+    private static string FormatDirection(Vector3 direction)
+    {
+        direction.y = 0f;
+        if (direction.sqrMagnitude <= 0.0001f)
+        {
+            return "(0.00,0.00,0.00)";
+        }
+
+        direction.Normalize();
+        return $"({direction.x:0.00},{direction.y:0.00},{direction.z:0.00})";
     }
 
     private static void ExitTravelLock(Character character)
@@ -169,7 +208,7 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         }
     }
 
-    private static void SnapToWorkPose(Character character, Vector3 engagePosition)
+    private static void SnapToWorkPose(Character character, Vector3 engagePosition, Vector3 actorFacingDirection)
     {
         if (character.TryGetComponent<WyrdrasilRouteTraversalController>(out var routeTraversalController))
         {
@@ -182,6 +221,8 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         }
 
         character.transform.position = engagePosition;
+
+        ForceFace(character, actorFacingDirection);
 
         if (character.TryGetComponent<Rigidbody>(out var rigidbody))
         {
@@ -198,6 +239,16 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
             return;
         }
 
-        character.transform.rotation = Quaternion.LookRotation(facingDirection.normalized, Vector3.up);
+        var desiredDirection = facingDirection.normalized;
+
+        if (character is WyrdrasilVikingNpc viking)
+        {
+            var currentVisualForward = viking.GetWorkbenchPoseReferenceForward();
+            var signedAngle = Vector3.SignedAngle(currentVisualForward, desiredDirection, Vector3.up);
+            character.transform.rotation = Quaternion.AngleAxis(signedAngle, Vector3.up) * character.transform.rotation;
+            return;
+        }
+
+        character.transform.rotation = Quaternion.LookRotation(desiredDirection, Vector3.up);
     }
 }

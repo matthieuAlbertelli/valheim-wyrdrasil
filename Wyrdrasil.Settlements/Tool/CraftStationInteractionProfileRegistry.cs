@@ -23,7 +23,7 @@ public static class CraftStationInteractionProfileRegistry
         [WorkbenchProfileId] = new CraftStationInteractionProfile(
             WorkbenchProfileId,
             new Vector3(0.32f, 0.23f, 1.46f),
-            new Vector3(0.13f, 0f, 0.99f),
+            new Vector3(-0.13f, 0f, -0.99f),
             0.85f,
             0.45f,
             0.85f,

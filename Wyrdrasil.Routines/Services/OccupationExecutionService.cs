@@ -136,23 +136,30 @@ public sealed class OccupationExecutionService
 
     public bool IsNearEngagePosition(Character character, OccupationTarget target, float maxDistance)
     {
-        var delta = target.Plan.EngagePosition - character.transform.position;
+        var delta = target.Plan.EngagePosition - GetOccupationReferenceWorldPosition(character);
         delta.y = 0f;
         return delta.sqrMagnitude <= maxDistance * maxDistance;
     }
 
     public bool IsNearApproachPosition(Character character, OccupationTarget target, float maxDistance)
     {
-        var delta = target.Plan.ApproachPosition - character.transform.position;
+        var delta = target.Plan.ApproachPosition - GetOccupationReferenceWorldPosition(character);
         delta.y = 0f;
         return delta.sqrMagnitude <= maxDistance * maxDistance;
     }
 
     public float GetHorizontalDistance(Character character, Vector3 position)
     {
-        var delta = position - character.transform.position;
+        var delta = position - GetOccupationReferenceWorldPosition(character);
         delta.y = 0f;
         return delta.magnitude;
+    }
+
+    private static Vector3 GetOccupationReferenceWorldPosition(Character character)
+    {
+        return character is WyrdrasilVikingNpc viking
+            ? viking.GetWorkbenchPoseReferenceWorldPosition()
+            : character.transform.position;
     }
 
     public bool IsOccupyingTarget(Character character, OccupationTarget target)

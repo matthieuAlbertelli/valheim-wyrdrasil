@@ -19,6 +19,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
     private Chair? _attachedChair;
     private Bed? _attachedBed;
     private bool _workbenchAnimatorProbeLogged;
+    private bool _workbenchReferenceProbeLogged;
     private bool _workbenchPoseRequested;
     private bool _attached;
     private bool _attachedToShip;
@@ -235,6 +236,49 @@ public sealed class WyrdrasilVikingNpc : Humanoid
                IsAnimatorStateActive("crafting") ||
                IsAnimatorStateActive("Craft") ||
                IsAnimatorStateActive("craft");
+    }
+
+
+    public Vector3 GetWorkbenchPoseReferenceWorldPosition()
+    {
+        return GetWorkbenchPoseReferenceTransform().position;
+    }
+
+    public Vector3 GetWorkbenchPoseReferenceForward()
+    {
+        var forward = GetWorkbenchPoseReferenceTransform().forward;
+        forward.y = 0f;
+        return forward.sqrMagnitude <= 0.0001f ? Vector3.forward : forward.normalized;
+    }
+
+    private Transform GetWorkbenchPoseReferenceTransform()
+    {
+        var referenceTransform = TryGetVisualRootTransform() ?? (m_animator != null ? m_animator.transform : transform);
+
+        if (!_workbenchReferenceProbeLogged)
+        {
+            _workbenchReferenceProbeLogged = true;
+            WyrdrasilSeatDebug.Log(this, $"WorkbenchReference transform={referenceTransform.name} root={transform.name} animator={(m_animator != null ? m_animator.transform.name : "<none>")}");
+        }
+
+        return referenceTransform;
+    }
+
+    private Transform? TryGetVisualRootTransform()
+    {
+        var visEquipment = GetComponent<VisEquipment>();
+        if (visEquipment == null)
+        {
+            return null;
+        }
+
+        var visualField = visEquipment.GetType().GetField("m_visual", InstanceFlags);
+        if (visualField?.GetValue(visEquipment) is GameObject visualObject && visualObject != null)
+        {
+            return visualObject.transform;
+        }
+
+        return null;
     }
 
     public bool IsAttachedToChair(Chair chair)
