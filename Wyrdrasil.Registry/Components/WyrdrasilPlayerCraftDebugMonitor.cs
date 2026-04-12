@@ -9,15 +9,36 @@ public sealed class WyrdrasilPlayerCraftDebugMonitor : MonoBehaviour
     private int _lastFullPathHash = int.MinValue;
     private int _lastShortNameHash = int.MinValue;
     private bool _lastAttached;
+    private int _traceFramesRemaining;
+    private int _traceTickCounter;
+    private string _traceLabel = string.Empty;
 
-    public static void EnsureAttached(Player? player)
+    public static WyrdrasilPlayerCraftDebugMonitor? EnsureAttached(Player? player)
     {
-        if (player == null || player.gameObject.GetComponent<WyrdrasilPlayerCraftDebugMonitor>() != null)
+        if (player == null)
         {
-            return;
+            return null;
         }
 
-        player.gameObject.AddComponent<WyrdrasilPlayerCraftDebugMonitor>();
+        var existing = player.gameObject.GetComponent<WyrdrasilPlayerCraftDebugMonitor>();
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        return player.gameObject.AddComponent<WyrdrasilPlayerCraftDebugMonitor>();
+    }
+
+    public void BeginTrace(string label, int frames)
+    {
+        _traceLabel = label;
+        _traceFramesRemaining = Mathf.Max(_traceFramesRemaining, frames);
+        _traceTickCounter = 0;
+
+        if (TryGetLocalPlayer(out var player))
+        {
+            WyrdrasilCraftDebug.LogAnimatorSnapshot(player, $"{label}.TraceStart", detailed: true);
+        }
     }
 
     private void Awake()
@@ -25,7 +46,7 @@ public sealed class WyrdrasilPlayerCraftDebugMonitor : MonoBehaviour
         _animator = GetComponentInChildren<Animator>(true);
         _lastAttached = TryGetLocalPlayer(out var player) && player.IsAttached();
         WyrdrasilCraftDebug.Log(gameObject, "Attached local player craft debug monitor.");
-        WyrdrasilCraftDebug.LogAnimatorSnapshot(player, "MonitorAwake");
+        WyrdrasilCraftDebug.LogAnimatorSnapshot(player, "MonitorAwake", detailed: true);
         CaptureCurrentHashes();
     }
 
@@ -47,9 +68,19 @@ public sealed class WyrdrasilPlayerCraftDebugMonitor : MonoBehaviour
             var state = _animator.GetCurrentAnimatorStateInfo(0);
             if (state.fullPathHash != _lastFullPathHash || state.shortNameHash != _lastShortNameHash)
             {
-                WyrdrasilCraftDebug.LogAnimatorSnapshot(player, "AnimatorStateChanged");
+                WyrdrasilCraftDebug.LogAnimatorSnapshot(player, "AnimatorStateChanged", detailed: true);
                 _lastFullPathHash = state.fullPathHash;
                 _lastShortNameHash = state.shortNameHash;
+            }
+        }
+
+        if (_traceFramesRemaining > 0)
+        {
+            _traceFramesRemaining--;
+            _traceTickCounter++;
+            if (_traceTickCounter % 5 == 0)
+            {
+                WyrdrasilCraftDebug.LogAnimatorSnapshot(player, $"{_traceLabel}.TraceTick{_traceTickCounter}", detailed: true);
             }
         }
 
@@ -58,7 +89,7 @@ public sealed class WyrdrasilPlayerCraftDebugMonitor : MonoBehaviour
         {
             _lastAttached = attached;
             WyrdrasilCraftDebug.Log(player, $"Player attached state changed -> {attached}");
-            WyrdrasilCraftDebug.LogAnimatorSnapshot(player, "AttachedStateChanged");
+            WyrdrasilCraftDebug.LogAnimatorSnapshot(player, "AttachedStateChanged", detailed: true);
         }
     }
 

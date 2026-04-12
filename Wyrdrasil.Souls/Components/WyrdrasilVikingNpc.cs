@@ -13,6 +13,9 @@ public sealed class WyrdrasilVikingNpc : Humanoid
     private static readonly BindingFlags InstanceFlags =
         BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
+    private const int WorkbenchFullPathHash = 37419463;
+    private const int WorkbenchShortHash = 1552222327;
+
     private Chair? _attachedChair;
     private Bed? _attachedBed;
     private bool _workbenchAnimatorProbeLogged;
@@ -153,38 +156,36 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             return true;
         }
 
-        if (_workbenchPoseRequested)
-        {
-            return false;
-        }
-
         var attempted = false;
-        attempted |= TrySetAnimatorInt("crafting", 0);
+        attempted |= TrySetAnimatorInt("crafting", 1);
         attempted |= TrySetAnimatorTrigger("interact");
+        attempted |= TrySetAnimatorBool("Workbench", true);
+        attempted |= TrySetAnimatorBool("workbench", true);
+        attempted |= TrySetAnimatorBool("Crafting", true);
+        attempted |= TrySetAnimatorBool("crafting", true);
+        attempted |= TrySetAnimatorBool("Craft", true);
+        attempted |= TrySetAnimatorBool("craft", true);
+        attempted |= TrySetAnimatorTrigger("Workbench");
+        attempted |= TrySetAnimatorTrigger("workbench");
+        attempted |= TrySetAnimatorTrigger("Crafting");
+        attempted |= TrySetAnimatorTrigger("crafting");
+        attempted |= TrySetAnimatorTrigger("Craft");
+        attempted |= TrySetAnimatorTrigger("craft");
 
-        if (!attempted)
-        {
-            attempted |= TrySetAnimatorBool("Workbench", true);
-            attempted |= TrySetAnimatorBool("workbench", true);
-            attempted |= TrySetAnimatorBool("Crafting", true);
-            attempted |= TrySetAnimatorBool("crafting", true);
-            attempted |= TrySetAnimatorBool("Craft", true);
-            attempted |= TrySetAnimatorBool("craft", true);
-            attempted |= TrySetAnimatorTrigger("Workbench");
-            attempted |= TrySetAnimatorTrigger("workbench");
-            attempted |= TrySetAnimatorTrigger("Crafting");
-            attempted |= TrySetAnimatorTrigger("crafting");
-            attempted |= TrySetAnimatorTrigger("Craft");
-            attempted |= TrySetAnimatorTrigger("craft");
-        }
+        var forced = TryPlayAnimatorState("Workbench") ||
+                     TryPlayAnimatorState("workbench") ||
+                     TryPlayAnimatorState("Crafting") ||
+                     TryPlayAnimatorState("crafting") ||
+                     TryPlayAnimatorState("Craft") ||
+                     TryPlayAnimatorState("craft");
 
-        if (attempted)
+        if (attempted || forced)
         {
             _workbenchPoseRequested = true;
         }
 
-        WyrdrasilSeatDebug.Log(this, $"TryEnterWorkbenchPose attempted={attempted} animator={DescribeAnimatorState()}");
-        return attempted;
+        WyrdrasilSeatDebug.Log(this, $"TryEnterWorkbenchPose attempted={attempted} forced={forced} animator={DescribeAnimatorState()}");
+        return attempted || forced;
     }
 
     public void TryExitWorkbenchPose()
@@ -194,6 +195,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             return;
         }
 
+        _workbenchPoseRequested = false;
         _ = TrySetAnimatorBool("Workbench", false);
         _ = TrySetAnimatorBool("workbench", false);
         _ = TrySetAnimatorBool("Crafting", false);
@@ -210,13 +212,29 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
     public bool IsInWorkbenchPose()
     {
-        return m_animator != null &&
-               (IsAnimatorStateActive("Workbench") ||
-                IsAnimatorStateActive("workbench") ||
-                IsAnimatorStateActive("Crafting") ||
-                IsAnimatorStateActive("crafting") ||
-                IsAnimatorStateActive("Craft") ||
-                IsAnimatorStateActive("craft"));
+        if (m_animator == null)
+        {
+            return false;
+        }
+
+        var state = m_animator.GetCurrentAnimatorStateInfo(0);
+        if (state.fullPathHash == WorkbenchFullPathHash || state.shortNameHash == WorkbenchShortHash)
+        {
+            return true;
+        }
+
+        var clips = m_animator.GetCurrentAnimatorClipInfo(0);
+        if (clips.Any(clip => clip.clip != null && clip.clip.name == "Workbench"))
+        {
+            return true;
+        }
+
+        return IsAnimatorStateActive("Workbench") ||
+               IsAnimatorStateActive("workbench") ||
+               IsAnimatorStateActive("Crafting") ||
+               IsAnimatorStateActive("crafting") ||
+               IsAnimatorStateActive("Craft") ||
+               IsAnimatorStateActive("craft");
     }
 
     public bool IsAttachedToChair(Chair chair)

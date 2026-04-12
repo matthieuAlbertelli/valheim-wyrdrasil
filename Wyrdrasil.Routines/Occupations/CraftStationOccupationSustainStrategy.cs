@@ -1,6 +1,5 @@
 using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
-using Wyrdrasil.Routines.Components;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Souls.Components;
 using Wyrdrasil.Souls.Tool;
@@ -23,14 +22,15 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
             return OccupationSustainResult.Abort;
         }
 
-        var isInWorkbenchPose = character is WyrdrasilVikingNpc viking && viking.IsInWorkbenchPose();
-        if (!isInWorkbenchPose)
+        if (character is not WyrdrasilVikingNpc viking)
         {
-            ForceFaceUseDirection(character, target.Plan.FacingDirection);
-            if (character is WyrdrasilVikingNpc waitingViking)
-            {
-                _ = waitingViking.TryEnterWorkbenchPose();
-            }
+            return OccupationSustainResult.Abort;
+        }
+
+        if (!viking.IsInWorkbenchPose())
+        {
+            WyrdrasilOccupationDebug.LogCraftStation(character, "Sustain abort pose lost");
+            return OccupationSustainResult.Abort;
         }
 
         return OccupationSustainResult.Continue;
@@ -38,26 +38,9 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
 
     public void Release(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationSession session)
     {
-        if (character.TryGetComponent<WyrdrasilOccupationDockingController>(out var dockingController))
-        {
-            dockingController.CancelDocking();
-        }
-
         if (character is WyrdrasilVikingNpc viking)
         {
             viking.TryExitWorkbenchPose();
         }
-    }
-
-    private static void ForceFaceUseDirection(Character character, Vector3 useForward)
-    {
-        useForward.y = 0f;
-        if (useForward.sqrMagnitude <= 0.0001f)
-        {
-            return;
-        }
-
-        var targetRotation = Quaternion.LookRotation(useForward.normalized, Vector3.up);
-        character.transform.rotation = targetRotation;
     }
 }

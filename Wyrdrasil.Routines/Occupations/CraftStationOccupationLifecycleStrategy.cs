@@ -3,7 +3,6 @@ using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Routines.Components;
 using Wyrdrasil.Routines.Services;
-using Wyrdrasil.Routines.Tool;
 using Wyrdrasil.Souls.Components;
 using Wyrdrasil.Souls.Tool;
 
@@ -11,30 +10,40 @@ namespace Wyrdrasil.Routines.Occupations;
 
 public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecycleStrategy
 {
-    private const float DockPositionTolerance = 0.08f;
-    private const float DockAngleToleranceDegrees = 5f;
-    private const float DockMaxDurationSeconds = 1.25f;
+    private const float WorkPoseCaptureRadius = 1.20f;
     private const float RetryCooldownSeconds = 0.65f;
+    private const float PosePendingTimeoutSeconds = 1.25f;
+
+    private sealed class PosePendingState
+    {
+        public float StartedAtTime { get; }
+        public bool PoseRequested { get; set; }
+
+        public PosePendingState(float startedAtTime)
+        {
+            StartedAtTime = startedAtTime;
+        }
+    }
 
     private readonly Dictionary<int, float> _retryBlockedUntilByResidentId = new();
+    private readonly Dictionary<int, PosePendingState> _posePendingStatesByResidentId = new();
 
     public string StrategyId => OccupationExecutionProfile.CraftStationStrategyId;
 
     public OccupationPhase Begin(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target)
     {
+        ClearPendingPoseState(resident.Id);
+        ExitTravelLock(character);
+
         if (_retryBlockedUntilByResidentId.TryGetValue(resident.Id, out var retryBlockedUntil) && Time.time < retryBlockedUntil)
         {
             return OccupationPhase.None;
         }
 
-        var travelPosition = target.Plan.ApproachPosition;
-        var began = executionService.TryApproachTarget(character, target);
-        if (began)
-        {
-            WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> Travel approach={travelPosition} engage={target.Plan.EngagePosition}");
-        }
-
-        return began ? OccupationPhase.Travel : OccupationPhase.None;
+        SnapToWorkPose(character, target.Plan.EngagePosition);
+        _posePendingStatesByResidentId[resident.Id] = new PosePendingState(Time.time);
+        WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> EnterPose direct snap engage={target.Plan.EngagePosition}");
+        return OccupationPhase.EnterPose;
     }
 
     public OccupationPhase Continue(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationPhase currentPhase)
@@ -63,57 +72,59 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
                     return OccupationPhase.AwaitNavigationStop;
                 }
 
-                var dockingController = EnsureDockingController(character);
-                if (!dockingController.IsActive && !dockingController.IsDocked)
+                var captureDistance = executionService.GetHorizontalDistance(character, target.Plan.EngagePosition);
+                if (captureDistance > WorkPoseCaptureRadius)
                 {
-                    var actorFacing = GetActorFacingDirection(target.Plan.FacingDirection);
-                    dockingController.BeginDocking(new DockingRequest(
-                        target.Plan.EngagePosition,
-                        actorFacing,
-                        DockPositionTolerance,
-                        DockAngleToleranceDegrees,
-                        DockMaxDurationSeconds));
-
-                    WyrdrasilOccupationDebug.LogCraftStation(character, $"AwaitNavigationStop -> Docking engage={target.Plan.EngagePosition} facing={actorFacing}");
-                }
-
-                return OccupationPhase.Docking;
-            }
-
-            case OccupationPhase.Docking:
-            {
-                var dockingController = EnsureDockingController(character);
-                if (dockingController.IsDocked)
-                {
-                    WyrdrasilOccupationDebug.LogCraftStation(character, $"Docking -> EnterPose distance={dockingController.CurrentHorizontalDistance:0.000} angle={dockingController.CurrentAngleErrorDegrees:0.0}");
-                    return OccupationPhase.EnterPose;
-                }
-
-                if (dockingController.HasFailed)
-                {
+                    ClearPendingPoseState(resident.Id);
                     _retryBlockedUntilByResidentId[resident.Id] = Time.time + RetryCooldownSeconds;
-                    WyrdrasilOccupationDebug.LogCraftStation(character, $"Docking failed distance={dockingController.CurrentHorizontalDistance:0.000} angle={dockingController.CurrentAngleErrorDegrees:0.0} retryAt={_retryBlockedUntilByResidentId[resident.Id]:0.00}");
+                    WyrdrasilOccupationDebug.LogCraftStation(character, $"Work slot capture failed distance={captureDistance:0.000} retryAt={_retryBlockedUntilByResidentId[resident.Id]:0.00}");
                     return OccupationPhase.None;
                 }
 
-                return OccupationPhase.Docking;
+                SnapToWorkPose(character, target.Plan.EngagePosition);
+                _posePendingStatesByResidentId[resident.Id] = new PosePendingState(Time.time);
+                WyrdrasilOccupationDebug.LogCraftStation(character, $"AwaitNavigationStop -> EnterPose snapped engage={target.Plan.EngagePosition} captureDistance={captureDistance:0.000}");
+                return OccupationPhase.EnterPose;
             }
 
             case OccupationPhase.EnterPose:
-                executionService.ReleaseResidentNavigation(resident, detachIfAttached: false);
+            {
                 if (character is not WyrdrasilVikingNpc viking)
                 {
+                    ClearPendingPoseState(resident.Id);
                     return OccupationPhase.None;
                 }
 
-                ForceFace(character, GetActorFacingDirection(target.Plan.FacingDirection));
-                if (viking.IsInWorkbenchPose() || viking.TryEnterWorkbenchPose())
+                if (!_posePendingStatesByResidentId.TryGetValue(resident.Id, out var posePendingState))
                 {
-                    WyrdrasilOccupationDebug.LogCraftStation(character, "EnterPose -> Sustain");
+                    posePendingState = new PosePendingState(Time.time);
+                    _posePendingStatesByResidentId[resident.Id] = posePendingState;
+                }
+
+                if (viking.IsInWorkbenchPose())
+                {
+                    ClearPendingPoseState(resident.Id);
+                    WyrdrasilOccupationDebug.LogCraftStation(character, "EnterPose -> Sustain confirmed");
                     return OccupationPhase.Sustain;
                 }
 
+                if (!posePendingState.PoseRequested)
+                {
+                    posePendingState.PoseRequested = true;
+                    _ = viking.TryEnterWorkbenchPose();
+                    WyrdrasilOccupationDebug.LogCraftStation(character, "EnterPose request sent");
+                }
+
+                if (Time.time - posePendingState.StartedAtTime >= PosePendingTimeoutSeconds)
+                {
+                    ClearPendingPoseState(resident.Id);
+                    _retryBlockedUntilByResidentId[resident.Id] = Time.time + RetryCooldownSeconds;
+                    WyrdrasilOccupationDebug.LogCraftStation(character, $"EnterPose timeout retryAt={_retryBlockedUntilByResidentId[resident.Id]:0.00}");
+                    return OccupationPhase.None;
+                }
+
                 return OccupationPhase.EnterPose;
+            }
 
             case OccupationPhase.Sustain:
                 return OccupationPhase.Sustain;
@@ -125,15 +136,18 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
 
     public void Release(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target)
     {
-        if (character.TryGetComponent<WyrdrasilOccupationDockingController>(out var dockingController))
-        {
-            dockingController.CancelDocking();
-        }
+        ClearPendingPoseState(resident.Id);
+        ExitTravelLock(character);
 
         if (character is WyrdrasilVikingNpc viking)
         {
             viking.TryExitWorkbenchPose();
         }
+    }
+
+    private void ClearPendingPoseState(int residentId)
+    {
+        _posePendingStatesByResidentId.Remove(residentId);
     }
 
     private static Vector3 GetActorFacingDirection(Vector3 anchorFacingDirection)
@@ -147,15 +161,33 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         return -anchorFacingDirection.normalized;
     }
 
-    private static WyrdrasilOccupationDockingController EnsureDockingController(Character character)
+    private static void ExitTravelLock(Character character)
     {
-        var controller = character.GetComponent<WyrdrasilOccupationDockingController>();
-        if (controller == null)
+        if (character.TryGetComponent<WyrdrasilVikingNpcAI>(out var ai))
         {
-            controller = character.gameObject.AddComponent<WyrdrasilOccupationDockingController>();
+            ai.ExitRegistryTravelLock();
+        }
+    }
+
+    private static void SnapToWorkPose(Character character, Vector3 engagePosition)
+    {
+        if (character.TryGetComponent<WyrdrasilRouteTraversalController>(out var routeTraversalController))
+        {
+            routeTraversalController.ReleaseControl();
         }
 
-        return controller;
+        if (character.TryGetComponent<WyrdrasilVikingNpcAI>(out var ai))
+        {
+            ai.EnterRegistryTravelLock();
+        }
+
+        character.transform.position = engagePosition;
+
+        if (character.TryGetComponent<Rigidbody>(out var rigidbody))
+        {
+            rigidbody.linearVelocity = Vector3.zero;
+            rigidbody.angularVelocity = Vector3.zero;
+        }
     }
 
     private static void ForceFace(Character character, Vector3 facingDirection)
