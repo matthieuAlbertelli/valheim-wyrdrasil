@@ -1,4 +1,3 @@
-using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Routines.Components;
 using Wyrdrasil.Routines.Services;
@@ -14,10 +13,9 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
 
     public OccupationSustainResult Sustain(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationSession session)
     {
-        var navigationActive = executionService.IsNavigationActive(character);
-        if (navigationActive)
+        if (executionService.IsNavigationActive(character))
         {
-            WyrdrasilOccupationDebug.LogCraftStation(character, $"Sustain abort navigationActive={navigationActive}");
+            WyrdrasilOccupationDebug.LogCraftStation(character, "Sustain abort navigationActive=True");
             return OccupationSustainResult.Abort;
         }
 
@@ -27,34 +25,11 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
             return OccupationSustainResult.Abort;
         }
 
-        var targetFacing = target.Plan.FacingDirection;
-        targetFacing.y = 0f;
-        if (targetFacing.sqrMagnitude > 0.0001f)
+        if (character is WyrdrasilVikingNpc viking && !viking.IsInWorkbenchPose())
         {
-            targetFacing.Normalize();
+            _ = viking.TryEnterWorkbenchPose();
         }
 
-        var visualForward = character is WyrdrasilVikingNpc viking
-            ? viking.GetWorkbenchPoseReferenceForward()
-            : character.transform.forward;
-        var rootForward = character.transform.forward;
-        rootForward.y = 0f;
-        if (rootForward.sqrMagnitude > 0.0001f)
-        {
-            rootForward.Normalize();
-        }
-
-        var inWorkbenchPose = true;
-        if (character is WyrdrasilVikingNpc craftViking)
-        {
-            inWorkbenchPose = craftViking.IsInWorkbenchPose();
-            if (!inWorkbenchPose)
-            {
-                _ = craftViking.TryEnterWorkbenchPose();
-            }
-        }
-
-        WyrdrasilOccupationDebug.LogCraftStation(character, $"Sustain engaged-pose engage={target.Plan.EngagePosition} targetFacing={FormatDirection(targetFacing)} visualForward={FormatDirection(visualForward)} rootForward={FormatDirection(rootForward)} inWorkbenchPose={inWorkbenchPose}");
         return OccupationSustainResult.Continue;
     }
 
@@ -64,17 +39,5 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
         {
             viking.TryExitWorkbenchPose();
         }
-    }
-
-    private static string FormatDirection(Vector3 direction)
-    {
-        direction.y = 0f;
-        if (direction.sqrMagnitude <= 0.0001f)
-        {
-            return "(0.00,0.00,0.00)";
-        }
-
-        direction.Normalize();
-        return $"({direction.x:0.00},{direction.y:0.00},{direction.z:0.00})";
     }
 }
