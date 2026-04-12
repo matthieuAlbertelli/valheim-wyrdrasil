@@ -20,3 +20,7 @@ obj/
 # Optional
 *.tmp
 *.temp
+
+#scripts
+demande-export.txt
+export.txt
