@@ -100,6 +100,16 @@ public sealed class ResidentOccupationService
             return;
         }
 
+        if (!_resolverRegistry.TryGetResolver(activityType, out var resolver) ||
+            !resolver.TryResolve(resident, out var resolvedTarget) ||
+            resolvedTarget.Reference.TargetKind != session.Target.Reference.TargetKind ||
+            resolvedTarget.Reference.TargetId != session.Target.Reference.TargetId)
+        {
+            ReleaseOccupation(resident, true);
+            TryStartOccupation(resident, activityType);
+            return;
+        }
+
         if (!_executionService.TryContinueExecution(resident, session, out var nextPhase) ||
             nextPhase == OccupationPhase.None)
         {

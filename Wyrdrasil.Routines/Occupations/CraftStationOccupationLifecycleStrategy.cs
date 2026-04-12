@@ -10,6 +10,7 @@ namespace Wyrdrasil.Routines.Occupations;
 
 public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecycleStrategy
 {
+    private const float ApproachArrivalTolerance = 0.10f;
     private const float PosePendingTimeoutSeconds = 1.25f;
 
     private sealed class PosePendingState
@@ -30,26 +31,35 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
     public OccupationPhase Begin(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target)
     {
         ClearPendingPoseState(resident.Id);
+        GetOrCreateEngagedPoseController(character).Disengage();
         ExitTravelLock(character);
 
-        var facingDirection = GetActorFacingDirection(target.Plan.FacingDirection);
-        GetOrCreateEngagedPoseController(character).Engage(target.Plan.EngagePosition, facingDirection);
-
-        if (character is WyrdrasilVikingNpc)
+        if (character is WyrdrasilVikingNpc viking)
         {
-            _posePendingStatesByResidentId[resident.Id] = new PosePendingState(Time.time);
-            WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> EnterPose engaged-pose engage={target.Plan.EngagePosition} facing={FormatDirection(facingDirection)}");
-            return OccupationPhase.EnterPose;
+            viking.TryExitWorkbenchPose();
         }
 
-        WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> Sustain engaged-pose engage={target.Plan.EngagePosition} facing={FormatDirection(facingDirection)}");
-        return OccupationPhase.Sustain;
+        if (executionService.IsNearApproachPosition(character, target, target.Plan.NavigationStopDistance + ApproachArrivalTolerance))
+        {
+            return EngageAtTarget(resident.Id, character, target);
+        }
+
+        if (executionService.TryApproachTarget(character, target))
+        {
+            WyrdrasilOccupationDebug.LogCraftStation(character, $"Begin -> Travel approach={target.Plan.ApproachPosition} engage={target.Plan.EngagePosition}");
+            return OccupationPhase.Travel;
+        }
+
+        return EngageAtTarget(resident.Id, character, target);
     }
 
     public OccupationPhase Continue(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationPhase currentPhase)
     {
         switch (currentPhase)
         {
+            case OccupationPhase.Travel:
+                return ContinueTravel(executionService, resident, character, target);
+
             case OccupationPhase.EnterPose:
                 return ContinueEnterPose(resident, character, target);
 
@@ -71,6 +81,19 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         {
             viking.TryExitWorkbenchPose();
         }
+    }
+
+    private OccupationPhase ContinueTravel(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target)
+    {
+        var nearApproach = executionService.IsNearApproachPosition(character, target, target.Plan.NavigationStopDistance + ApproachArrivalTolerance);
+        var navigationActive = executionService.IsNavigationActive(character);
+        if (!nearApproach && navigationActive)
+        {
+            return OccupationPhase.Travel;
+        }
+
+        executionService.ReleaseResidentNavigation(resident, detachIfAttached: false);
+        return EngageAtTarget(resident.Id, character, target);
     }
 
     private OccupationPhase ContinueEnterPose(RegisteredNpcData resident, Character character, OccupationTarget target)
@@ -118,6 +141,22 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         }
 
         return OccupationPhase.EnterPose;
+    }
+
+    private OccupationPhase EngageAtTarget(int residentId, Character character, OccupationTarget target)
+    {
+        var facingDirection = GetActorFacingDirection(target.Plan.FacingDirection);
+        GetOrCreateEngagedPoseController(character).Engage(target.Plan.EngagePosition, facingDirection);
+
+        if (character is WyrdrasilVikingNpc)
+        {
+            _posePendingStatesByResidentId[residentId] = new PosePendingState(Time.time);
+            WyrdrasilOccupationDebug.LogCraftStation(character, $"Travel -> EnterPose engaged-pose engage={target.Plan.EngagePosition} facing={FormatDirection(facingDirection)}");
+            return OccupationPhase.EnterPose;
+        }
+
+        WyrdrasilOccupationDebug.LogCraftStation(character, $"Travel -> Sustain engaged-pose engage={target.Plan.EngagePosition} facing={FormatDirection(facingDirection)}");
+        return OccupationPhase.Sustain;
     }
 
     private void ClearPendingPoseState(int residentId)
