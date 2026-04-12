@@ -9,7 +9,7 @@ public sealed class ResidentScheduleService
 {
     private const int SleepPriority = 200;
     private const int WorkPriority = 100;
-    private const int MealPriority = 50;
+    private const int MealPriority = 150;
     private const int WanderPriority = 10;
 
     public void EnsureDefaultAutonomySchedules(RegisteredNpcData resident)
