@@ -45,7 +45,7 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
     }
 
     public string ModuleId => "settlements";
-    public int SchemaVersion => 2;
+    public int SchemaVersion => 3;
 
     public void ResetForWorldChange()
     {
@@ -440,9 +440,10 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
             ZoneId = data.ZoneId,
             DisplayName = data.DisplayName,
             PersistentFurnitureId = data.PersistentFurnitureId,
-            ApproachPosition = Float3SaveData.FromVector3(data.ApproachPosition),
-            UsePosition = Float3SaveData.FromVector3(data.UsePosition),
-            UseForward = Float3SaveData.FromVector3(data.UseForward),
+            AnchorLocalPosition = Float3SaveData.FromVector3(data.AnchorPoseLocal.LocalPosition),
+            AnchorLocalForward = Float3SaveData.FromVector3(data.AnchorPoseLocal.LocalForward),
+            InteractionProfileId = data.InteractionProfileId,
+            ReferenceWorldPosition = Float3SaveData.FromVector3(data.ReferenceWorldPosition),
             AssignedRegisteredNpcId = data.AssignedRegisteredNpcId
         };
     }

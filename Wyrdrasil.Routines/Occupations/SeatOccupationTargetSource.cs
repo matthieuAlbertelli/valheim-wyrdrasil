@@ -1,4 +1,4 @@
-﻿using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Services;
 
 namespace Wyrdrasil.Routines.Occupations;
@@ -23,12 +23,20 @@ public sealed class SeatOccupationTargetSource : IOccupationTargetSource
             return false;
         }
 
+        var plan = new OccupationPosePlan(
+            seatData.ApproachPosition,
+            seatData.SeatPosition,
+            seatData.SeatForward,
+            0.25f,
+            0.25f,
+            0.75f);
+
         target = new OccupationTarget(
             new OccupationTargetRef(TargetKind, seatData.Id),
             seatData.DisplayName,
             seatData.BuildingId,
             seatData.ZoneId,
-            new OccupationAnchor(seatData.ApproachPosition, seatData.SeatPosition, seatData.SeatForward),
+            plan,
             OccupationExecutionProfile.Seat(seatData.ChairComponent));
 
         return true;

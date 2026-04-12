@@ -7,6 +7,7 @@ using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Settlements.Tool;
+using Wyrdrasil.Routines.Components;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Souls.Services;
 using Wyrdrasil.Souls.Tool;
@@ -331,6 +332,74 @@ public sealed class RegistryResidentService
         _log.LogWarning("Cannot respawn resident: the targeted object is neither a registered innkeeper slot, designated seat, designated bed, nor designated craft station.");
     }
 
+
+    public void ProbeAssignedCraftStationOccupationAtCrosshair()
+    {
+        if (!_craftStationService.TryGetCraftStationAtCrosshair(out var craftStationData))
+        {
+            _log.LogWarning("[CraftStation][Probe] Cannot probe occupation: no designated craft station is under the crosshair.");
+            return;
+        }
+
+        if (!craftStationData.AssignedRegisteredNpcId.HasValue)
+        {
+            _log.LogWarning($"[CraftStation][Probe] Cannot probe occupation on station #{craftStationData.Id}: no resident is assigned.");
+            return;
+        }
+
+        if (!_catalogService.TryGetResidentById(craftStationData.AssignedRegisteredNpcId.Value, out var resident))
+        {
+            _log.LogWarning($"[CraftStation][Probe] Cannot probe occupation on station #{craftStationData.Id}: assigned resident #{craftStationData.AssignedRegisteredNpcId.Value} is missing.");
+            return;
+        }
+
+        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
+        {
+            if (!_presenceService.TryRespawnResidentAssignedToCraftStation(craftStationData) ||
+                !_runtimeService.TryGetBoundCharacter(resident.Id, out character))
+            {
+                _log.LogWarning($"[CraftStation][Probe] Cannot probe occupation on station #{craftStationData.Id}: resident #{resident.Id} could not be spawned.");
+                return;
+            }
+        }
+
+        if (!craftStationData.TryResolveWorldAnchor(out var anchorWorldPosition, out var anchorWorldForward))
+        {
+            _log.LogWarning($"[CraftStation][Probe] Cannot probe occupation on station #{craftStationData.Id}: world anchor resolution failed.");
+            return;
+        }
+
+        var actorFacing = GetCraftStationActorFacing(anchorWorldForward);
+        character.transform.position = anchorWorldPosition;
+        character.transform.rotation = Quaternion.LookRotation(actorFacing, Vector3.up);
+
+        if (character.TryGetComponent<WyrdrasilVikingNpcAI>(out var ai))
+        {
+            ai.ClearSteering();
+            ai.SetCivilianWalkLocomotion(false);
+        }
+
+        if (character.TryGetComponent<WyrdrasilRouteTraversalController>(out var routeTraversalController))
+        {
+            routeTraversalController.ReleaseControl();
+        }
+
+        if (character.TryGetComponent<Rigidbody>(out var rigidbody))
+        {
+            rigidbody.linearVelocity = Vector3.zero;
+            rigidbody.angularVelocity = Vector3.zero;
+        }
+
+        var enteredPose = false;
+        if (character is WyrdrasilVikingNpc viking)
+        {
+            viking.TryExitWorkbenchPose();
+            enteredPose = viking.IsInWorkbenchPose() || viking.TryEnterWorkbenchPose();
+        }
+
+        _log.LogInfo($"[CraftStation][Probe] Snapped resident #{resident.Id} ('{resident.DisplayName}') to station #{craftStationData.Id}. anchor={anchorWorldPosition} actorFacing={actorFacing} enteredPose={enteredPose}.");
+    }
+
     public void AssignInnkeeperRoleAtCrosshair()
     {
         if (!TryGetTargetRegisteredResident("Cannot assign innkeeper role", out var targetCharacter, out var data)) return;
@@ -356,6 +425,18 @@ public sealed class RegistryResidentService
             return;
         }
         _log.LogInfo($"Assigned designated bed #{bedData.Id} to registered NPC #{data.Id} ('{data.DisplayName}').");
+    }
+
+
+    private static Vector3 GetCraftStationActorFacing(Vector3 anchorForward)
+    {
+        anchorForward.y = 0f;
+        if (anchorForward.sqrMagnitude <= 0.0001f)
+        {
+            return Vector3.forward;
+        }
+
+        return -anchorForward.normalized;
     }
 
     private void NormalizeResidentAfterLoad(RegisteredNpcData resident)

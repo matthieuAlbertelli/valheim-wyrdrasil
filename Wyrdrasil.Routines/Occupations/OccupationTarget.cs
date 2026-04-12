@@ -1,4 +1,3 @@
-using UnityEngine;
 using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;
@@ -9,7 +8,7 @@ public sealed class OccupationTarget
     public string DisplayName { get; }
     public int BuildingId { get; }
     public int? ZoneId { get; }
-    public OccupationAnchor Anchor { get; }
+    public OccupationPosePlan Plan { get; }
     public OccupationExecutionProfile Execution { get; }
 
     public OccupationTarget(
@@ -17,14 +16,14 @@ public sealed class OccupationTarget
         string displayName,
         int buildingId,
         int? zoneId,
-        OccupationAnchor anchor,
+        OccupationPosePlan plan,
         OccupationExecutionProfile execution)
     {
         Reference = reference;
         DisplayName = displayName;
         BuildingId = buildingId;
         ZoneId = zoneId;
-        Anchor = anchor;
+        Plan = plan;
         Execution = execution;
     }
 }

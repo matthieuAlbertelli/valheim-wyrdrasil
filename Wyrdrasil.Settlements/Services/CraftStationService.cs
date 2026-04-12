@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
@@ -117,7 +117,7 @@ public sealed class CraftStationService
 
     public bool TryResolveCraftStationFromSave(RegisteredCraftStationSaveData saveData, out RegisteredCraftStationData craftStationData)
     {
-        var fallbackPosition = saveData.UsePosition.ToVector3();
+        var referencePosition = saveData.ReferenceWorldPosition.ToVector3();
         var allStations = Object.FindObjectsByType<CraftingStation>(FindObjectsSortMode.None);
 
         var exactCandidates = allStations
@@ -125,7 +125,7 @@ public sealed class CraftStationService
             {
                 Station = station,
                 PersistentId = BuildPersistentFurnitureId(station),
-                Distance = Vector3.Distance(GetReferencePosition(station), fallbackPosition)
+                Distance = Vector3.Distance(GetReferencePosition(station), referencePosition)
             })
             .Where(candidate => candidate.PersistentId == saveData.PersistentFurnitureId)
             .OrderBy(candidate => candidate.Distance)
@@ -136,52 +136,29 @@ public sealed class CraftStationService
             var exactMatch = exactCandidates[0];
             if (exactMatch.Distance <= ResolveStationDistance)
             {
-                craftStationData = new RegisteredCraftStationData(
-                    saveData.Id,
-                    saveData.BuildingId,
-                    saveData.ZoneId,
-                    saveData.DisplayName,
-                    exactMatch.PersistentId,
-                    saveData.ApproachPosition.ToVector3(),
-                    saveData.UsePosition.ToVector3(),
-                    saveData.UseForward.ToVector3());
-                craftStationData.UpdateRuntimeBinding(exactMatch.Station.gameObject, exactMatch.Station);
-                EnsureMarker(craftStationData);
-                EnsureAnchorIndicator(craftStationData);
-                UpdateMarker(craftStationData);
-                UpdateAnchorIndicator(craftStationData);
+                craftStationData = BuildResolvedCraftStation(saveData, exactMatch.Station, exactMatch.PersistentId);
+                _log.LogInfo($"[CraftStation][Resolve] Restored station #{craftStationData.Id} with exact persistent match '{exactMatch.PersistentId}'.");
                 return true;
             }
         }
 
         var fallbackStation = allStations
-            .OrderBy(station => Vector3.Distance(GetReferencePosition(station), fallbackPosition))
+            .OrderBy(station => Vector3.Distance(GetReferencePosition(station), referencePosition))
             .FirstOrDefault();
 
         if (fallbackStation != null)
         {
-            var fallbackDistance = Vector3.Distance(GetReferencePosition(fallbackStation), fallbackPosition);
+            var fallbackDistance = Vector3.Distance(GetReferencePosition(fallbackStation), referencePosition);
             if (fallbackDistance <= ResolveStationDistance)
             {
-                craftStationData = new RegisteredCraftStationData(
-                    saveData.Id,
-                    saveData.BuildingId,
-                    saveData.ZoneId,
-                    saveData.DisplayName,
-                    BuildPersistentFurnitureId(fallbackStation),
-                    saveData.ApproachPosition.ToVector3(),
-                    saveData.UsePosition.ToVector3(),
-                    saveData.UseForward.ToVector3());
-                craftStationData.UpdateRuntimeBinding(fallbackStation.gameObject, fallbackStation);
-                EnsureMarker(craftStationData);
-                EnsureAnchorIndicator(craftStationData);
-                UpdateMarker(craftStationData);
-                UpdateAnchorIndicator(craftStationData);
+                craftStationData = BuildResolvedCraftStation(saveData, fallbackStation, BuildPersistentFurnitureId(fallbackStation));
+                _log.LogWarning($"[CraftStation][Resolve] Restored station #{craftStationData.Id} with fallback nearest-station resolution. distance={fallbackDistance:0.00}");
                 return true;
             }
         }
 
         craftStationData = null!;
+        _log.LogWarning($"[CraftStation][Resolve] Unable to resolve craft station #{saveData.Id} ('{saveData.DisplayName}') near {referencePosition}.");
         return false;
     }
 
@@ -189,42 +166,46 @@ public sealed class CraftStationService
     {
         if (!TryGetCraftStationAtCrosshair(out var furnitureRoot, out var craftingStation))
         {
-            _log.LogWarning("Cannot designate craft station: the targeted object is not a valid Valheim crafting station.");
+            _log.LogWarning("[CraftStation][Authoring] Cannot designate craft station: targeted object is not a valid Valheim crafting station.");
             return;
         }
 
         if (FindCraftStationByFurniture(furnitureRoot) != null)
         {
-            _log.LogWarning("Cannot designate craft station: this furniture is already registered as a craft station.");
+            _log.LogWarning("[CraftStation][Authoring] Cannot designate craft station: this furniture is already registered.");
             return;
         }
 
         var zone = _zoneService.FindZoneContainingPointHorizontally(GetReferencePosition(craftingStation));
         if (zone == null)
         {
-            _log.LogWarning("Cannot designate craft station yet: no functional zone footprint was found at the targeted table.");
+            _log.LogWarning("[CraftStation][Authoring] Cannot designate craft station yet: no functional zone footprint found at the targeted table.");
             return;
         }
 
         var persistentFurnitureId = BuildPersistentFurnitureId(craftingStation);
+        var referenceWorldPosition = GetReferencePosition(craftingStation);
+        var profile = ResolveProfileForFurniture(furnitureRoot.name);
+
         var data = new RegisteredCraftStationData(
             _nextCraftStationId++,
             zone.BuildingId,
             zone.Id,
             furnitureRoot.name,
             persistentFurnitureId,
-            Vector3.zero,
-            Vector3.zero,
-            Vector3.zero);
+            referenceWorldPosition,
+            profile.DefaultLocalAnchorPosition,
+            profile.DefaultLocalAnchorForward,
+            profile.ProfileId);
 
         data.UpdateRuntimeBinding(furnitureRoot, craftingStation);
-        ApplyKnownAnchorProfileIfAny(data);
         _craftStations.Add(data);
         EnsureMarker(data);
         EnsureAnchorIndicator(data);
         UpdateMarker(data);
         UpdateAnchorIndicator(data);
-        _log.LogInfo($"Designated craft station #{data.Id} on '{data.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) with persistentId='{persistentFurnitureId}'.");
+
+        _log.LogInfo($"[CraftStation][Authoring] Designated station #{data.Id} on '{data.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) with profile='{profile.ProfileId}' and persistentId='{persistentFurnitureId}'.");
     }
 
     public bool TryGetCraftStationAtCrosshair(out RegisteredCraftStationData craftStationData)
@@ -246,6 +227,17 @@ public sealed class CraftStationService
         return true;
     }
 
+    public bool TryGetInteractionProfile(RegisteredCraftStationData station, out CraftStationInteractionProfile profile)
+    {
+        if (CraftStationInteractionProfileRegistry.TryGetProfileById(station.InteractionProfileId, out profile))
+        {
+            return true;
+        }
+
+        profile = CraftStationInteractionProfileRegistry.GetDefaultProfile();
+        return true;
+    }
+
     public bool ForceAssignCraftStation(int craftStationId, int registeredNpcId, out int? previousResidentId, out RegisteredCraftStationData? craftStationData)
     {
         foreach (var station in _craftStations)
@@ -259,6 +251,7 @@ public sealed class CraftStationService
             station.AssignRegisteredNpc(registeredNpcId);
             UpdateMarker(station);
             craftStationData = station;
+            _log.LogInfo($"[CraftStation][Assignment] Assigned resident #{registeredNpcId} to station #{station.Id}. previousResident={previousResidentId?.ToString() ?? "none"}");
             return true;
         }
 
@@ -284,6 +277,7 @@ public sealed class CraftStationService
 
             station.ClearAssignedRegisteredNpc();
             UpdateMarker(station);
+            _log.LogInfo($"[CraftStation][Assignment] Cleared assignment on station #{station.Id}. previousResident={previousResidentId.Value}");
             return true;
         }
 
@@ -297,6 +291,7 @@ public sealed class CraftStationService
         {
             station.ClearAssignedRegisteredNpc();
             UpdateMarker(station);
+            _log.LogInfo($"[CraftStation][Assignment] Cleared resident #{registeredNpcId} from station #{station.Id}.");
         }
     }
 
@@ -357,6 +352,7 @@ public sealed class CraftStationService
         _markers.Remove(station.Id);
         _anchorRoots.Remove(station.Id);
         _craftStations.RemoveAt(index);
+        _log.LogInfo($"[CraftStation][Authoring] Deleted station #{station.Id} ('{station.DisplayName}').");
         return true;
     }
 
@@ -406,13 +402,11 @@ public sealed class CraftStationService
         var root = new GameObject($"Wyrdrasil_CraftStationAnchor_{station.Id}");
         _anchorRoots[station.Id] = root;
 
-        var approach = CreateIndicatorPrimitive(root.transform, PrimitiveType.Sphere, "Approach", new Vector3(0.22f, 0.22f, 0.22f), new Color(1f, 0.75f, 0.2f, 1f));
-        var use = CreateIndicatorPrimitive(root.transform, PrimitiveType.Sphere, "Use", new Vector3(0.16f, 0.16f, 0.16f), new Color(0.25f, 1f, 0.35f, 1f));
+        var anchor = CreateIndicatorPrimitive(root.transform, PrimitiveType.Sphere, "Anchor", new Vector3(0.18f, 0.18f, 0.18f), new Color(0.25f, 1f, 0.35f, 1f));
         var shaft = CreateIndicatorPrimitive(root.transform, PrimitiveType.Cube, "ArrowShaft", new Vector3(0.08f, 0.08f, 0.65f), new Color(1f, 0.25f, 0.25f, 1f));
         var head = CreateIndicatorPrimitive(root.transform, PrimitiveType.Cube, "ArrowHead", new Vector3(0.18f, 0.18f, 0.18f), new Color(1f, 0.25f, 0.25f, 1f));
 
-        approach.transform.localPosition = Vector3.zero;
-        use.transform.localPosition = Vector3.zero;
+        anchor.transform.localPosition = Vector3.zero;
         shaft.transform.localPosition = new Vector3(0f, 0f, 0.38f);
         head.transform.localPosition = new Vector3(0f, 0f, 0.72f);
 
@@ -432,21 +426,14 @@ public sealed class CraftStationService
             return;
         }
 
-        root.transform.position = station.ApproachPosition + Vector3.up * 0.05f;
-        var forward = station.UseForward;
-        forward.y = 0f;
-        if (forward.sqrMagnitude <= 0.0001f)
+        if (!station.TryResolveWorldAnchor(out var anchorWorldPosition, out var anchorWorldForward))
         {
-            forward = Vector3.forward;
+            root.SetActive(false);
+            return;
         }
 
-        root.transform.rotation = Quaternion.LookRotation(forward.normalized, Vector3.up);
-
-        var use = root.transform.Find("Use");
-        if (use != null)
-        {
-            use.position = station.UsePosition + Vector3.up * 0.08f;
-        }
+        root.transform.position = anchorWorldPosition + Vector3.up * 0.05f;
+        root.transform.rotation = Quaternion.LookRotation(anchorWorldForward, Vector3.up);
     }
 
     private static GameObject CreateIndicatorPrimitive(Transform parent, PrimitiveType primitiveType, string name, Vector3 scale, Color color)
@@ -482,29 +469,51 @@ public sealed class CraftStationService
         return gameObject;
     }
 
-    private void ApplyKnownAnchorProfileIfAny(RegisteredCraftStationData station)
+    private RegisteredCraftStationData BuildResolvedCraftStation(RegisteredCraftStationSaveData saveData, CraftingStation runtimeStation, string persistentId)
     {
-        if (station.FurnitureRoot == null)
+        var profile = ResolveProfileForRestoredStation(saveData, runtimeStation.gameObject.name);
+        var craftStationData = new RegisteredCraftStationData(
+            saveData.Id,
+            saveData.BuildingId,
+            saveData.ZoneId,
+            saveData.DisplayName,
+            persistentId,
+            saveData.ReferenceWorldPosition.ToVector3(),
+            saveData.AnchorLocalPosition.ToVector3(),
+            saveData.AnchorLocalForward.ToVector3(),
+            profile.ProfileId);
+
+        craftStationData.UpdateRuntimeBinding(runtimeStation.gameObject, runtimeStation);
+        if (saveData.AssignedRegisteredNpcId.HasValue)
         {
-            return;
+            craftStationData.AssignRegisteredNpc(saveData.AssignedRegisteredNpcId.Value);
         }
 
-        var prefabName = station.FurnitureRoot.name;
-        if (!CraftStationAnchorProfileRegistry.TryGetProfile(prefabName, out var profile))
+        EnsureMarker(craftStationData);
+        EnsureAnchorIndicator(craftStationData);
+        UpdateMarker(craftStationData);
+        UpdateAnchorIndicator(craftStationData);
+        return craftStationData;
+    }
+
+    private static CraftStationInteractionProfile ResolveProfileForFurniture(string prefabName)
+    {
+        if (CraftStationInteractionProfileRegistry.TryGetProfileForPrefab(prefabName, out var profile))
         {
-            return;
+            return profile;
         }
 
-        var root = station.FurnitureRoot.transform;
-        var worldApproach = root.TransformPoint(profile.LocalApproachPosition);
-        var worldUse = root.TransformPoint(profile.LocalUsePosition);
-        var worldForward = root.TransformDirection(profile.LocalUseForward);
-        worldForward.y = 0f;
-        worldForward = worldForward.sqrMagnitude > 0.0001f ? worldForward.normalized : Vector3.forward;
+        return CraftStationInteractionProfileRegistry.GetDefaultProfile();
+    }
 
-        station.SetManualAnchor(worldApproach, worldUse, worldForward);
+    private static CraftStationInteractionProfile ResolveProfileForRestoredStation(RegisteredCraftStationSaveData saveData, string prefabName)
+    {
+        if (CraftStationInteractionProfileRegistry.TryGetProfileById(saveData.InteractionProfileId, out var savedProfile))
+        {
+            return savedProfile;
+        }
 
-        _log.LogInfo($"Applied hardcoded craft station anchor profile '{profile.PrefabName}' to station #{station.Id}. localApproach={profile.LocalApproachPosition} localUse={profile.LocalUsePosition} localForward={profile.LocalUseForward}");
+        return ResolveProfileForFurniture(prefabName);
     }
 
     private RegisteredCraftStationData? FindCraftStationByFurniture(GameObject furnitureRoot)

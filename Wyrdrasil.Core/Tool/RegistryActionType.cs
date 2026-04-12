@@ -34,6 +34,7 @@ public enum RegistryActionType
 
     InspectTargetNpcAi,
     EditTargetCraftStationAnchor,
+    ProbeAssignedCraftStationOccupation,
     SimulateNoon,
     SimulateNight,
     ClearTimeSimulation,

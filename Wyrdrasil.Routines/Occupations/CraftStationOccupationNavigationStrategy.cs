@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using Wyrdrasil.Routines.Services;
 
@@ -10,11 +10,11 @@ public sealed class CraftStationOccupationNavigationStrategy : IOccupationNaviga
 
     public void NavigateAlongRoute(NpcNavigationService navigationService, Character character, IReadOnlyList<Vector3> routePoints, OccupationTarget target)
     {
-        navigationService.NavigateAlongRouteToPosition(character, routePoints, target.Anchor.ApproachPosition, 0.45f, target.Anchor.FacingDirection);
+        navigationService.NavigateAlongRouteToPosition(character, routePoints, target.Plan.ApproachPosition, target.Plan.NavigationStopDistance, target.Plan.FacingDirection);
     }
 
     public void NavigateDirectly(NpcNavigationService navigationService, Character character, OccupationTarget target)
     {
-        navigationService.NavigateDirectlyToPosition(character, target.Anchor.ApproachPosition, 0.45f, target.Anchor.FacingDirection);
+        navigationService.NavigateDirectlyToPosition(character, target.Plan.ApproachPosition, target.Plan.NavigationStopDistance, target.Plan.FacingDirection);
     }
 }

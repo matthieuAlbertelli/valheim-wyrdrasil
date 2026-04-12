@@ -3,11 +3,10 @@ using System.Collections.Generic;
 
 namespace Wyrdrasil.Settlements.Tool;
 
-
 [Serializable]
 public sealed class SettlementsModuleSaveData
 {
-    public int SchemaVersion = 2;
+    public int SchemaVersion = 3;
     public int NextBuildingId = 1;
     public int NextZoneId = 1;
     public int NextWaypointId = 1;

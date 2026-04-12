@@ -260,8 +260,8 @@ public sealed class ResidentPresenceService
             return false;
         }
 
-        var spawnPosition = target.Anchor.ApproachPosition;
-        var lookTarget = target.Anchor.UsePosition;
+        var spawnPosition = target.Plan.ApproachPosition;
+        var lookTarget = target.Plan.EngagePosition;
         if (target.Execution.IsStand && (lookTarget - spawnPosition).sqrMagnitude <= 0.0001f)
         {
             lookTarget = GetPlayerLookTargetOrFallback(spawnPosition);

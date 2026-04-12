@@ -1,4 +1,4 @@
-﻿using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Services;
 
 namespace Wyrdrasil.Routines.Occupations;
@@ -23,12 +23,20 @@ public sealed class BedOccupationTargetSource : IOccupationTargetSource
             return false;
         }
 
+        var plan = new OccupationPosePlan(
+            bedData.ApproachPosition,
+            bedData.SleepPosition,
+            bedData.SleepForward,
+            0.25f,
+            0.25f,
+            0.90f);
+
         target = new OccupationTarget(
             new OccupationTargetRef(TargetKind, bedData.Id),
             bedData.DisplayName,
             bedData.BuildingId,
             bedData.ZoneId,
-            new OccupationAnchor(bedData.ApproachPosition, bedData.SleepPosition, bedData.SleepForward),
+            plan,
             OccupationExecutionProfile.Bed(bedData.BedComponent, bedData.SleepAttachPoint));
 
         return true;

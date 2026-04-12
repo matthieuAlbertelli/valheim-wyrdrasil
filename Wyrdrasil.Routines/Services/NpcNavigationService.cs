@@ -23,7 +23,7 @@ public sealed class NpcNavigationService
         if (!_strategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var strategy))
         {
             _log.LogWarning($"Missing occupation navigation strategy '{target.Execution.StrategyId}' for {target.Reference}. Falling back to direct position navigation.");
-            NavigateAlongRouteToPosition(character, routePoints, target.Anchor.UsePosition, 0.3f, target.Anchor.FacingDirection);
+            NavigateAlongRouteToPosition(character, routePoints, target.Plan.EngagePosition, 0.3f, target.Plan.FacingDirection);
             return;
         }
 
@@ -35,7 +35,7 @@ public sealed class NpcNavigationService
         if (!_strategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var strategy))
         {
             _log.LogWarning($"Missing occupation navigation strategy '{target.Execution.StrategyId}' for {target.Reference}. Falling back to direct position navigation.");
-            NavigateDirectlyToPosition(character, target.Anchor.UsePosition, 0.3f, target.Anchor.FacingDirection);
+            NavigateDirectlyToPosition(character, target.Plan.EngagePosition, 0.3f, target.Plan.FacingDirection);
             return;
         }
 
@@ -122,7 +122,7 @@ public sealed class NpcNavigationService
             ReleaseLegacyControllers(character, true);
             vikingAi.SetCivilianWalkLocomotion(true);
             var routeController = EnsureRouteController(character);
-            routeController.ConfigureRouteToSeat(routePoints, target.Anchor.ApproachPosition, target.Anchor.UsePosition, target.Anchor.FacingDirection, target.Execution.ChairComponent);
+            routeController.ConfigureRouteToSeat(routePoints, target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.ChairComponent);
             _log.LogInfo($"Assigned registry viking configured for designated seat navigation with {routePoints.Count} waypoint(s).");
             return;
         }
@@ -130,9 +130,9 @@ public sealed class NpcNavigationService
         var controller = EnsureAssignedSlotController(character);
         controller.ConfigureForSeatRoute(
             routePoints,
-            target.Anchor.ApproachPosition,
-            target.Anchor.UsePosition,
-            target.Anchor.FacingDirection,
+            target.Plan.ApproachPosition,
+            target.Plan.EngagePosition,
+            target.Plan.FacingDirection,
             target.Execution.ChairComponent,
             1.15f,
             0.25f);
@@ -141,23 +141,23 @@ public sealed class NpcNavigationService
 
     public void NavigateDirectlyToSeat(Character character, OccupationTarget target)
     {
-        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToSeat target={target.Reference} approach={target.Anchor.ApproachPosition} seat={target.Anchor.UsePosition}");
+        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToSeat target={target.Reference} approach={target.Plan.ApproachPosition} seat={target.Plan.EngagePosition}");
 
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
             ReleaseLegacyControllers(character, true);
             vikingAi.SetCivilianWalkLocomotion(true);
-            vikingAi.StartSeatApproach(target.Anchor.ApproachPosition, target.Anchor.UsePosition, target.Anchor.FacingDirection, target.Execution.ChairComponent, false);
+            vikingAi.StartSeatApproach(target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.ChairComponent, false);
             _log.LogInfo("Assigned registry viking configured for direct designated seat fallback.");
             return;
         }
 
         var controller = EnsureAssignedSlotController(character);
         controller.ConfigureForDirectSeatMovement(
-            target.Anchor.ApproachPosition,
-            target.Anchor.UsePosition,
-            target.Anchor.FacingDirection,
+            target.Plan.ApproachPosition,
+            target.Plan.EngagePosition,
+            target.Plan.FacingDirection,
             target.Execution.ChairComponent,
             1.15f,
             0.25f);
@@ -174,7 +174,7 @@ public sealed class NpcNavigationService
             ReleaseLegacyControllers(character, true);
             vikingAi.SetCivilianWalkLocomotion(true);
             var routeController = EnsureRouteController(character);
-            routeController.ConfigureRouteToBed(routePoints, target.Anchor.ApproachPosition, target.Anchor.UsePosition, target.Anchor.FacingDirection, target.Execution.BedComponent, target.Execution.AttachPoint);
+            routeController.ConfigureRouteToBed(routePoints, target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.BedComponent, target.Execution.AttachPoint);
             _log.LogInfo($"Assigned registry viking configured for bed navigation with {routePoints.Count} waypoint(s).");
             return;
         }
@@ -182,9 +182,9 @@ public sealed class NpcNavigationService
         var controller = EnsureAssignedSlotController(character);
         controller.ConfigureForBedRoute(
             routePoints,
-            target.Anchor.ApproachPosition,
-            target.Anchor.UsePosition,
-            target.Anchor.FacingDirection,
+            target.Plan.ApproachPosition,
+            target.Plan.EngagePosition,
+            target.Plan.FacingDirection,
             target.Execution.BedComponent,
             target.Execution.AttachPoint,
             1.15f,
@@ -194,23 +194,23 @@ public sealed class NpcNavigationService
 
     public void NavigateDirectlyToBed(Character character, OccupationTarget target)
     {
-        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToBed target={target.Reference} approach={target.Anchor.ApproachPosition} sleep={target.Anchor.UsePosition}");
+        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToBed target={target.Reference} approach={target.Plan.ApproachPosition} sleep={target.Plan.EngagePosition}");
 
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
         {
             ReleaseLegacyControllers(character, true);
             vikingAi.SetCivilianWalkLocomotion(true);
-            vikingAi.StartBedApproach(target.Anchor.ApproachPosition, target.Anchor.UsePosition, target.Anchor.FacingDirection, target.Execution.BedComponent, target.Execution.AttachPoint, false);
+            vikingAi.StartBedApproach(target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.BedComponent, target.Execution.AttachPoint, false);
             _log.LogInfo("Assigned registry viking configured for direct bed fallback.");
             return;
         }
 
         var controller = EnsureAssignedSlotController(character);
         controller.ConfigureForDirectBedMovement(
-            target.Anchor.ApproachPosition,
-            target.Anchor.UsePosition,
-            target.Anchor.FacingDirection,
+            target.Plan.ApproachPosition,
+            target.Plan.EngagePosition,
+            target.Plan.FacingDirection,
             target.Execution.BedComponent,
             target.Execution.AttachPoint,
             1.15f,

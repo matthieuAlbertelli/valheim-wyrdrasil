@@ -86,11 +86,13 @@ public class Plugin : BaseUnityPlugin
         var residentVisualService = new ResidentVisualService(modeService, residentRuntimeService);
         var scheduleService = new ResidentScheduleService();
 
+        var craftStationOccupationPlanBuilder = new CraftStationOccupationPlanBuilder();
+
         var occupationTargetCatalog = new OccupationTargetCatalog();
         occupationTargetCatalog.Register(new SlotOccupationTargetSource(slotService));
         occupationTargetCatalog.Register(new SeatOccupationTargetSource(seatService));
         occupationTargetCatalog.Register(new BedOccupationTargetSource(bedService));
-        occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(craftStationService));
+        occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(craftStationService, craftStationOccupationPlanBuilder));
 
         var occupationClaimRegistry = new OccupationClaimRegistry();
         occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(seatService, occupationTargetCatalog));
@@ -303,6 +305,7 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new RespawnAssignedResidentAction());
         registry.Register(new InspectTargetNpcAiAction());
         registry.Register(new EditTargetCraftStationAnchorAction());
+        registry.Register(new ProbeAssignedCraftStationOccupationAction());
         registry.Register(new SimulateNoonAction());
         registry.Register(new SimulateNightAction());
         registry.Register(new ClearTimeSimulationAction());

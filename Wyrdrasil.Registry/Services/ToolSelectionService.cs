@@ -46,6 +46,7 @@ public sealed class ToolSelectionService
     {
         RegistryActionType.InspectTargetNpcAi,
         RegistryActionType.EditTargetCraftStationAnchor,
+        RegistryActionType.ProbeAssignedCraftStationOccupation,
         RegistryActionType.SimulateNoon,
         RegistryActionType.SimulateNight,
         RegistryActionType.ClearTimeSimulation,

@@ -1,5 +1,6 @@
-﻿using UnityEngine;
+using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
+using Wyrdrasil.Routines.Components;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Souls.Components;
 using Wyrdrasil.Souls.Tool;
@@ -13,20 +14,19 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
 
     public OccupationSustainResult Sustain(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationSession session)
     {
-        var isNearWorkbench = executionService.IsNearUsePosition(character, target, 1.35f) ||
-                              executionService.IsNearApproachPosition(character, target, 0.95f);
+        var isNearWorkbench = executionService.IsNearEngagePosition(character, target, target.Plan.SustainRadius);
         var navigationActive = executionService.IsNavigationActive(character);
 
         if (!isNearWorkbench || navigationActive)
         {
-            WyrdrasilSeatDebug.Log(character, $"CraftSustain abort isNearWorkbench={isNearWorkbench} navigationActive={navigationActive} approachDistance={executionService.GetHorizontalDistance(character, target.Anchor.ApproachPosition):0.00} useDistance={executionService.GetHorizontalDistance(character, target.Anchor.UsePosition):0.00}");
+            WyrdrasilOccupationDebug.LogCraftStation(character, $"Sustain abort isNearWorkbench={isNearWorkbench} navigationActive={navigationActive} engageDistance={executionService.GetHorizontalDistance(character, target.Plan.EngagePosition):0.00}");
             return OccupationSustainResult.Abort;
         }
 
         var isInWorkbenchPose = character is WyrdrasilVikingNpc viking && viking.IsInWorkbenchPose();
         if (!isInWorkbenchPose)
         {
-            ForceFaceUseDirection(character, target.Anchor.FacingDirection);
+            ForceFaceUseDirection(character, target.Plan.FacingDirection);
             if (character is WyrdrasilVikingNpc waitingViking)
             {
                 _ = waitingViking.TryEnterWorkbenchPose();
@@ -38,6 +38,11 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
 
     public void Release(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationSession session)
     {
+        if (character.TryGetComponent<WyrdrasilOccupationDockingController>(out var dockingController))
+        {
+            dockingController.CancelDocking();
+        }
+
         if (character is WyrdrasilVikingNpc viking)
         {
             viking.TryExitWorkbenchPose();

@@ -119,7 +119,7 @@ public sealed class OccupationExecutionService
 
     public bool TryApproachTarget(Character character, OccupationTarget target)
     {
-        if (_waypointService.TryBuildRoute(character.transform.position, target.Anchor.ApproachPosition, out var routePoints) && routePoints.Count > 0)
+        if (_waypointService.TryBuildRoute(character.transform.position, target.Plan.ApproachPosition, out var routePoints) && routePoints.Count > 0)
         {
             _navigationService.NavigateAlongRoute(character, routePoints, target);
             return true;
@@ -134,16 +134,16 @@ public sealed class OccupationExecutionService
         return _navigationService.IsNavigationActive(character);
     }
 
-    public bool IsNearUsePosition(Character character, OccupationTarget target, float maxDistance)
+    public bool IsNearEngagePosition(Character character, OccupationTarget target, float maxDistance)
     {
-        var delta = target.Anchor.UsePosition - character.transform.position;
+        var delta = target.Plan.EngagePosition - character.transform.position;
         delta.y = 0f;
         return delta.sqrMagnitude <= maxDistance * maxDistance;
     }
 
     public bool IsNearApproachPosition(Character character, OccupationTarget target, float maxDistance)
     {
-        var delta = target.Anchor.ApproachPosition - character.transform.position;
+        var delta = target.Plan.ApproachPosition - character.transform.position;
         delta.y = 0f;
         return delta.sqrMagnitude <= maxDistance * maxDistance;
     }
@@ -174,7 +174,7 @@ public sealed class OccupationExecutionService
 
         if (target.Execution.IsCraftStation)
         {
-            return (IsNearUsePosition(character, target, 1.35f) || IsNearApproachPosition(character, target, 0.95f)) &&
+            return IsNearEngagePosition(character, target, target.Plan.SustainRadius) &&
                    !_navigationService.IsNavigationActive(character);
         }
 

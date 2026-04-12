@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Settlements.Tool;
@@ -11,8 +11,9 @@ public sealed class RegisteredCraftStationSaveData
     public int ZoneId;
     public string DisplayName = string.Empty;
     public string PersistentFurnitureId = string.Empty;
-    public Float3SaveData ApproachPosition = new();
-    public Float3SaveData UsePosition = new();
-    public Float3SaveData UseForward = new();
+    public Float3SaveData AnchorLocalPosition = new();
+    public Float3SaveData AnchorLocalForward = new();
+    public string InteractionProfileId = string.Empty;
+    public Float3SaveData ReferenceWorldPosition = new();
     public int? AssignedRegisteredNpcId;
 }
