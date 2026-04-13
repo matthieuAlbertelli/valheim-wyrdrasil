@@ -321,6 +321,7 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new ForceCompleteLatestConstructionProjectAction());
         registry.Register(new ResetLatestConstructionProjectAction());
         registry.Register(new ToggleConstructionVerboseLoggingAction());
+        registry.Register(new PlaceBlueprintInstantlyAction());
         registry.Register(new FlushRegistryStateAction());
         registry.Register(new LoggingRegistryAction(RegistryActionType.None));
         return registry;

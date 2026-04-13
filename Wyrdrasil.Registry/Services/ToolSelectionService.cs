@@ -55,6 +55,7 @@ public sealed class ToolSelectionService
         RegistryActionType.ForceCompleteLatestConstructionProject,
         RegistryActionType.ResetLatestConstructionProject,
         RegistryActionType.ToggleConstructionVerboseLogging,
+        RegistryActionType.PlaceBlueprintInstantly,
         RegistryActionType.FlushRegistryState,
         RegistryActionType.None
     };
