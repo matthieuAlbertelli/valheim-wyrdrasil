@@ -57,6 +57,7 @@
     <ProjectReference Include="..\Wyrdrasil.Core\Wyrdrasil.Core.csproj" />
     <ProjectReference Include="..\Wyrdrasil.Settlements\Wyrdrasil.Settlements.csproj" />
     <ProjectReference Include="..\Wyrdrasil.Souls\Wyrdrasil.Souls.csproj" />
+    <ProjectReference Include="..\Wyrdrasil.Construction\Wyrdrasil.Construction.csproj" />
     <ProjectReference Include="..\Wyrdrasil.Routines\Wyrdrasil.Routines.csproj" />
   </ItemGroup>
   <PropertyGroup>

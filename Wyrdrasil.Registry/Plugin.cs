@@ -4,6 +4,7 @@ using HarmonyLib;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Core.Services;
 using Wyrdrasil.Core.Tool;
+using Wyrdrasil.Construction.Bootstrap;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Controllers;
@@ -41,6 +42,7 @@ public class Plugin : BaseUnityPlugin
         RegistryModuleBootstrap.ApplyHarmony(_harmony);
         RoutinesModuleBootstrap.ApplyHarmony(_harmony);
 
+        var constructionBootstrap = ConstructionModuleBootstrap.Create(Logger);
         var modeService = new RegistryModeService(Logger);
         var buildingService = new BuildingService(Logger);
         var anchorPolicyService = new ZonePlacementPolicyService();
@@ -208,7 +210,8 @@ public class Plugin : BaseUnityPlugin
                 craftStationService),
 
             new RegistrySoulsPersistenceParticipant(residentService),
-            new RoutinesPersistenceParticipant(_worldClockService)
+            new RoutinesPersistenceParticipant(_worldClockService),
+            constructionBootstrap.PersistenceParticipant
         };
 
         _persistenceService = new RegistryPersistenceService(
@@ -250,7 +253,9 @@ public class Plugin : BaseUnityPlugin
             _diagnosticsService,
             craftStationAnchorEditorService,
             deletionService,
-            flushService,
+            flushService, 
+            constructionBootstrap.AuthoringApi,
+            constructionBootstrap.TestingApi,
             _worldClockService);
 
         var hudRenderer = new RegistryHudRenderer();
