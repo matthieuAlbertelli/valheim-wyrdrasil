@@ -82,4 +82,12 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         failureReason = string.Empty;
         return true;
     }
+
+    public bool ToggleVerboseLogging(out bool isEnabled)
+    {
+        _debugStateService.Current.VerboseLoggingEnabled = !_debugStateService.Current.VerboseLoggingEnabled;
+        isEnabled = _debugStateService.Current.VerboseLoggingEnabled;
+        _debugLogService.Info("Testing", $"Construction verbose logging {(isEnabled ? "enabled" : "disabled")}.");
+        return true;
+    }
 }

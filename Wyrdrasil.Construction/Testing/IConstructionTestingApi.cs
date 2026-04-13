@@ -10,4 +10,5 @@ public interface IConstructionTestingApi
     bool TryResetProject(int projectId, out string failureReason);
     bool TryValidateProject(int projectId, out ConstructionValidationReport report, out string failureReason);
     bool TryDumpProjectState(int projectId, out string dump, out string failureReason);
+    bool ToggleVerboseLogging(out bool isEnabled);
 }

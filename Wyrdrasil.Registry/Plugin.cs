@@ -238,6 +238,7 @@ public class Plugin : BaseUnityPlugin
             _persistenceService);
 
         var selectionService = new ToolSelectionService(modeService.State);
+        var constructionDebugSessionService = new ConstructionDebugSessionService();
         var actionRegistry = BuildActionRegistry();
 
         var context = new RegistryContext(
@@ -253,9 +254,10 @@ public class Plugin : BaseUnityPlugin
             _diagnosticsService,
             craftStationAnchorEditorService,
             deletionService,
-            flushService, 
+            flushService,
             constructionBootstrap.AuthoringApi,
             constructionBootstrap.TestingApi,
+            constructionDebugSessionService,
             _worldClockService);
 
         var hudRenderer = new RegistryHudRenderer();
@@ -314,6 +316,11 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new SimulateNoonAction());
         registry.Register(new SimulateNightAction());
         registry.Register(new ClearTimeSimulationAction());
+        registry.Register(new SpawnTestConstructionProjectAction());
+        registry.Register(new DumpLatestConstructionProjectStateAction());
+        registry.Register(new ForceCompleteLatestConstructionProjectAction());
+        registry.Register(new ResetLatestConstructionProjectAction());
+        registry.Register(new ToggleConstructionVerboseLoggingAction());
         registry.Register(new FlushRegistryStateAction());
         registry.Register(new LoggingRegistryAction(RegistryActionType.None));
         return registry;

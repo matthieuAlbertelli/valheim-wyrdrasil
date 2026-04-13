@@ -38,5 +38,10 @@ public enum RegistryActionType
     SimulateNoon,
     SimulateNight,
     ClearTimeSimulation,
+    SpawnTestConstructionProject,
+    DumpLatestConstructionProjectState,
+    ForceCompleteLatestConstructionProject,
+    ResetLatestConstructionProject,
+    ToggleConstructionVerboseLogging,
     FlushRegistryState
 }

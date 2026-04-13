@@ -26,6 +26,7 @@ public sealed class RegistryContext
     public WorldClockService WorldClockService { get; }
     public IConstructionAuthoringApi ConstructionAuthoringApi { get; }
     public IConstructionTestingApi ConstructionTestingApi { get; }
+    public ConstructionDebugSessionService ConstructionDebugSessionService { get; }
 
     public RegistryContext(
         ManualLogSource log,
@@ -43,6 +44,7 @@ public sealed class RegistryContext
         RegistryFlushService flushService,
         IConstructionAuthoringApi constructionAuthoringApi,
         IConstructionTestingApi constructionTestingApi,
+        ConstructionDebugSessionService constructionDebugSessionService,
         WorldClockService worldClockService)
     {
         Log = log;
@@ -60,6 +62,7 @@ public sealed class RegistryContext
         FlushService = flushService;
         ConstructionAuthoringApi = constructionAuthoringApi;
         ConstructionTestingApi = constructionTestingApi;
+        ConstructionDebugSessionService = constructionDebugSessionService;
         WorldClockService = worldClockService;
     }
 }

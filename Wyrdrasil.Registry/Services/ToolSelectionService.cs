@@ -50,6 +50,11 @@ public sealed class ToolSelectionService
         RegistryActionType.SimulateNoon,
         RegistryActionType.SimulateNight,
         RegistryActionType.ClearTimeSimulation,
+        RegistryActionType.SpawnTestConstructionProject,
+        RegistryActionType.DumpLatestConstructionProjectState,
+        RegistryActionType.ForceCompleteLatestConstructionProject,
+        RegistryActionType.ResetLatestConstructionProject,
+        RegistryActionType.ToggleConstructionVerboseLogging,
         RegistryActionType.FlushRegistryState,
         RegistryActionType.None
     };
