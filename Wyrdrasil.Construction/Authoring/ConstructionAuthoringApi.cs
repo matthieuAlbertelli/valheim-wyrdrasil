@@ -11,17 +11,20 @@ public sealed class ConstructionAuthoringApi : IConstructionAuthoringApi
 {
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionProjectService _constructionProjectService;
+    private readonly ConstructionBlueprintCaptureService _constructionBlueprintCaptureService;
     private readonly ConstructionOrderService _constructionOrderService;
     private readonly ConstructionDebugLogService _debugLogService;
 
     public ConstructionAuthoringApi(
         BlueprintCatalogService blueprintCatalogService,
         ConstructionProjectService constructionProjectService,
+        ConstructionBlueprintCaptureService constructionBlueprintCaptureService,
         ConstructionOrderService constructionOrderService,
         ConstructionDebugLogService debugLogService)
     {
         _blueprintCatalogService = blueprintCatalogService;
         _constructionProjectService = constructionProjectService;
+        _constructionBlueprintCaptureService = constructionBlueprintCaptureService;
         _constructionOrderService = constructionOrderService;
         _debugLogService = debugLogService;
     }
@@ -38,6 +41,22 @@ public sealed class ConstructionAuthoringApi : IConstructionAuthoringApi
         failureReason = "Blueprint capture is not implemented yet. The module scaffold is ready for integration.";
         _debugLogService.Verbose("Capture", $"Capture requested for '{blueprint.DisplayName}' at {request.Center} with size {request.Size}.");
         return false;
+    }
+
+    public bool TryCaptureBlueprintFromZone(ConstructionZoneCaptureRequest request, out StructureBlueprintData blueprint, out string failureReason)
+    {
+        if (!_constructionBlueprintCaptureService.TryCaptureFromZone(
+                request.Zone,
+                request.OriginPosition,
+                request.BlueprintId,
+                request.DisplayName,
+                out blueprint,
+                out failureReason))
+        {
+            return false;
+        }
+
+        return TryRegisterBlueprint(blueprint, out failureReason);
     }
 
     public bool TryRegisterBlueprint(StructureBlueprintData blueprint, out string failureReason)

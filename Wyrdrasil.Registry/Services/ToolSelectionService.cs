@@ -44,6 +44,7 @@ public sealed class ToolSelectionService
 
     private static readonly RegistryActionType[] ConstructionActions =
     {
+        RegistryActionType.CaptureBlueprintFromTargetZone,
         RegistryActionType.SpawnTestConstructionProject,
         RegistryActionType.DumpLatestConstructionProjectState,
         RegistryActionType.ForceCompleteLatestConstructionProject,

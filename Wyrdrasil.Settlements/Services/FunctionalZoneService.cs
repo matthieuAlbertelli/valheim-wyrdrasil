@@ -38,6 +38,7 @@ public sealed class FunctionalZoneService
     private float _pendingBaseY;
     private float _pendingTopY;
     private int _nextZoneId = 1;
+    private int? _highlightedZoneId;
     private bool _visualsVisible;
 
     public IReadOnlyList<FunctionalZoneData> Zones => _zones;
@@ -102,6 +103,7 @@ public sealed class FunctionalZoneService
         _zones.Clear();
         _zoneRoots.Clear();
         _markers.Clear();
+        _highlightedZoneId = null;
         _nextZoneId = 1;
     }
 
@@ -256,6 +258,42 @@ public sealed class FunctionalZoneService
         return false;
     }
 
+    public void UpdateTargetedZoneHighlight()
+    {
+        if (!_visualsVisible)
+        {
+            SetHighlightedZone(null);
+            return;
+        }
+
+        if (!TryGetPlacementPoint(out var placementPoint) || !TryFindZoneAtPoint(placementPoint, out var zone))
+        {
+            SetHighlightedZone(null);
+            return;
+        }
+
+        SetHighlightedZone(zone.Id);
+    }
+
+    private void SetHighlightedZone(int? zoneId)
+    {
+        if (_highlightedZoneId == zoneId)
+        {
+            return;
+        }
+
+        if (_highlightedZoneId.HasValue && _markers.TryGetValue(_highlightedZoneId.Value, out var previousMarker))
+        {
+            previousMarker.SetHighlighted(false);
+        }
+
+        _highlightedZoneId = zoneId;
+        if (_highlightedZoneId.HasValue && _markers.TryGetValue(_highlightedZoneId.Value, out var nextMarker))
+        {
+            nextMarker.SetHighlighted(true);
+        }
+    }
+
     public bool TryFindZoneAtPoint(Vector3 point, out FunctionalZoneData zone)
     {
         var match = FindZoneContainingPoint(point);
@@ -284,6 +322,7 @@ public sealed class FunctionalZoneService
         if (_zoneRoots.TryGetValue(zoneId, out var root) && root != null)
         {
             Object.Destroy(root);
+            SetHighlightedZone(_highlightedZoneId == zoneId ? null : _highlightedZoneId);
         }
 
         _zoneRoots.Remove(zoneId);
@@ -322,6 +361,7 @@ public sealed class FunctionalZoneService
         if (!isEnabled)
         {
             CancelPendingZoneAuthoring();
+            SetHighlightedZone(null);
         }
     }
 
@@ -587,6 +627,7 @@ public sealed class FunctionalZoneService
 
         marker.RegisterRenderer(lineRenderer);
         marker.SetVisualizationVisible(_visualsVisible);
+        marker.SetHighlighted(_highlightedZoneId == zoneData.Id);
         _markers[zoneData.Id] = marker;
     }
 

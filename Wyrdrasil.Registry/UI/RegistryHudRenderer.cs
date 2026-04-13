@@ -77,7 +77,7 @@ public sealed class RegistryHudRenderer
 
         if (state.SelectedCategory == RegistryCategory.Construction)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : projets de test, dump d'état, complétion forcée, reset et placement instantané.", _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : capturer un blueprint depuis une zone, puis le replacer plus loin via le HUD.", _hintStyle!);
             nextLineY += 24f;
         }
 
@@ -152,12 +152,13 @@ public sealed class RegistryHudRenderer
         RegistryActionType.SimulateNoon => "Diagnostic : simuler midi",
         RegistryActionType.SimulateNight => "Diagnostic : simuler 22h00",
         RegistryActionType.ClearTimeSimulation => "Diagnostic : arrêter la simulation temps",
+        RegistryActionType.CaptureBlueprintFromTargetZone => "Construction : capturer la zone ciblée",
         RegistryActionType.SpawnTestConstructionProject => "Construction : créer un projet de test",
         RegistryActionType.DumpLatestConstructionProjectState => "Construction : dump du dernier projet",
         RegistryActionType.ForceCompleteLatestConstructionProject => "Construction : compléter le dernier projet",
         RegistryActionType.ResetLatestConstructionProject => "Construction : reset du dernier projet",
         RegistryActionType.ToggleConstructionVerboseLogging => "Construction : basculer logs verbeux",
-        RegistryActionType.PlaceBlueprintInstantly => "Construction : placer le blueprint instantanément",
+        RegistryActionType.PlaceBlueprintInstantly => "Construction : placer le blueprint courant",
         RegistryActionType.FlushRegistryState => "Diagnostic : flush mémoire registre",
         _ => action.ToString()
     };

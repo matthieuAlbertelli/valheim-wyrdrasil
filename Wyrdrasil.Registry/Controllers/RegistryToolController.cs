@@ -79,6 +79,7 @@ public sealed class RegistryToolController
 
         var selectedAction = _modeService.State.SelectedAction;
         UpdateForceAssignFeedback();
+        _zoneService.UpdateTargetedZoneHighlight();
 
         if (selectedAction == RegistryActionType.CreateTavernZone || selectedAction == RegistryActionType.CreateBedroomZone)
         {

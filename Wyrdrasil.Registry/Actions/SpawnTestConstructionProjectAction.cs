@@ -54,7 +54,7 @@ public sealed class SpawnTestConstructionProjectAction : IRegistryAction
             return;
         }
 
-        context.ConstructionDebugSessionService.SetLatestProjectId(project.Id);
+        context.ConstructionDebugSessionService.SetLatestBlueprintAndProject(BlueprintId, project.Id);
         context.Log.LogInfo($"Spawned test construction project {project.Id} from blueprint '{BlueprintId}' at {origin}.");
     }
 }

@@ -17,10 +17,28 @@ public sealed class PlaceBlueprintInstantlyAction : IRegistryAction
             return;
         }
 
+        if (!context.ConstructionDebugSessionService.TryGetLatestBlueprintId(out var blueprintId))
+        {
+            context.Log.LogWarning("No latest construction blueprint is available for instant placement. Capture a zone blueprint or spawn a test construction project first.");
+            return;
+        }
+
+        Vector3 originPosition;
+        if (context.ZoneService.TryGetPlacementPoint(out var placementPoint))
+        {
+            originPosition = placementPoint;
+            context.Log.LogInfo($"Using registry placement point {originPosition} for blueprint '{blueprintId}'.");
+        }
+        else
+        {
+            originPosition = player.transform.position + player.transform.forward * 4f;
+            context.Log.LogInfo($"No registry placement point was available. Falling back to forward placement at {originPosition} for blueprint '{blueprintId}'.");
+        }
+
         var request = new PlaceBlueprintInstantRequest
         {
-            BlueprintId = "debug.tavern.frame.small",
-            OriginPosition = player.transform.position + player.transform.forward * 4f,
+            BlueprintId = blueprintId,
+            OriginPosition = originPosition,
             OriginRotation = Quaternion.identity
         };
 

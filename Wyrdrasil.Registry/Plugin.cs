@@ -316,6 +316,7 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new SimulateNoonAction());
         registry.Register(new SimulateNightAction());
         registry.Register(new ClearTimeSimulationAction());
+        registry.Register(new CaptureBlueprintFromTargetZoneAction());
         registry.Register(new SpawnTestConstructionProjectAction());
         registry.Register(new DumpLatestConstructionProjectStateAction());
         registry.Register(new ForceCompleteLatestConstructionProjectAction());
