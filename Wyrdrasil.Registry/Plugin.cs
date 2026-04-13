@@ -257,6 +257,7 @@ public class Plugin : BaseUnityPlugin
             flushService,
             constructionBootstrap.AuthoringApi,
             constructionBootstrap.TestingApi,
+            constructionBootstrap.ConstructionPlacementPreviewService,
             constructionDebugSessionService,
             _worldClockService);
 

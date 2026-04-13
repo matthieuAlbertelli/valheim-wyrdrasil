@@ -16,6 +16,7 @@ public sealed class ConstructionModuleBootstrap
         BlueprintCatalogService blueprintCatalogService,
         ConstructionBlueprintCaptureService constructionBlueprintCaptureService,
         ConstructionPlacementService constructionPlacementService,
+        ConstructionPlacementPreviewService constructionPlacementPreviewService,
         ConstructionOrderService constructionOrderService,
         ConstructionProjectService constructionProjectService,
         ConstructionPersistenceParticipant persistenceParticipant,
@@ -28,6 +29,7 @@ public sealed class ConstructionModuleBootstrap
         BlueprintCatalogService = blueprintCatalogService;
         ConstructionBlueprintCaptureService = constructionBlueprintCaptureService;
         ConstructionPlacementService = constructionPlacementService;
+        ConstructionPlacementPreviewService = constructionPlacementPreviewService;
         ConstructionOrderService = constructionOrderService;
         ConstructionProjectService = constructionProjectService;
         PersistenceParticipant = persistenceParticipant;
@@ -41,6 +43,7 @@ public sealed class ConstructionModuleBootstrap
     public BlueprintCatalogService BlueprintCatalogService { get; }
     public ConstructionBlueprintCaptureService ConstructionBlueprintCaptureService { get; }
     public ConstructionPlacementService ConstructionPlacementService { get; }
+    public ConstructionPlacementPreviewService ConstructionPlacementPreviewService { get; }
     public ConstructionOrderService ConstructionOrderService { get; }
     public ConstructionProjectService ConstructionProjectService { get; }
     public ConstructionPersistenceParticipant PersistenceParticipant { get; }
@@ -55,6 +58,10 @@ public sealed class ConstructionModuleBootstrap
         var blueprintCatalogService = new BlueprintCatalogService();
         var constructionBlueprintCaptureService = new ConstructionBlueprintCaptureService();
         var constructionPlacementService = new ConstructionPlacementService(debugLogService);
+        var constructionPlacementPreviewService = new ConstructionPlacementPreviewService(
+            blueprintCatalogService,
+            constructionPlacementService,
+            debugLogService);
         var constructionOrderService = new ConstructionOrderService();
         var constructionProjectService = new ConstructionProjectService(debugLogService);
         var persistenceParticipant = new ConstructionPersistenceParticipant(blueprintCatalogService, constructionProjectService, debugLogService);
@@ -68,6 +75,7 @@ public sealed class ConstructionModuleBootstrap
             blueprintCatalogService,
             constructionBlueprintCaptureService,
             constructionPlacementService,
+            constructionPlacementPreviewService,
             constructionOrderService,
             constructionProjectService,
             persistenceParticipant,

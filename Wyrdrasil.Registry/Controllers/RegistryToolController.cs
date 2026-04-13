@@ -1,8 +1,8 @@
 using UnityEngine;
+using Wyrdrasil.Core.Services;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Registry.UI;
-using Wyrdrasil.Core.Services;
 using Wyrdrasil.Routines.Services;
 using Wyrdrasil.Settlements.Services;
 
@@ -68,6 +68,11 @@ public sealed class RegistryToolController
     {
         if (Input.GetKeyDown(ToggleKey))
         {
+            if (_actionContext.ConstructionPlacementPreviewService.IsPreviewActive)
+            {
+                _actionContext.ConstructionPlacementPreviewService.CancelPreview();
+            }
+
             _modeService.ToggleRegistryMode();
             return;
         }
@@ -81,6 +86,12 @@ public sealed class RegistryToolController
         UpdateForceAssignFeedback();
         _zoneService.UpdateTargetedZoneHighlight();
 
+        if (_actionContext.ConstructionPlacementPreviewService.IsPreviewActive)
+        {
+            UpdateConstructionPlacementPreview();
+            return;
+        }
+
         if (selectedAction == RegistryActionType.CreateTavernZone || selectedAction == RegistryActionType.CreateBedroomZone)
         {
             _zoneService.UpdatePendingZoneAuthoringPreview();
@@ -89,14 +100,14 @@ public sealed class RegistryToolController
 
         if (Input.GetKeyDown(NextCategoryKey))
         {
-            CancelZoneAuthoringIfNeeded();
+            CancelInteractiveAuthoringIfNeeded();
             _selectionService.SelectNextCategory();
             return;
         }
 
         if (Input.GetKeyDown(NextActionKey))
         {
-            CancelZoneAuthoringIfNeeded();
+            CancelInteractiveAuthoringIfNeeded();
             _selectionService.SelectNextAction();
             return;
         }
@@ -110,6 +121,7 @@ public sealed class RegistryToolController
             {
                 _persistenceService.SaveWorldState();
             }
+
             return;
         }
 
@@ -136,6 +148,8 @@ public sealed class RegistryToolController
             return;
         }
 
+        var constructionPlacementPreviewService = _actionContext.ConstructionPlacementPreviewService;
+
         _hudRenderer.Draw(
             _modeService.State,
             ToggleKey,
@@ -153,7 +167,51 @@ public sealed class RegistryToolController
             _worldClockService.GetClockModeLabel(),
             _craftStationAnchorEditorService.IsEditing,
             _craftStationAnchorEditorService.StatusLabel,
-            _craftStationAnchorEditorService.ControlsLabel);
+            _craftStationAnchorEditorService.ControlsLabel,
+            constructionPlacementPreviewService.IsPreviewActive,
+            constructionPlacementPreviewService.StatusLabel,
+            constructionPlacementPreviewService.ControlsLabel);
+    }
+
+    private void UpdateConstructionPlacementPreview()
+    {
+        var previewService = _actionContext.ConstructionPlacementPreviewService;
+        var player = Player.m_localPlayer;
+
+        if (_zoneService.TryGetPlacementPoint(out var placementPoint))
+        {
+            previewService.UpdatePreviewPosition(placementPoint);
+        }
+        else if (player != null)
+        {
+            previewService.UpdatePreviewPosition(player.transform.position + (player.transform.forward * 4f));
+        }
+
+        var scrollDelta = Input.mouseScrollDelta.y;
+        if (Mathf.Abs(scrollDelta) > 0.01f)
+        {
+            previewService.RotatePreview(scrollDelta);
+        }
+
+        if (Input.GetMouseButtonDown(1))
+        {
+            previewService.CancelPreview();
+            _actionContext.Log.LogInfo("Cancelled construction placement preview.");
+            return;
+        }
+
+        if (Input.GetMouseButtonDown(0))
+        {
+            if (previewService.TryConfirmPreview(out var placedPieceCount, out var failureReason))
+            {
+                _actionContext.Log.LogInfo($"Confirmed construction placement preview. Placed {placedPieceCount} pieces.");
+                _persistenceService.SaveWorldState();
+            }
+            else
+            {
+                _actionContext.Log.LogWarning($"Failed to confirm construction placement preview: {failureReason}");
+            }
+        }
     }
 
     private void HandleZoneAuthoringInputs()
@@ -176,8 +234,13 @@ public sealed class RegistryToolController
         }
     }
 
-    private void CancelZoneAuthoringIfNeeded()
+    private void CancelInteractiveAuthoringIfNeeded()
     {
+        if (_actionContext.ConstructionPlacementPreviewService.IsPreviewActive)
+        {
+            _actionContext.ConstructionPlacementPreviewService.CancelPreview();
+        }
+
         if (_zoneService.IsZoneAuthoringActive)
         {
             _zoneService.CancelPendingZoneAuthoring();

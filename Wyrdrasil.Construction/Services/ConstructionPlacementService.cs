@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -20,6 +21,34 @@ public sealed class ConstructionPlacementService
     {
         placedPieceCount = 0;
 
+        if (!TryResolveBlueprintPlacements(blueprint, originPosition, originRotation, out var placements, out failureReason))
+        {
+            return false;
+        }
+
+        foreach (var placement in placements)
+        {
+            var instance = Object.Instantiate(placement.Prefab, placement.WorldPosition, placement.WorldRotation);
+            instance.name = $"{placement.Prefab.name}_ConstructionDebug";
+            placedPieceCount++;
+
+            _debugLogService.Verbose("Placement", $"Placed prefab '{placement.Prefab.name}' for piece {placement.PieceId} at {placement.WorldPosition}.");
+        }
+
+        failureReason = string.Empty;
+        _debugLogService.Info("Placement", $"Instantly placed blueprint '{blueprint.Id}' with {placedPieceCount} pieces.");
+        return true;
+    }
+
+    public bool TryResolveBlueprintPlacements(
+        StructureBlueprintData blueprint,
+        Vector3 originPosition,
+        Quaternion originRotation,
+        out List<ConstructionResolvedPiecePlacement> placements,
+        out string failureReason)
+    {
+        placements = new List<ConstructionResolvedPiecePlacement>();
+
         if (ZNetScene.instance == null)
         {
             failureReason = "ZNetScene.instance is not available.";
@@ -40,15 +69,17 @@ public sealed class ConstructionPlacementService
             var worldPosition = originPosition + (originRotation * piece.LocalPosition);
             var worldRotation = originRotation * localRotation;
 
-            var instance = Object.Instantiate(prefab, worldPosition, worldRotation);
-            instance.name = $"{prefab.name}_ConstructionDebug";
-            placedPieceCount++;
-
-            _debugLogService.Verbose("Placement", $"Placed prefab '{prefab.name}' for piece {piece.PieceId} at {worldPosition}.");
+            placements.Add(new ConstructionResolvedPiecePlacement
+            {
+                PieceId = piece.PieceId,
+                PrefabName = piece.PrefabName,
+                Prefab = prefab,
+                WorldPosition = worldPosition,
+                WorldRotation = worldRotation
+            });
         }
 
         failureReason = string.Empty;
-        _debugLogService.Info("Placement", $"Instantly placed blueprint '{blueprint.Id}' with {placedPieceCount} pieces.");
         return true;
     }
 

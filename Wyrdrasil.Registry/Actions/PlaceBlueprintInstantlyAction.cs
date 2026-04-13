@@ -1,5 +1,4 @@
 ﻿using UnityEngine;
-using Wyrdrasil.Construction.Testing;
 using Wyrdrasil.Registry.Tool;
 
 namespace Wyrdrasil.Registry.Actions;
@@ -13,13 +12,13 @@ public sealed class PlaceBlueprintInstantlyAction : IRegistryAction
         var player = Player.m_localPlayer;
         if (player == null)
         {
-            context.Log.LogWarning("No local player for instant placement.");
+            context.Log.LogWarning("No local player for construction placement preview.");
             return;
         }
 
         if (!context.ConstructionDebugSessionService.TryGetLatestBlueprintId(out var blueprintId))
         {
-            context.Log.LogWarning("No latest construction blueprint is available for instant placement. Capture a zone blueprint or spawn a test construction project first.");
+            context.Log.LogWarning("No latest construction blueprint is available for preview. Capture a zone blueprint or spawn a test construction project first.");
             return;
         }
 
@@ -27,27 +26,22 @@ public sealed class PlaceBlueprintInstantlyAction : IRegistryAction
         if (context.ZoneService.TryGetPlacementPoint(out var placementPoint))
         {
             originPosition = placementPoint;
-            context.Log.LogInfo($"Using registry placement point {originPosition} for blueprint '{blueprintId}'.");
         }
         else
         {
-            originPosition = player.transform.position + player.transform.forward * 4f;
-            context.Log.LogInfo($"No registry placement point was available. Falling back to forward placement at {originPosition} for blueprint '{blueprintId}'.");
+            originPosition = player.transform.position + (player.transform.forward * 4f);
         }
 
-        var request = new PlaceBlueprintInstantRequest
+        if (!context.ConstructionPlacementPreviewService.TryBeginPreview(
+                blueprintId,
+                originPosition,
+                Quaternion.identity,
+                out var failureReason))
         {
-            BlueprintId = blueprintId,
-            OriginPosition = originPosition,
-            OriginRotation = Quaternion.identity
-        };
-
-        if (!context.ConstructionTestingApi.TryPlaceBlueprintInstantly(request, out var count, out var failure))
-        {
-            context.Log.LogWarning($"Instant placement failed: {failure}");
+            context.Log.LogWarning($"Failed to start construction placement preview: {failureReason}");
             return;
         }
 
-        context.Log.LogInfo($"Instantly placed blueprint with {count} pieces.");
+        context.Log.LogInfo($"Started construction placement preview for blueprint '{blueprintId}'.");
     }
 }

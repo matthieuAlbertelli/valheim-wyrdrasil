@@ -27,7 +27,10 @@ public sealed class RegistryHudRenderer
         string worldClockModeLabel,
         bool isCraftAnchorEditorActive,
         string craftAnchorEditorStatus,
-        string craftAnchorEditorControls)
+        string craftAnchorEditorControls,
+        bool isConstructionPlacementPreviewActive,
+        string constructionPlacementPreviewStatus,
+        string constructionPlacementPreviewControls)
     {
         if (!state.IsRegistryModeEnabled)
         {
@@ -36,6 +39,11 @@ public sealed class RegistryHudRenderer
 
         EnsureStyles();
         var panelHeight = pendingZoneAuthoring == null ? 408f : 504f;
+        if (isConstructionPlacementPreviewActive)
+        {
+            panelHeight += 48f;
+        }
+
         var panelRect = new Rect(20f, 180f, 880f, panelHeight);
 
         GUI.Box(panelRect, GUIContent.none);
@@ -78,6 +86,14 @@ public sealed class RegistryHudRenderer
         if (state.SelectedCategory == RegistryCategory.Construction)
         {
             GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : capturer un blueprint depuis une zone, puis le replacer plus loin via le HUD.", _hintStyle!);
+            nextLineY += 24f;
+        }
+
+        if (isConstructionPlacementPreviewActive)
+        {
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), constructionPlacementPreviewStatus, _textStyle!);
+            nextLineY += 24f;
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), constructionPlacementPreviewControls, _hintStyle!);
             nextLineY += 24f;
         }
 
@@ -158,7 +174,7 @@ public sealed class RegistryHudRenderer
         RegistryActionType.ForceCompleteLatestConstructionProject => "Construction : compléter le dernier projet",
         RegistryActionType.ResetLatestConstructionProject => "Construction : reset du dernier projet",
         RegistryActionType.ToggleConstructionVerboseLogging => "Construction : basculer logs verbeux",
-        RegistryActionType.PlaceBlueprintInstantly => "Construction : placer le blueprint courant",
+        RegistryActionType.PlaceBlueprintInstantly => "Construction : prévisualiser le blueprint courant",
         RegistryActionType.FlushRegistryState => "Diagnostic : flush mémoire registre",
         _ => action.ToString()
     };
