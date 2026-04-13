@@ -14,6 +14,7 @@ public sealed class ConstructionModuleBootstrap
         ConstructionDebugStateService debugStateService,
         ConstructionDebugLogService debugLogService,
         BlueprintCatalogService blueprintCatalogService,
+        ConstructionPlacementService constructionPlacementService,
         ConstructionOrderService constructionOrderService,
         ConstructionProjectService constructionProjectService,
         ConstructionPersistenceParticipant persistenceParticipant,
@@ -24,6 +25,7 @@ public sealed class ConstructionModuleBootstrap
         DebugStateService = debugStateService;
         DebugLogService = debugLogService;
         BlueprintCatalogService = blueprintCatalogService;
+        ConstructionPlacementService = constructionPlacementService;
         ConstructionOrderService = constructionOrderService;
         ConstructionProjectService = constructionProjectService;
         PersistenceParticipant = persistenceParticipant;
@@ -35,6 +37,7 @@ public sealed class ConstructionModuleBootstrap
     public ConstructionDebugStateService DebugStateService { get; }
     public ConstructionDebugLogService DebugLogService { get; }
     public BlueprintCatalogService BlueprintCatalogService { get; }
+    public ConstructionPlacementService ConstructionPlacementService { get; }
     public ConstructionOrderService ConstructionOrderService { get; }
     public ConstructionProjectService ConstructionProjectService { get; }
     public ConstructionPersistenceParticipant PersistenceParticipant { get; }
@@ -47,17 +50,19 @@ public sealed class ConstructionModuleBootstrap
         var debugStateService = new ConstructionDebugStateService();
         var debugLogService = new ConstructionDebugLogService(log, debugStateService);
         var blueprintCatalogService = new BlueprintCatalogService();
+        var constructionPlacementService = new ConstructionPlacementService(debugLogService);
         var constructionOrderService = new ConstructionOrderService();
         var constructionProjectService = new ConstructionProjectService(debugLogService);
         var persistenceParticipant = new ConstructionPersistenceParticipant(blueprintCatalogService, constructionProjectService, debugLogService);
         var authoringApi = new ConstructionAuthoringApi(blueprintCatalogService, constructionProjectService, constructionOrderService, debugLogService);
         var runtimeApi = new ConstructionRuntimeApi(constructionProjectService, debugLogService);
-        var testingApi = new ConstructionTestingApi(constructionProjectService, debugStateService, debugLogService);
+        var testingApi = new ConstructionTestingApi(constructionProjectService, blueprintCatalogService, constructionPlacementService, debugStateService, debugLogService);
 
         return new ConstructionModuleBootstrap(
             debugStateService,
             debugLogService,
             blueprintCatalogService,
+            constructionPlacementService,
             constructionOrderService,
             constructionProjectService,
             persistenceParticipant,

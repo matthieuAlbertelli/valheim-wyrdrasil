@@ -8,25 +8,44 @@ namespace Wyrdrasil.Construction.Testing;
 public sealed class ConstructionTestingApi : IConstructionTestingApi
 {
     private readonly ConstructionProjectService _constructionProjectService;
+    private readonly BlueprintCatalogService _blueprintCatalogService;
+    private readonly ConstructionPlacementService _constructionPlacementService;
     private readonly ConstructionDebugStateService _debugStateService;
     private readonly ConstructionDebugLogService _debugLogService;
 
     public ConstructionTestingApi(
         ConstructionProjectService constructionProjectService,
+        BlueprintCatalogService blueprintCatalogService,
+        ConstructionPlacementService constructionPlacementService,
         ConstructionDebugStateService debugStateService,
         ConstructionDebugLogService debugLogService)
     {
         _constructionProjectService = constructionProjectService;
+        _blueprintCatalogService = blueprintCatalogService;
+        _constructionPlacementService = constructionPlacementService;
         _debugStateService = debugStateService;
         _debugLogService = debugLogService;
     }
 
     public bool TryPlaceBlueprintInstantly(PlaceBlueprintInstantRequest request, out int placedPieceCount, out string failureReason)
     {
-        placedPieceCount = 0;
-        failureReason = "Instant blueprint placement is not implemented yet. The API surface is ready for wiring.";
-        _debugLogService.Verbose("Testing", $"Instant placement requested for blueprint '{request.BlueprintId}' at {request.OriginPosition}. IgnoreMaterials={request.IgnoreMaterials}.");
-        return false;
+        if (!_blueprintCatalogService.TryGetBlueprint(request.BlueprintId, out var blueprint))
+        {
+            placedPieceCount = 0;
+            failureReason = $"Unknown blueprint '{request.BlueprintId}'.";
+            return false;
+        }
+
+        _debugLogService.Verbose(
+            "Testing",
+            $"Instant placement requested for blueprint '{request.BlueprintId}' at {request.OriginPosition}. IgnoreMaterials={request.IgnoreMaterials}.");
+
+        return _constructionPlacementService.TryPlaceBlueprintInstantly(
+            blueprint,
+            request.OriginPosition,
+            request.OriginRotation,
+            out placedPieceCount,
+            out failureReason);
     }
 
     public bool TryForceCompleteNextPiece(int projectId, out int pieceId, out string failureReason)
