@@ -42,6 +42,16 @@ public sealed class ToolSelectionService
         RegistryActionType.SpawnTestViking
     };
 
+    private static readonly RegistryActionType[] ConstructionActions =
+    {
+        RegistryActionType.SpawnTestConstructionProject,
+        RegistryActionType.DumpLatestConstructionProjectState,
+        RegistryActionType.ForceCompleteLatestConstructionProject,
+        RegistryActionType.ResetLatestConstructionProject,
+        RegistryActionType.ToggleConstructionVerboseLogging,
+        RegistryActionType.PlaceBlueprintInstantly
+    };
+
     private static readonly RegistryActionType[] DiagnosticActions =
     {
         RegistryActionType.InspectTargetNpcAi,
@@ -106,6 +116,7 @@ public sealed class ToolSelectionService
             RegistryCategory.Zones => ZoneActions,
             RegistryCategory.Slots => SlotActions,
             RegistryCategory.Residents => ResidentActions,
+            RegistryCategory.Construction => ConstructionActions,
             RegistryCategory.Diagnostics => DiagnosticActions,
             _ => DiagnosticActions
         };
