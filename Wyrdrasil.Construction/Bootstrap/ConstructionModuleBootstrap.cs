@@ -18,7 +18,11 @@ public sealed class ConstructionModuleBootstrap
         ConstructionPlacementService constructionPlacementService,
         ConstructionPlacementPreviewService constructionPlacementPreviewService,
         ConstructionOrderService constructionOrderService,
+        ConstructionWorkPostGenerationService constructionWorkPostGenerationService,
         ConstructionProjectService constructionProjectService,
+        ConstructionGameTimeService constructionGameTimeService,
+        ConstructionPieceBuildService constructionPieceBuildService,
+        ConstructionProjectProgressService constructionProjectProgressService,
         ConstructionPersistenceParticipant persistenceParticipant,
         IConstructionAuthoringApi authoringApi,
         IConstructionRuntimeApi runtimeApi,
@@ -31,7 +35,11 @@ public sealed class ConstructionModuleBootstrap
         ConstructionPlacementService = constructionPlacementService;
         ConstructionPlacementPreviewService = constructionPlacementPreviewService;
         ConstructionOrderService = constructionOrderService;
+        ConstructionWorkPostGenerationService = constructionWorkPostGenerationService;
         ConstructionProjectService = constructionProjectService;
+        ConstructionGameTimeService = constructionGameTimeService;
+        ConstructionPieceBuildService = constructionPieceBuildService;
+        ConstructionProjectProgressService = constructionProjectProgressService;
         PersistenceParticipant = persistenceParticipant;
         AuthoringApi = authoringApi;
         RuntimeApi = runtimeApi;
@@ -45,7 +53,11 @@ public sealed class ConstructionModuleBootstrap
     public ConstructionPlacementService ConstructionPlacementService { get; }
     public ConstructionPlacementPreviewService ConstructionPlacementPreviewService { get; }
     public ConstructionOrderService ConstructionOrderService { get; }
+    public ConstructionWorkPostGenerationService ConstructionWorkPostGenerationService { get; }
     public ConstructionProjectService ConstructionProjectService { get; }
+    public ConstructionGameTimeService ConstructionGameTimeService { get; }
+    public ConstructionPieceBuildService ConstructionPieceBuildService { get; }
+    public ConstructionProjectProgressService ConstructionProjectProgressService { get; }
     public ConstructionPersistenceParticipant PersistenceParticipant { get; }
     public IConstructionAuthoringApi AuthoringApi { get; }
     public IConstructionRuntimeApi RuntimeApi { get; }
@@ -58,16 +70,35 @@ public sealed class ConstructionModuleBootstrap
         var blueprintCatalogService = new BlueprintCatalogService();
         var constructionBlueprintCaptureService = new ConstructionBlueprintCaptureService();
         var constructionPlacementService = new ConstructionPlacementService(debugLogService);
+        var constructionOrderService = new ConstructionOrderService();
+        var constructionWorkPostGenerationService = new ConstructionWorkPostGenerationService();
+        var constructionProjectService = new ConstructionProjectService(debugLogService, constructionWorkPostGenerationService);
+        var constructionGameTimeService = new ConstructionGameTimeService();
+        var constructionPieceBuildService = new ConstructionPieceBuildService(
+            blueprintCatalogService,
+            constructionPlacementService,
+            constructionProjectService,
+            debugLogService);
+        var constructionProjectProgressService = new ConstructionProjectProgressService(
+            constructionGameTimeService,
+            constructionProjectService,
+            constructionPieceBuildService,
+            debugLogService);
         var constructionPlacementPreviewService = new ConstructionPlacementPreviewService(
             blueprintCatalogService,
             constructionPlacementService,
+            constructionProjectService,
             debugLogService);
-        var constructionOrderService = new ConstructionOrderService();
-        var constructionProjectService = new ConstructionProjectService(debugLogService);
         var persistenceParticipant = new ConstructionPersistenceParticipant(blueprintCatalogService, constructionProjectService, debugLogService);
         var authoringApi = new ConstructionAuthoringApi(blueprintCatalogService, constructionProjectService, constructionBlueprintCaptureService, constructionOrderService, debugLogService);
         var runtimeApi = new ConstructionRuntimeApi(constructionProjectService, debugLogService);
-        var testingApi = new ConstructionTestingApi(constructionProjectService, blueprintCatalogService, constructionPlacementService, debugStateService, debugLogService);
+        var testingApi = new ConstructionTestingApi(
+            constructionProjectService,
+            blueprintCatalogService,
+            constructionPlacementService,
+            constructionPieceBuildService,
+            debugStateService,
+            debugLogService);
 
         return new ConstructionModuleBootstrap(
             debugStateService,
@@ -77,7 +108,11 @@ public sealed class ConstructionModuleBootstrap
             constructionPlacementService,
             constructionPlacementPreviewService,
             constructionOrderService,
+            constructionWorkPostGenerationService,
             constructionProjectService,
+            constructionGameTimeService,
+            constructionPieceBuildService,
+            constructionProjectProgressService,
             persistenceParticipant,
             authoringApi,
             runtimeApi,

@@ -86,6 +86,11 @@ public sealed class RegistryResidentService
         return _catalogService.TryGetResidentById(residentId, out resident!);
     }
 
+    public bool TryGetTargetedRegisteredResident(out RegisteredNpcData resident)
+    {
+        return TryGetTargetRegisteredResident(out resident);
+    }
+
     public void PrepareResidentPresenceSnapshotsForSave()
     {
         _presenceService.PrepareResidentPresenceSnapshotsForSave();

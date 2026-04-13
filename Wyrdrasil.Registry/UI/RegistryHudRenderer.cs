@@ -85,7 +85,7 @@ public sealed class RegistryHudRenderer
 
         if (state.SelectedCategory == RegistryCategory.Construction)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : capturer un blueprint depuis une zone, puis le replacer plus loin via le HUD.", _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : capturer un blueprint, lancer une preview, puis confirmer pour créer un vrai chantier avec posts de travail externes.", _hintStyle!);
             nextLineY += 24f;
         }
 
@@ -111,6 +111,8 @@ public sealed class RegistryHudRenderer
             nextLineY += 24f;
         }
 
+        GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Astuce Construction : vise un PNJ enregistré, puis utilise l'action d'assignation chantier pour l'envoyer sur le dernier projet créé.", _hintStyle!);
+        nextLineY += 24f;
         GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Astuce : avec 'Force assign', vise d'abord un PNJ enregistré, puis vise un slot, un siège, un lit ou un poste d'artisanat.", _hintStyle!);
         nextLineY += 24f;
         GUI.Label(new Rect(35f, nextLineY, 820f, 20f), $"{toggleKey} : mode | {nextCategoryKey} : catégorie | {nextActionKey} : action | Clic gauche : créer/éditer | Clic droit : supprimer/annuler auteur", _hintStyle!);
@@ -171,6 +173,8 @@ public sealed class RegistryHudRenderer
         RegistryActionType.CaptureBlueprintFromTargetZone => "Construction : capturer la zone ciblée",
         RegistryActionType.SpawnTestConstructionProject => "Construction : créer un projet de test",
         RegistryActionType.DumpLatestConstructionProjectState => "Construction : dump du dernier projet",
+        RegistryActionType.AssignTargetResidentToLatestConstructionProject => "Construction : assigner le PNJ visé au dernier chantier",
+        RegistryActionType.ClearTargetResidentConstructionAssignment => "Construction : retirer le PNJ visé de son chantier",
         RegistryActionType.ForceCompleteLatestConstructionProject => "Construction : compléter le dernier projet",
         RegistryActionType.ResetLatestConstructionProject => "Construction : reset du dernier projet",
         RegistryActionType.ToggleConstructionVerboseLogging => "Construction : basculer logs verbeux",

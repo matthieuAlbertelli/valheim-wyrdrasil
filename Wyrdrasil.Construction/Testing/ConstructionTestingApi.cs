@@ -1,6 +1,6 @@
 using System.Text;
-using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Diagnostics;
+using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Services;
 
 namespace Wyrdrasil.Construction.Testing;
@@ -10,6 +10,7 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
+    private readonly ConstructionPieceBuildService _constructionPieceBuildService;
     private readonly ConstructionDebugStateService _debugStateService;
     private readonly ConstructionDebugLogService _debugLogService;
 
@@ -17,12 +18,14 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         ConstructionProjectService constructionProjectService,
         BlueprintCatalogService blueprintCatalogService,
         ConstructionPlacementService constructionPlacementService,
+        ConstructionPieceBuildService constructionPieceBuildService,
         ConstructionDebugStateService debugStateService,
         ConstructionDebugLogService debugLogService)
     {
         _constructionProjectService = constructionProjectService;
         _blueprintCatalogService = blueprintCatalogService;
         _constructionPlacementService = constructionPlacementService;
+        _constructionPieceBuildService = constructionPieceBuildService;
         _debugStateService = debugStateService;
         _debugLogService = debugLogService;
     }
@@ -50,20 +53,55 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
 
     public bool TryForceCompleteNextPiece(int projectId, out int pieceId, out string failureReason)
     {
-        var result = _constructionProjectService.TryForceCompleteNextPiece(projectId, out pieceId);
-        failureReason = result ? string.Empty : $"Project {projectId} has no eligible construction piece to force-complete.";
-        return result;
+        if (!_constructionPieceBuildService.TryBuildNextPiece(projectId, out pieceId, out failureReason))
+        {
+            return false;
+        }
+
+        _constructionProjectService.TryForceAdvanceBuiltPieceCount(projectId, out _, out _);
+        return true;
     }
 
     public bool TryForceCompleteProject(int projectId, out int builtPieceCount, out string failureReason)
     {
-        var result = _constructionProjectService.TryForceCompleteProject(projectId, out builtPieceCount);
-        failureReason = result ? string.Empty : $"Project {projectId} could not be force-completed.";
-        return result;
+        builtPieceCount = 0;
+
+        if (!_constructionProjectService.TryGetProject(projectId, out var project))
+        {
+            failureReason = $"Unknown construction project {projectId}.";
+            return false;
+        }
+
+        while (project.Progress.BuiltPieceCount < project.Progress.TotalPieceCount)
+        {
+            if (!_constructionPieceBuildService.TryBuildNextPiece(projectId, out _, out failureReason))
+            {
+                return false;
+            }
+
+            _constructionProjectService.TryForceAdvanceBuiltPieceCount(projectId, out _, out _);
+            builtPieceCount++;
+        }
+
+        failureReason = string.Empty;
+        _debugLogService.Info("Testing", $"Force-completed construction project {projectId} with {builtPieceCount} newly built pieces.");
+        return true;
     }
 
     public bool TryResetProject(int projectId, out string failureReason)
     {
+        if (!_constructionProjectService.TryGetProject(projectId, out var project))
+        {
+            failureReason = $"Unknown construction project {projectId}.";
+            return false;
+        }
+
+        if (project.Progress.BuiltPieceCount > 0)
+        {
+            failureReason = "Reset is only supported before any construction piece has been instantiated in this V1.";
+            return false;
+        }
+
         var result = _constructionProjectService.TryResetProject(projectId);
         failureReason = result ? string.Empty : $"Unknown construction project {projectId}.";
         return result;
@@ -92,12 +130,41 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         builder.AppendLine($"Origin: {project.OriginPosition}");
         builder.AppendLine($"VerboseLoggingEnabled: {_debugStateService.Current.VerboseLoggingEnabled}");
         builder.AppendLine($"IgnoreMaterialRequirements: {_debugStateService.Current.IgnoreMaterialRequirements}");
-        foreach (var piece in project.PieceProgress)
+        builder.AppendLine($"TotalPieceCount: {project.Progress.TotalPieceCount}");
+        builder.AppendLine($"BuiltPieceCount: {project.Progress.BuiltPieceCount}");
+        builder.AppendLine($"AccumulatedPieceWork: {project.Progress.AccumulatedPieceWork:0.##}");
+        builder.AppendLine($"AssignedWorkerCount: {_constructionProjectService.GetAssignedWorkerCount(project)}");
+        builder.AppendLine("WorkPosts:");
+        foreach (var workPost in project.WorkPosts)
         {
-            builder.AppendLine($"  Piece {piece.PieceId}: Built={piece.IsBuilt}, Reserved={piece.MaterialsReserved}, Work={piece.CurrentWork:0.##}/{piece.RequiredWork:0.##}");
+            builder.AppendLine($"  WorkPost {workPost.Id}: Pos={workPost.WorldPosition}, Resident={(workPost.AssignedResidentId.HasValue ? workPost.AssignedResidentId.Value.ToString() : "none")}");
         }
 
         dump = builder.ToString();
+        failureReason = string.Empty;
+        return true;
+    }
+
+    public bool TryAssignResidentToProject(int residentId, int projectId, out int workPostId, out string failureReason)
+    {
+        if (!_constructionProjectService.TryAssignResidentToProject(residentId, projectId, out var workPost, out failureReason))
+        {
+            workPostId = 0;
+            return false;
+        }
+
+        workPostId = workPost.Id;
+        return true;
+    }
+
+    public bool TryClearResidentProjectAssignment(int residentId, out int projectId, out int workPostId, out string failureReason)
+    {
+        if (!_constructionProjectService.TryClearResidentAssignment(residentId, out projectId, out workPostId))
+        {
+            failureReason = $"Resident #{residentId} has no construction work post assignment.";
+            return false;
+        }
+
         failureReason = string.Empty;
         return true;
     }

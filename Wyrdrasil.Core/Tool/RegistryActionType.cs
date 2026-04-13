@@ -45,5 +45,7 @@ public enum RegistryActionType
     ToggleConstructionVerboseLogging,
     PlaceBlueprintInstantly,
     CaptureBlueprintFromTargetZone,
+    AssignTargetResidentToLatestConstructionProject,
+    ClearTargetResidentConstructionAssignment,
     FlushRegistryState
 }

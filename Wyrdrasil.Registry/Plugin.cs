@@ -5,6 +5,7 @@ using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Core.Services;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Construction.Bootstrap;
+using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Controllers;
@@ -33,6 +34,7 @@ public class Plugin : BaseUnityPlugin
     private WorldClockService _worldClockService = null!;
     private ResidentRoutineService _residentRoutineService = null!;
     private TargetDiagnosticsService _diagnosticsService = null!;
+    private ConstructionProjectProgressService _constructionProjectProgressService = null!;
     private Harmony? _harmony;
 
     private void Awake()
@@ -43,6 +45,7 @@ public class Plugin : BaseUnityPlugin
         RoutinesModuleBootstrap.ApplyHarmony(_harmony);
 
         var constructionBootstrap = ConstructionModuleBootstrap.Create(Logger);
+        _constructionProjectProgressService = constructionBootstrap.ConstructionProjectProgressService;
         var modeService = new RegistryModeService(Logger);
         var buildingService = new BuildingService(Logger);
         var anchorPolicyService = new ZonePlacementPolicyService();
@@ -320,6 +323,8 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new CaptureBlueprintFromTargetZoneAction());
         registry.Register(new SpawnTestConstructionProjectAction());
         registry.Register(new DumpLatestConstructionProjectStateAction());
+        registry.Register(new AssignTargetResidentToLatestConstructionProjectAction());
+        registry.Register(new ClearTargetResidentConstructionAssignmentAction());
         registry.Register(new ForceCompleteLatestConstructionProjectAction());
         registry.Register(new ResetLatestConstructionProjectAction());
         registry.Register(new ToggleConstructionVerboseLoggingAction());
@@ -334,6 +339,7 @@ public class Plugin : BaseUnityPlugin
         WyrdrasilPlayerCraftDebugMonitor.EnsureAttached(Player.m_localPlayer);
         _persistenceService.Update();
         _residentRoutineService.Update();
+        _constructionProjectProgressService.Update();
         _registryToolController.Update();
     }
 

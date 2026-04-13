@@ -29,8 +29,9 @@ public sealed class ConstructionPlacementPreviewService
 
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
+    private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionDebugLogService _debugLogService;
-    private readonly List<PreviewPiece> _previewPieces = new List<PreviewPiece>();
+    private readonly List<PreviewPiece> _previewPieces = new();
 
     private StructureBlueprintData? _activeBlueprint;
     private Vector3 _originPosition;
@@ -41,10 +42,12 @@ public sealed class ConstructionPlacementPreviewService
     public ConstructionPlacementPreviewService(
         BlueprintCatalogService blueprintCatalogService,
         ConstructionPlacementService constructionPlacementService,
+        ConstructionProjectService constructionProjectService,
         ConstructionDebugLogService debugLogService)
     {
         _blueprintCatalogService = blueprintCatalogService;
         _constructionPlacementService = constructionPlacementService;
+        _constructionProjectService = constructionProjectService;
         _debugLogService = debugLogService;
     }
 
@@ -53,7 +56,7 @@ public sealed class ConstructionPlacementPreviewService
     public string StatusLabel => !IsPreviewActive
         ? "Construction preview inactive."
         : $"Construction preview: {ActiveBlueprintId} | Valid: {(_isPlacementValid ? "Yes" : "No")} | {_validationMessage}";
-    public string ControlsLabel => "Construction preview: Molette = pivoter | Clic gauche = confirmer | Clic droit = annuler";
+    public string ControlsLabel => "Construction preview: Molette = pivoter | Clic gauche = lancer le chantier | Clic droit = annuler";
 
     public bool TryBeginPreview(string blueprintId, Vector3 originPosition, Quaternion initialRotation, out string failureReason)
     {
@@ -101,9 +104,9 @@ public sealed class ConstructionPlacementPreviewService
         RefreshPreview(out _);
     }
 
-    public bool TryConfirmPreview(out int placedPieceCount, out string failureReason)
+    public bool TryConfirmPreview(out ConstructionProjectData project, out string failureReason)
     {
-        placedPieceCount = 0;
+        project = new ConstructionProjectData();
 
         if (_activeBlueprint == null)
         {
@@ -119,19 +122,14 @@ public sealed class ConstructionPlacementPreviewService
             return false;
         }
 
-        var success = _constructionPlacementService.TryPlaceBlueprintInstantly(
+        project = _constructionProjectService.CreateProject(
             _activeBlueprint,
             _originPosition,
-            GetCurrentRotation(),
-            out placedPieceCount,
-            out failureReason);
+            GetCurrentRotation());
 
-        if (success)
-        {
-            CancelPreview();
-        }
-
-        return success;
+        CancelPreview();
+        failureReason = string.Empty;
+        return true;
     }
 
     public void CancelPreview()

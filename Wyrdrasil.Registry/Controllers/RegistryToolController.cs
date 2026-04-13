@@ -202,9 +202,10 @@ public sealed class RegistryToolController
 
         if (Input.GetMouseButtonDown(0))
         {
-            if (previewService.TryConfirmPreview(out var placedPieceCount, out var failureReason))
+            if (previewService.TryConfirmPreview(out var project, out var failureReason))
             {
-                _actionContext.Log.LogInfo($"Confirmed construction placement preview. Placed {placedPieceCount} pieces.");
+                _actionContext.ConstructionDebugSessionService.SetLatestProjectId(project.Id);
+                _actionContext.Log.LogInfo($"Confirmed construction placement preview. Created construction project {project.Id} with {project.Progress.TotalPieceCount} pieces and {project.WorkPosts.Count} work posts.");
                 _persistenceService.SaveWorldState();
             }
             else

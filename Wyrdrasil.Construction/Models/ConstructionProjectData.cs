@@ -10,6 +10,7 @@ public sealed class ConstructionProjectData
     public Vector3 OriginPosition { get; set; }
     public Quaternion OriginRotation { get; set; }
     public ConstructionProjectState State { get; set; }
-    public List<ConstructionPieceProgressData> PieceProgress { get; set; } = new();
+    public ConstructionProjectProgressData Progress { get; set; } = new();
+    public List<ConstructionWorkPostData> WorkPosts { get; set; } = new();
     public List<MaterialLedgerEntryData> MaterialLedger { get; set; } = new();
 }

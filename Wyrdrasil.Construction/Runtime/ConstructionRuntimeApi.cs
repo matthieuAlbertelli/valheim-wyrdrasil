@@ -1,6 +1,5 @@
-using UnityEngine;
-using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Diagnostics;
+using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Services;
 
 namespace Wyrdrasil.Construction.Runtime;
@@ -19,7 +18,7 @@ public sealed class ConstructionRuntimeApi : IConstructionRuntimeApi
     public bool TryClaimWorkItem(int residentId, out ConstructionWorkTarget target)
     {
         target = new ConstructionWorkTarget();
-        _debugLogService.Verbose("Runtime", $"Resident {residentId} requested a construction work item, but claiming is not implemented yet.");
+        _debugLogService.Verbose("Runtime", $"Resident {residentId} requested a construction work item, but runtime claiming is not implemented yet.");
         return false;
     }
 
@@ -30,13 +29,15 @@ public sealed class ConstructionRuntimeApi : IConstructionRuntimeApi
 
     public bool TryContributeWork(int residentId, int projectId, int pieceId, float workAmount)
     {
-        if (!_constructionProjectService.TryAdvancePieceWork(projectId, pieceId, workAmount))
+        var success = _constructionProjectService.TryAddAccumulatedPieceWork(projectId, workAmount, out _);
+        if (success)
         {
-            return false;
+            _debugLogService.Verbose(
+                "Runtime",
+                $"Resident {residentId} contributed {workAmount:0.##} aggregate work to construction project {projectId}.");
         }
 
-        _debugLogService.Verbose("Runtime", $"Resident {residentId} contributed {workAmount:0.##} work to project {projectId}, piece {pieceId}.");
-        return true;
+        return success;
     }
 
     public bool IsProjectActive(int projectId) => _constructionProjectService.IsProjectActive(projectId);
