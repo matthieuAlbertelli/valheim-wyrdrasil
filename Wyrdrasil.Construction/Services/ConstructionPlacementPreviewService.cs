@@ -24,8 +24,8 @@ public sealed class ConstructionPlacementPreviewService
         }
     }
 
-    private static readonly Color ValidColor = new Color(0.2f, 1f, 0.35f, 0.18f);
-    private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.18f);
+    private static readonly Color ValidColor = new Color(0.2f, 1f, 0.35f, 0.30f);
+    private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.30f);
     private const float RotationStepDegrees = 45f;
     private const float VerticalOffsetStep = 0.5f;
 
@@ -34,6 +34,9 @@ public sealed class ConstructionPlacementPreviewService
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionDebugLogService _debugLogService;
     private readonly List<PreviewPiece> _previewPieces = new();
+
+    private Material? _validGhostMaterial;
+    private Material? _invalidGhostMaterial;
 
     private StructureBlueprintData? _activeBlueprint;
     private Vector3 _anchorPosition;
@@ -158,6 +161,7 @@ public sealed class ConstructionPlacementPreviewService
         }
 
         _previewPieces.Clear();
+        DestroyGhostMaterials();
         _activeBlueprint = null;
         _anchorPosition = Vector3.zero;
         _verticalOffset = 0f;
@@ -337,6 +341,7 @@ public sealed class ConstructionPlacementPreviewService
 
     private void ApplyPreviewColor(Color color)
     {
+        var ghostMaterial = GetGhostMaterial(color);
         foreach (var previewPiece in _previewPieces)
         {
             foreach (var renderer in previewPiece.Renderers)
@@ -353,17 +358,59 @@ public sealed class ConstructionPlacementPreviewService
                 {
                     lineRenderer.startColor = color;
                     lineRenderer.endColor = color;
-                }
-
-                var material = renderer.material;
-                if (material == null)
-                {
                     continue;
                 }
 
-                ConfigureGhostMaterial(material, color);
+                var slotCount = renderer.sharedMaterials != null && renderer.sharedMaterials.Length > 0
+                    ? renderer.sharedMaterials.Length
+                    : 1;
+                var replacementMaterials = new Material[slotCount];
+                for (var index = 0; index < slotCount; index++)
+                {
+                    replacementMaterials[index] = ghostMaterial;
+                }
+
+                renderer.sharedMaterials = replacementMaterials;
             }
         }
+    }
+
+    private Material GetGhostMaterial(Color color)
+    {
+        if (ApproximatelySameColor(color, ValidColor))
+        {
+            return _validGhostMaterial ??= CreateGhostMaterial(color);
+        }
+
+        return _invalidGhostMaterial ??= CreateGhostMaterial(color);
+    }
+
+    private static bool ApproximatelySameColor(Color left, Color right)
+    {
+        return Mathf.Abs(left.r - right.r) <= 0.0001f &&
+               Mathf.Abs(left.g - right.g) <= 0.0001f &&
+               Mathf.Abs(left.b - right.b) <= 0.0001f &&
+               Mathf.Abs(left.a - right.a) <= 0.0001f;
+    }
+
+    private static Material CreateGhostMaterial(Color color)
+    {
+        var shader = Shader.Find("Standard") ??
+                     Shader.Find("Legacy Shaders/Transparent/Diffuse") ??
+                     Shader.Find("Unlit/Color") ??
+                     Shader.Find("Sprites/Default");
+        if (shader == null)
+        {
+            throw new System.InvalidOperationException("Unable to find a shader for construction ghost preview.");
+        }
+
+        var material = new Material(shader)
+        {
+            name = $"Wyrdrasil_ConstructionGhost_{color.r:0.00}_{color.g:0.00}_{color.b:0.00}_{color.a:0.00}"
+        };
+
+        ConfigureGhostMaterial(material, color);
+        return material;
     }
 
     private static void ConfigureGhostMaterial(Material material, Color color)
@@ -373,19 +420,24 @@ public sealed class ConstructionPlacementPreviewService
             material.color = color;
         }
 
-        if (material.HasProperty("_EmissionColor"))
+        if (material.HasProperty("_BaseColor"))
         {
-            material.SetColor("_EmissionColor", new Color(color.r * 0.15f, color.g * 0.15f, color.b * 0.15f, color.a));
+            material.SetColor("_BaseColor", color);
         }
 
-        if (material.HasProperty("_Surface"))
+        if (material.HasProperty("_EmissionColor"))
         {
-            material.SetFloat("_Surface", 1f);
+            material.SetColor("_EmissionColor", new Color(color.r * 0.10f, color.g * 0.10f, color.b * 0.10f, 1f));
         }
 
         if (material.HasProperty("_Mode"))
         {
             material.SetFloat("_Mode", 3f);
+        }
+
+        if (material.HasProperty("_Surface"))
+        {
+            material.SetFloat("_Surface", 1f);
         }
 
         if (material.HasProperty("_SrcBlend"))
@@ -407,6 +459,22 @@ public sealed class ConstructionPlacementPreviewService
         material.EnableKeyword("_ALPHABLEND_ON");
         material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
         material.renderQueue = (int)RenderQueue.Transparent;
+    }
+
+
+    private void DestroyGhostMaterials()
+    {
+        if (_validGhostMaterial != null)
+        {
+            Object.Destroy(_validGhostMaterial);
+            _validGhostMaterial = null;
+        }
+
+        if (_invalidGhostMaterial != null)
+        {
+            Object.Destroy(_invalidGhostMaterial);
+            _invalidGhostMaterial = null;
+        }
     }
 
     private Vector3 GetCurrentOriginPosition()
