@@ -81,10 +81,22 @@ public sealed class ConstructionProjectCleanupService
             }
 
             destroyedRootIds.Add(instanceId);
-            Object.Destroy(root);
+            DestroyPersistedPiece(root);
             destroyedCount++;
         }
 
         return destroyedCount;
+    }
+
+    private static void DestroyPersistedPiece(GameObject root)
+    {
+        var zNetView = root.GetComponent<ZNetView>() ?? root.GetComponentInParent<ZNetView>();
+        if (zNetView != null && zNetView.IsValid() && ZNetScene.instance != null)
+        {
+            ZNetScene.instance.Destroy(root);
+            return;
+        }
+
+        Object.Destroy(root);
     }
 }
