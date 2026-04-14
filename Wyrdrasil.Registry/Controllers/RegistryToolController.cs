@@ -190,7 +190,14 @@ public sealed class RegistryToolController
         var scrollDelta = Input.mouseScrollDelta.y;
         if (Mathf.Abs(scrollDelta) > 0.01f)
         {
-            previewService.RotatePreview(scrollDelta);
+            if (Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift))
+            {
+                previewService.AdjustPreviewHeight(scrollDelta);
+            }
+            else
+            {
+                previewService.RotatePreview(scrollDelta);
+            }
         }
 
         if (Input.GetMouseButtonDown(1))

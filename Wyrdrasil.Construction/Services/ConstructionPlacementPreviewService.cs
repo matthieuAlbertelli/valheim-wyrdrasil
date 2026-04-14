@@ -26,6 +26,7 @@ public sealed class ConstructionPlacementPreviewService
     private static readonly Color ValidColor = new Color(0.2f, 1f, 0.35f, 0.55f);
     private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.55f);
     private const float RotationStepDegrees = 45f;
+    private const float VerticalOffsetStep = 0.5f;
 
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
@@ -34,7 +35,8 @@ public sealed class ConstructionPlacementPreviewService
     private readonly List<PreviewPiece> _previewPieces = new();
 
     private StructureBlueprintData? _activeBlueprint;
-    private Vector3 _originPosition;
+    private Vector3 _anchorPosition;
+    private float _verticalOffset;
     private int _rotationStepIndex;
     private bool _isPlacementValid;
     private string _validationMessage = "No active construction preview.";
@@ -55,8 +57,8 @@ public sealed class ConstructionPlacementPreviewService
     public string ActiveBlueprintId => _activeBlueprint?.Id ?? string.Empty;
     public string StatusLabel => !IsPreviewActive
         ? "Construction preview inactive."
-        : $"Construction preview: {ActiveBlueprintId} | Valid: {(_isPlacementValid ? "Yes" : "No")} | {_validationMessage}";
-    public string ControlsLabel => "Construction preview: Molette = pivoter | Clic gauche = lancer le chantier | Clic droit = annuler";
+        : $"Construction preview: {ActiveBlueprintId} | Valid: {(_isPlacementValid ? "Yes" : "No")} | Y Offset: {_verticalOffset:0.00} | {_validationMessage}";
+    public string ControlsLabel => "Construction preview: Molette = pivoter | Shift + Molette = élever/enfoncer | Clic gauche = lancer le chantier | Clic droit = annuler";
 
     public bool TryBeginPreview(string blueprintId, Vector3 originPosition, Quaternion initialRotation, out string failureReason)
     {
@@ -69,7 +71,8 @@ public sealed class ConstructionPlacementPreviewService
         }
 
         _activeBlueprint = blueprint;
-        _originPosition = originPosition;
+        _anchorPosition = originPosition;
+        _verticalOffset = 0f;
         _rotationStepIndex = Mathf.RoundToInt(initialRotation.eulerAngles.y / RotationStepDegrees);
 
         if (!RefreshPreview(out failureReason))
@@ -89,7 +92,18 @@ public sealed class ConstructionPlacementPreviewService
             return;
         }
 
-        _originPosition = originPosition;
+        _anchorPosition = originPosition;
+        RefreshPreview(out _);
+    }
+
+    public void AdjustPreviewHeight(float scrollDelta)
+    {
+        if (!IsPreviewActive || Mathf.Abs(scrollDelta) < 0.01f)
+        {
+            return;
+        }
+
+        _verticalOffset += scrollDelta > 0f ? VerticalOffsetStep : -VerticalOffsetStep;
         RefreshPreview(out _);
     }
 
@@ -124,7 +138,7 @@ public sealed class ConstructionPlacementPreviewService
 
         project = _constructionProjectService.CreateProject(
             _activeBlueprint,
-            _originPosition,
+            GetCurrentOriginPosition(),
             GetCurrentRotation());
 
         CancelPreview();
@@ -144,7 +158,8 @@ public sealed class ConstructionPlacementPreviewService
 
         _previewPieces.Clear();
         _activeBlueprint = null;
-        _originPosition = Vector3.zero;
+        _anchorPosition = Vector3.zero;
+        _verticalOffset = 0f;
         _rotationStepIndex = 0;
         _isPlacementValid = false;
         _validationMessage = "No active construction preview.";
@@ -162,7 +177,7 @@ public sealed class ConstructionPlacementPreviewService
 
         if (!_constructionPlacementService.TryResolveBlueprintPlacements(
                 _activeBlueprint,
-                _originPosition,
+                GetCurrentOriginPosition(),
                 GetCurrentRotation(),
                 out var placements,
                 out failureReason))
@@ -343,6 +358,11 @@ public sealed class ConstructionPlacementPreviewService
                 }
             }
         }
+    }
+
+    private Vector3 GetCurrentOriginPosition()
+    {
+        return _anchorPosition + (Vector3.up * _verticalOffset);
     }
 
     private Quaternion GetCurrentRotation()
