@@ -38,6 +38,7 @@ public class Plugin : BaseUnityPlugin
     private ConstructionProjectProgressService _constructionProjectProgressService = null!;
     private ConstructionProjectMarkerService _constructionProjectMarkerService = null!;
     private ConstructionProjectService _constructionProjectService = null!;
+    private ConstructionLinkVisualService _constructionLinkVisualService = null!;
     private Harmony? _harmony;
 
     private void Awake()
@@ -254,6 +255,11 @@ public class Plugin : BaseUnityPlugin
         var selectionService = new ToolSelectionService(modeService.State);
         var constructionDebugSessionService = new ConstructionDebugSessionService();
         var actionRegistry = BuildActionRegistry();
+        _constructionLinkVisualService = new ConstructionLinkVisualService(
+            constructionBootstrap.ConstructionProjectService,
+            constructionBootstrap.ConstructionProjectMarkerService,
+            craftStationService,
+            residentRuntimeService);
 
         var context = new RegistryContext(
             Logger,
@@ -294,6 +300,7 @@ public class Plugin : BaseUnityPlugin
             residentService,
             _worldClockService,
             craftStationAnchorEditorService,
+            _constructionLinkVisualService,
             hudRenderer);
 
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
@@ -358,6 +365,7 @@ public class Plugin : BaseUnityPlugin
         _constructionProjectMarkerService.Update();
         _constructionProjectService.PruneCompletedProjects();
         _registryToolController.Update();
+        _constructionLinkVisualService.Update();
     }
 
     private void OnGUI()
@@ -368,6 +376,7 @@ public class Plugin : BaseUnityPlugin
     private void OnDestroy()
     {
         _constructionProjectMarkerService?.Reset();
+        _constructionLinkVisualService?.Reset();
         _persistenceService?.SaveWorldState();
         _harmony?.UnpatchSelf();
     }

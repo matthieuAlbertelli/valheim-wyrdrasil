@@ -28,6 +28,7 @@ public sealed class RegistryToolController
     private readonly RegistryResidentService _residentService;
     private readonly WorldClockService _worldClockService;
     private readonly CraftStationAnchorEditorService _craftStationAnchorEditorService;
+    private readonly ConstructionLinkVisualService _constructionLinkVisualService;
     private readonly RegistryHudRenderer _hudRenderer;
 
     public RegistryToolController(
@@ -45,6 +46,7 @@ public sealed class RegistryToolController
         RegistryResidentService residentService,
         WorldClockService worldClockService,
         CraftStationAnchorEditorService craftStationAnchorEditorService,
+        ConstructionLinkVisualService constructionLinkVisualService,
         RegistryHudRenderer hudRenderer)
     {
         _modeService = modeService;
@@ -61,6 +63,7 @@ public sealed class RegistryToolController
         _residentService = residentService;
         _worldClockService = worldClockService;
         _craftStationAnchorEditorService = craftStationAnchorEditorService;
+        _constructionLinkVisualService = constructionLinkVisualService;
         _hudRenderer = hudRenderer;
     }
 
@@ -317,6 +320,8 @@ public sealed class RegistryToolController
         _actionContext.ConstructionProjectMarkerService.SetHoveredProject(null);
         _craftStationService.SetPendingConstructionTarget(null);
         _residentService.SetPendingConstructionAssignmentResidentVisual(null);
+        _constructionLinkVisualService.SetHoveredWorkbenchLink(null, null);
+        _constructionLinkVisualService.SetHoveredResidentLink(null, null);
 
         if (selectedAction == RegistryActionType.AssignTargetCraftStationToConstructionProject)
         {
@@ -336,6 +341,7 @@ public sealed class RegistryToolController
                 if (_craftStationService.TryGetCraftStationAtCrosshair(out var craftStation))
                 {
                     _craftStationService.SetPendingConstructionTarget(craftStation.Id);
+                    _constructionLinkVisualService.SetHoveredWorkbenchLink(pendingProjectId, craftStation.Id);
                 }
             }
 
@@ -360,6 +366,7 @@ public sealed class RegistryToolController
                 if (_residentService.TryGetTargetedRegisteredResident(out var resident))
                 {
                     _residentService.SetPendingConstructionAssignmentResidentVisual(resident.Id);
+                    _constructionLinkVisualService.SetHoveredResidentLink(pendingProjectId, resident.Id);
                 }
             }
         }
@@ -370,6 +377,8 @@ public sealed class RegistryToolController
         _actionContext.ConstructionProjectMarkerService.SetHoveredProject(null);
         _craftStationService.SetPendingConstructionTarget(null);
         _residentService.SetPendingConstructionAssignmentResidentVisual(null);
+        _constructionLinkVisualService.SetHoveredWorkbenchLink(null, null);
+        _constructionLinkVisualService.SetHoveredResidentLink(null, null);
         _residentService.SetPendingForceAssignResidentVisual(null);
         _slotService.SetPendingForceAssignTarget(null);
         _seatService.SetPendingForceAssignTarget(null);
