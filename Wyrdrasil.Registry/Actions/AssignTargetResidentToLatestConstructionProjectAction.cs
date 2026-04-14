@@ -20,6 +20,6 @@ public sealed class AssignTargetResidentToLatestConstructionProjectAction : IReg
             return;
         }
 
-        context.Log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project {projectId}, work post #{workPostId}.");
+        context.Log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project {projectId}, workbench binding #{workPostId}.");
     }
 }

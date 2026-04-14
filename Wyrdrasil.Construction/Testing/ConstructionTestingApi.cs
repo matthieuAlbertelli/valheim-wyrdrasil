@@ -2,6 +2,7 @@ using System.Text;
 using Wyrdrasil.Construction.Diagnostics;
 using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Services;
+using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Construction.Testing;
 
@@ -11,6 +12,7 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
     private readonly ConstructionPieceBuildService _constructionPieceBuildService;
+    private readonly ConstructionProjectCleanupService _constructionProjectCleanupService;
     private readonly ConstructionDebugStateService _debugStateService;
     private readonly ConstructionDebugLogService _debugLogService;
 
@@ -19,6 +21,7 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         BlueprintCatalogService blueprintCatalogService,
         ConstructionPlacementService constructionPlacementService,
         ConstructionPieceBuildService constructionPieceBuildService,
+        ConstructionProjectCleanupService constructionProjectCleanupService,
         ConstructionDebugStateService debugStateService,
         ConstructionDebugLogService debugLogService)
     {
@@ -26,6 +29,7 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         _blueprintCatalogService = blueprintCatalogService;
         _constructionPlacementService = constructionPlacementService;
         _constructionPieceBuildService = constructionPieceBuildService;
+        _constructionProjectCleanupService = constructionProjectCleanupService;
         _debugStateService = debugStateService;
         _debugLogService = debugLogService;
     }
@@ -134,10 +138,10 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         builder.AppendLine($"BuiltPieceCount: {project.Progress.BuiltPieceCount}");
         builder.AppendLine($"AccumulatedPieceWork: {project.Progress.AccumulatedPieceWork:0.##}");
         builder.AppendLine($"AssignedWorkerCount: {_constructionProjectService.GetAssignedWorkerCount(project)}");
-        builder.AppendLine("WorkPosts:");
+        builder.AppendLine("WorkbenchBindings:");
         foreach (var workPost in project.WorkPosts)
         {
-            builder.AppendLine($"  WorkPost {workPost.Id}: Pos={workPost.WorldPosition}, Resident={(workPost.AssignedResidentId.HasValue ? workPost.AssignedResidentId.Value.ToString() : "none")}");
+            builder.AppendLine($"  Binding {workPost.Id}: CraftStation={workPost.CraftStationId}, Pos={workPost.WorldPosition}, Resident={(workPost.AssignedResidentId.HasValue ? workPost.AssignedResidentId.Value.ToString() : "none")}");
         }
 
         dump = builder.ToString();
@@ -161,7 +165,7 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
     {
         if (!_constructionProjectService.TryClearResidentAssignment(residentId, out projectId, out workPostId))
         {
-            failureReason = $"Resident #{residentId} has no construction work post assignment.";
+            failureReason = $"Resident #{residentId} has no construction workbench assignment.";
             return false;
         }
 
@@ -175,5 +179,10 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         isEnabled = _debugStateService.Current.VerboseLoggingEnabled;
         _debugLogService.Info("Testing", $"Construction verbose logging {(isEnabled ? "enabled" : "disabled")}.");
         return true;
+    }
+
+    public bool TryDeleteConstructionInZone(FunctionalZoneData zone, out int deletedProjectCount, out int destroyedPieceCount, out string failureReason)
+    {
+        return _constructionProjectCleanupService.TryDeleteProjectsInZone(zone, out deletedProjectCount, out destroyedPieceCount, out failureReason);
     }
 }

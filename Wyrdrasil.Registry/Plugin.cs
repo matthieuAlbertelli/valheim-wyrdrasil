@@ -45,8 +45,6 @@ public class Plugin : BaseUnityPlugin
         RegistryModuleBootstrap.ApplyHarmony(_harmony);
         RoutinesModuleBootstrap.ApplyHarmony(_harmony);
 
-        var constructionBootstrap = ConstructionModuleBootstrap.Create(Logger);
-        _constructionProjectProgressService = constructionBootstrap.ConstructionProjectProgressService;
         var modeService = new RegistryModeService(Logger);
         var buildingService = new BuildingService(Logger);
         var anchorPolicyService = new ZonePlacementPolicyService();
@@ -56,6 +54,8 @@ public class Plugin : BaseUnityPlugin
         var seatService = new SeatService(Logger, modeService, zoneService, anchorPolicyService);
         var bedService = new BedService(Logger, modeService, zoneService, anchorPolicyService);
         var craftStationService = new CraftStationService(Logger, modeService, zoneService);
+        var constructionBootstrap = ConstructionModuleBootstrap.Create(Logger, craftStationService);
+        _constructionProjectProgressService = constructionBootstrap.ConstructionProjectProgressService;
 
         var appearanceCatalog = new NpcAppearanceCatalog();
         var equipmentCatalog = new NpcEquipmentCatalog();
@@ -101,7 +101,7 @@ public class Plugin : BaseUnityPlugin
         occupationTargetCatalog.Register(new SeatOccupationTargetSource(seatService));
         occupationTargetCatalog.Register(new BedOccupationTargetSource(bedService));
         occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(craftStationService, anchorOccupationPlanBuilder));
-        occupationTargetCatalog.Register(new ConstructionWorkPostOccupationTargetSource(constructionBootstrap.RuntimeApi, anchorOccupationPlanBuilder));
+        occupationTargetCatalog.Register(new ConstructionWorkPostOccupationTargetSource(constructionBootstrap.RuntimeApi, craftStationService, anchorOccupationPlanBuilder));
 
         var occupationClaimRegistry = new OccupationClaimRegistry();
         occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(seatService, occupationTargetCatalog));
@@ -331,6 +331,7 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new DumpLatestConstructionProjectStateAction());
         registry.Register(new AssignTargetResidentToLatestConstructionProjectAction());
         registry.Register(new ClearTargetResidentConstructionAssignmentAction());
+        registry.Register(new DeleteConstructionInTargetZoneAction());
         registry.Register(new ForceCompleteLatestConstructionProjectAction());
         registry.Register(new ResetLatestConstructionProjectAction());
         registry.Register(new ToggleConstructionVerboseLoggingAction());

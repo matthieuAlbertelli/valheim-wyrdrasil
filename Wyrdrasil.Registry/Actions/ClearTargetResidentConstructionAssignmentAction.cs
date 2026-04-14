@@ -14,6 +14,6 @@ public sealed class ClearTargetResidentConstructionAssignmentAction : IRegistryA
             return;
         }
 
-        context.Log.LogInfo($"Cleared construction assignment for resident #{resident.Id} ('{resident.DisplayName}') from construction project {projectId}, work post #{workPostId}.");
+        context.Log.LogInfo($"Cleared construction assignment for resident #{resident.Id} ('{resident.DisplayName}') from construction project {projectId}, workbench binding #{workPostId}.");
     }
 }

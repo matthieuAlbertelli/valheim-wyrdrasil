@@ -17,7 +17,8 @@ public sealed class OccupationExecutionProfile
     public const string BedStrategyId = "bed";
     public const string ApproachNavigationStrategyId = "approach";
     public const string AnchoredStandLifecycleStrategyId = "anchored-stand.lifecycle";
-    public const string CraftStationLifecycleStrategyId = "craftstation.lifecycle";
+    public const string WorkbenchLifecycleStrategyId = "workbench.lifecycle";
+    public const string CraftStationLifecycleStrategyId = WorkbenchLifecycleStrategyId;
     public const string CraftStationSustainStrategyId = "craftstation.sustain";
     public const string ConstructionWorkSustainStrategyId = "construction.work";
 
@@ -75,18 +76,23 @@ public sealed class OccupationExecutionProfile
         return new OccupationExecutionProfile(BedStrategyId, BedStrategyId, BedStrategyId, OccupationExecutionKind.Bed, bedComponent: bedComponent, attachPoint: attachPoint);
     }
 
-    public static OccupationExecutionProfile CraftStation(Interactable? interactable)
+    public static OccupationExecutionProfile Workbench(string sustainStrategyId, Interactable? interactable)
     {
         return new OccupationExecutionProfile(
             ApproachNavigationStrategyId,
-            CraftStationLifecycleStrategyId,
-            CraftStationSustainStrategyId,
+            WorkbenchLifecycleStrategyId,
+            sustainStrategyId,
             OccupationExecutionKind.CraftStation,
             interactable: interactable);
     }
 
-    public static OccupationExecutionProfile ConstructionWork()
+    public static OccupationExecutionProfile CraftStation(Interactable? interactable)
     {
-        return AnchoredStand(ConstructionWorkSustainStrategyId);
+        return Workbench(CraftStationSustainStrategyId, interactable);
+    }
+
+    public static OccupationExecutionProfile ConstructionWork(Interactable? interactable)
+    {
+        return Workbench(ConstructionWorkSustainStrategyId, interactable);
     }
 }

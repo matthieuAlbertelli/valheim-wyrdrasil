@@ -89,10 +89,7 @@ public sealed class AnchoredStandOccupationLifecycleStrategy : IOccupationLifecy
             controller.Disengage();
         }
 
-        if (character is WyrdrasilVikingNpc viking)
-        {
-            viking.TryExitWorkbenchPose();
-        }
+        WorkbenchPoseRuntime.EnsureExited(character);
 
         if (character.TryGetComponent<WyrdrasilVikingNpcAI>(out var ai))
         {

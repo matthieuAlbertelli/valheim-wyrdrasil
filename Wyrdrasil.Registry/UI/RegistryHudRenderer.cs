@@ -85,7 +85,7 @@ public sealed class RegistryHudRenderer
 
         if (state.SelectedCategory == RegistryCategory.Construction)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : capturer un blueprint, lancer une preview, puis confirmer pour créer un vrai chantier avec posts de travail externes.", _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : capturer un blueprint, lancer une preview, puis confirmer pour créer un vrai chantier qui réclame ensuite des workbenches réels à proximité.", _hintStyle!);
             nextLineY += 24f;
         }
 
@@ -99,7 +99,7 @@ public sealed class RegistryHudRenderer
 
         if (state.SelectedCategory == RegistryCategory.Diagnostics)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Diagnostics : inspection IA, édition anchor craft, simulation temps et flush registre.", _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Diagnostics : inspection IA, édition anchor craft, simulation temps, suppression de construction ciblée et flush registre.", _hintStyle!);
             nextLineY += 24f;
         }
 
@@ -111,7 +111,7 @@ public sealed class RegistryHudRenderer
             nextLineY += 24f;
         }
 
-        GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Astuce Construction : vise un PNJ enregistré, puis utilise l'action d'assignation chantier pour l'envoyer sur le dernier projet créé.", _hintStyle!);
+        GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Astuce Construction : vise un PNJ enregistré, puis utilise l'action d'assignation chantier pour le lier au dernier projet créé via un workbench enregistré à proximité.", _hintStyle!);
         nextLineY += 24f;
         GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Astuce : avec 'Force assign', vise d'abord un PNJ enregistré, puis vise un slot, un siège, un lit ou un poste d'artisanat.", _hintStyle!);
         nextLineY += 24f;
@@ -175,6 +175,7 @@ public sealed class RegistryHudRenderer
         RegistryActionType.DumpLatestConstructionProjectState => "Construction : dump du dernier projet",
         RegistryActionType.AssignTargetResidentToLatestConstructionProject => "Construction : assigner le PNJ visé au dernier chantier",
         RegistryActionType.ClearTargetResidentConstructionAssignment => "Construction : retirer le PNJ visé de son chantier",
+        RegistryActionType.DeleteConstructionInTargetZone => "Diagnostic : supprimer les constructions de la zone visée",
         RegistryActionType.ForceCompleteLatestConstructionProject => "Construction : compléter le dernier projet",
         RegistryActionType.ResetLatestConstructionProject => "Construction : reset du dernier projet",
         RegistryActionType.ToggleConstructionVerboseLogging => "Construction : basculer logs verbeux",

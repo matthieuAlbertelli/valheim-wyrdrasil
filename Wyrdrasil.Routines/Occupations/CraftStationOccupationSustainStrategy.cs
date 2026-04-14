@@ -25,19 +25,13 @@ public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainSt
             return OccupationSustainResult.Abort;
         }
 
-        if (character is WyrdrasilVikingNpc viking && !viking.IsInWorkbenchPose())
-        {
-            _ = viking.TryEnterWorkbenchPose();
-        }
+        WorkbenchPoseRuntime.EnsureEntered(character);
 
         return OccupationSustainResult.Continue;
     }
 
     public void Release(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationSession session)
     {
-        if (character is WyrdrasilVikingNpc viking)
-        {
-            viking.TryExitWorkbenchPose();
-        }
+        WorkbenchPoseRuntime.EnsureExited(character);
     }
 }

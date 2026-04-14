@@ -34,10 +34,7 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         GetOrCreateEngagedPoseController(character).Disengage();
         ExitTravelLock(character);
 
-        if (character is WyrdrasilVikingNpc viking)
-        {
-            viking.TryExitWorkbenchPose();
-        }
+        WorkbenchPoseRuntime.EnsureExited(character);
 
         if (executionService.IsNearApproachPosition(character, target, target.Plan.NavigationStopDistance + ApproachArrivalTolerance))
         {
@@ -77,10 +74,7 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         GetOrCreateEngagedPoseController(character).Disengage();
         ExitTravelLock(character);
 
-        if (character is WyrdrasilVikingNpc viking)
-        {
-            viking.TryExitWorkbenchPose();
-        }
+        WorkbenchPoseRuntime.EnsureExited(character);
     }
 
     private OccupationPhase ContinueTravel(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target)
@@ -129,7 +123,7 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
         if (!posePendingState.PoseRequested)
         {
             posePendingState.PoseRequested = true;
-            _ = viking.TryEnterWorkbenchPose();
+            WorkbenchPoseRuntime.EnsureEntered(character);
             WyrdrasilOccupationDebug.LogCraftStation(character, "EnterPose request sent");
         }
 

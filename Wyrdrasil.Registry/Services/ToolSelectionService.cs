@@ -63,6 +63,7 @@ public sealed class ToolSelectionService
         RegistryActionType.SimulateNoon,
         RegistryActionType.SimulateNight,
         RegistryActionType.ClearTimeSimulation,
+        RegistryActionType.DeleteConstructionInTargetZone,
         RegistryActionType.SpawnTestConstructionProject,
         RegistryActionType.DumpLatestConstructionProjectState,
         RegistryActionType.AssignTargetResidentToLatestConstructionProject,

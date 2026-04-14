@@ -1,3 +1,5 @@
+using Wyrdrasil.Settlements.Tool;
+
 using Wyrdrasil.Construction.Models;
 
 namespace Wyrdrasil.Construction.Testing;
@@ -13,4 +15,5 @@ public interface IConstructionTestingApi
     bool TryAssignResidentToProject(int residentId, int projectId, out int workPostId, out string failureReason);
     bool TryClearResidentProjectAssignment(int residentId, out int projectId, out int workPostId, out string failureReason);
     bool ToggleVerboseLogging(out bool isEnabled);
+    bool TryDeleteConstructionInZone(FunctionalZoneData zone, out int deletedProjectCount, out int destroyedPieceCount, out string failureReason);
 }

@@ -277,18 +277,18 @@ public sealed class ResidentAssignmentService
 
     public bool TryAssignToConstructionProject(RegisteredNpcData resident, int projectId, out int workPostId, out string failureReason)
     {
-        if (!_constructionRuntimeApi.TryAssignResidentToProject(resident.Id, projectId, out var workPost, out failureReason))
-        {
-            workPostId = 0;
-            return false;
-        }
-
         _slotService.ClearAssignmentForResident(resident.Id);
         _craftStationService.ClearAssignmentForResident(resident.Id);
         _occupationService.ReleaseOccupation(resident, detachIfAttached: false);
         ClearWorkAssignment(resident, clearRole: true, clearConstructionRuntime: false);
         _visualService.UpdateMarker(resident);
         DetachResidentIfBound(resident);
+
+        if (!_constructionRuntimeApi.TryAssignResidentToProject(resident.Id, projectId, out var workPost, out failureReason))
+        {
+            workPostId = 0;
+            return false;
+        }
 
         resident.AssignConstructionWorkPost(workPost.Id);
         _scheduleService.ApplyDefaultConstructionWorkSchedule(resident);
@@ -345,12 +345,47 @@ public sealed class ResidentAssignmentService
         }
     }
 
+    public int ClearStaleConstructionAssignments()
+    {
+        var clearedCount = 0;
+        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate => candidate.AssignedConstructionWorkPostId.HasValue))
+        {
+            var workPostId = resident.AssignedConstructionWorkPostId!.Value;
+            if (_constructionRuntimeApi.TryGetWorkPost(workPostId, out _))
+            {
+                continue;
+            }
+
+            _occupationService.ReleaseOccupation(resident, detachIfAttached: false);
+            ClearWorkAssignment(resident, clearRole: false, clearConstructionRuntime: false);
+            _visualService.UpdateMarker(resident);
+            clearedCount++;
+        }
+
+        return clearedCount;
+    }
+
     public void HandleDeletedCraftStation(int craftStationId)
     {
         foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
                      HasAssignmentTarget(candidate, ResidentAssignmentPurpose.Work, OccupationTargetKind.CraftStation, craftStationId)))
         {
             _occupationService.ReleaseOccupation(resident);
+            ClearWorkAssignment(resident, clearRole: false);
+            _visualService.UpdateMarker(resident);
+        }
+
+        foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
+                     HasAssignmentTarget(candidate, ResidentAssignmentPurpose.Work, OccupationTargetKind.ConstructionWorkPost, candidate.AssignedConstructionWorkPostId ?? 0)))
+        {
+            if (!resident.AssignedConstructionWorkPostId.HasValue ||
+                !_constructionRuntimeApi.TryGetWorkPost(resident.AssignedConstructionWorkPostId.Value, out var workPost) ||
+                workPost.CraftStationId != craftStationId)
+            {
+                continue;
+            }
+
+            _occupationService.ReleaseOccupation(resident, detachIfAttached: false);
             ClearWorkAssignment(resident, clearRole: false);
             _visualService.UpdateMarker(resident);
         }

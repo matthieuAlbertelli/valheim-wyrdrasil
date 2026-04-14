@@ -101,6 +101,11 @@ public sealed class RegistryResidentService
         _presenceService.RestoreResidentsAfterLoad();
     }
 
+    public int ClearStaleConstructionAssignments()
+    {
+        return _assignmentService.ClearStaleConstructionAssignments();
+    }
+
     public void ClearAllResidents()
     {
         foreach (var resident in _catalogService.RegisteredNpcs)

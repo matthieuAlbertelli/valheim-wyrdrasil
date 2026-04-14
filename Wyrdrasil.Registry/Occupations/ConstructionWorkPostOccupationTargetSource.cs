@@ -2,6 +2,7 @@ using UnityEngine;
 using Wyrdrasil.Construction.Runtime;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Routines.Occupations;
+using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Registry.Occupations;
@@ -9,13 +10,16 @@ namespace Wyrdrasil.Registry.Occupations;
 public sealed class ConstructionWorkPostOccupationTargetSource : IOccupationTargetSource
 {
     private readonly IConstructionRuntimeApi _constructionRuntimeApi;
+    private readonly CraftStationService _craftStationService;
     private readonly AnchorOccupationPlanBuilder _planBuilder;
 
     public ConstructionWorkPostOccupationTargetSource(
         IConstructionRuntimeApi constructionRuntimeApi,
+        CraftStationService craftStationService,
         AnchorOccupationPlanBuilder planBuilder)
     {
         _constructionRuntimeApi = constructionRuntimeApi;
+        _craftStationService = craftStationService;
         _planBuilder = planBuilder;
     }
 
@@ -24,16 +28,21 @@ public sealed class ConstructionWorkPostOccupationTargetSource : IOccupationTarg
     public bool TryResolve(OccupationTargetRef targetRef, out OccupationTarget target)
     {
         if (targetRef.TargetKind != TargetKind ||
-            !_constructionRuntimeApi.TryGetWorkPost(targetRef.TargetId, out var workPost))
+            !_constructionRuntimeApi.TryGetWorkPost(targetRef.TargetId, out var workPost) ||
+            workPost.CraftStationId <= 0 ||
+            !_craftStationService.TryGetCraftStationById(workPost.CraftStationId, out var craftStation) ||
+            !craftStation.TryResolveWorldAnchor(out var anchorWorldPosition, out var anchorWorldForward))
         {
             target = null!;
             return false;
         }
 
-        var profile = CraftStationInteractionProfileRegistry.GetDefaultProfile();
-        var facingDirection = workPost.WorldRotation * Vector3.forward;
+        var profile = _craftStationService.TryGetInteractionProfile(craftStation, out var interactionProfile)
+            ? interactionProfile
+            : CraftStationInteractionProfileRegistry.GetDefaultProfile();
+
         var plan = _planBuilder.BuildPlan(
-            new OccupationAnchorPose(workPost.WorldPosition, facingDirection),
+            new OccupationAnchorPose(anchorWorldPosition, anchorWorldForward),
             profile.ApproachDistance,
             profile.NavigationStopDistance,
             profile.EngageRadius,
@@ -41,11 +50,11 @@ public sealed class ConstructionWorkPostOccupationTargetSource : IOccupationTarg
 
         target = new OccupationTarget(
             new OccupationTargetRef(TargetKind, workPost.Id),
-            $"Construction work post #{workPost.Id}",
+            $"Construction workbench slot #{workPost.Id}",
             0,
             null,
             plan,
-            OccupationExecutionProfile.ConstructionWork());
+            OccupationExecutionProfile.ConstructionWork(craftStation.Interactable));
 
         return true;
     }
