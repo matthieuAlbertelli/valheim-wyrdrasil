@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
+using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 using Wyrdrasil.Construction.Diagnostics;
 using Wyrdrasil.Construction.Models;
@@ -23,8 +24,8 @@ public sealed class ConstructionPlacementPreviewService
         }
     }
 
-    private static readonly Color ValidColor = new Color(0.2f, 1f, 0.35f, 0.55f);
-    private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.55f);
+    private static readonly Color ValidColor = new Color(0.2f, 1f, 0.35f, 0.18f);
+    private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.18f);
     private const float RotationStepDegrees = 45f;
     private const float VerticalOffsetStep = 0.5f;
 
@@ -345,6 +346,9 @@ public sealed class ConstructionPlacementPreviewService
                     continue;
                 }
 
+                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+
                 if (renderer is LineRenderer lineRenderer)
                 {
                     lineRenderer.startColor = color;
@@ -352,12 +356,57 @@ public sealed class ConstructionPlacementPreviewService
                 }
 
                 var material = renderer.material;
-                if (material != null && material.HasProperty("_Color"))
+                if (material == null)
                 {
-                    material.color = color;
+                    continue;
                 }
+
+                ConfigureGhostMaterial(material, color);
             }
         }
+    }
+
+    private static void ConfigureGhostMaterial(Material material, Color color)
+    {
+        if (material.HasProperty("_Color"))
+        {
+            material.color = color;
+        }
+
+        if (material.HasProperty("_EmissionColor"))
+        {
+            material.SetColor("_EmissionColor", new Color(color.r * 0.15f, color.g * 0.15f, color.b * 0.15f, color.a));
+        }
+
+        if (material.HasProperty("_Surface"))
+        {
+            material.SetFloat("_Surface", 1f);
+        }
+
+        if (material.HasProperty("_Mode"))
+        {
+            material.SetFloat("_Mode", 3f);
+        }
+
+        if (material.HasProperty("_SrcBlend"))
+        {
+            material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+        }
+
+        if (material.HasProperty("_DstBlend"))
+        {
+            material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+        }
+
+        if (material.HasProperty("_ZWrite"))
+        {
+            material.SetInt("_ZWrite", 0);
+        }
+
+        material.DisableKeyword("_ALPHATEST_ON");
+        material.EnableKeyword("_ALPHABLEND_ON");
+        material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+        material.renderQueue = (int)RenderQueue.Transparent;
     }
 
     private Vector3 GetCurrentOriginPosition()
