@@ -8,7 +8,7 @@ namespace Wyrdrasil.Routines.Occupations;
 
 public sealed class CraftStationOccupationSustainStrategy : IOccupationSustainStrategy
 {
-    public string StrategyId => OccupationExecutionProfile.CraftStationStrategyId;
+    public string StrategyId => OccupationExecutionProfile.CraftStationSustainStrategyId;
     public float TickIntervalSeconds => 0.25f;
 
     public OccupationSustainResult Sustain(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target, OccupationSession session)

@@ -4,7 +4,6 @@ using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Services;
 
-
 public sealed class ResidentScheduleService
 {
     private const int SleepPriority = 200;
@@ -28,24 +27,31 @@ public sealed class ResidentScheduleService
             });
     }
 
-    public void ApplyDefaultInnkeeperSchedule(RegisteredNpcData resident)
+    public void ApplyDefaultAssignedWorkSchedule(RegisteredNpcData resident)
     {
+        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedSlot);
+        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedCraftStation);
         resident.ReplaceScheduleEntries(
-            ResidentRoutineActivityType.WorkAtAssignedSlot,
+            ResidentRoutineActivityType.WorkAtAssignedTarget,
             new[]
             {
-                new ResidentScheduleEntryData(ResidentRoutineActivityType.WorkAtAssignedSlot, 10 * 60, 22 * 60, WorkPriority)
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.WorkAtAssignedTarget, 10 * 60, 22 * 60, WorkPriority)
             });
+    }
+
+    public void ApplyDefaultInnkeeperSchedule(RegisteredNpcData resident)
+    {
+        ApplyDefaultAssignedWorkSchedule(resident);
     }
 
     public void ApplyDefaultCraftStationWorkSchedule(RegisteredNpcData resident)
     {
-        resident.ReplaceScheduleEntries(
-            ResidentRoutineActivityType.WorkAtAssignedCraftStation,
-            new[]
-            {
-                new ResidentScheduleEntryData(ResidentRoutineActivityType.WorkAtAssignedCraftStation, 10 * 60, 22 * 60, WorkPriority)
-            });
+        ApplyDefaultAssignedWorkSchedule(resident);
+    }
+
+    public void ApplyDefaultConstructionWorkSchedule(RegisteredNpcData resident)
+    {
+        ApplyDefaultAssignedWorkSchedule(resident);
     }
 
     public void ApplyDefaultPublicMealSchedule(RegisteredNpcData resident)
@@ -78,14 +84,26 @@ public sealed class ResidentScheduleService
             });
     }
 
+    public void ClearAssignedWorkSchedule(RegisteredNpcData resident)
+    {
+        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedTarget);
+        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedSlot);
+        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedCraftStation);
+    }
+
     public void ClearSlotSchedule(RegisteredNpcData resident)
     {
-        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedSlot);
+        ClearAssignedWorkSchedule(resident);
     }
 
     public void ClearCraftStationSchedule(RegisteredNpcData resident)
     {
-        resident.RemoveScheduleEntries(ResidentRoutineActivityType.WorkAtAssignedCraftStation);
+        ClearAssignedWorkSchedule(resident);
+    }
+
+    public void ClearConstructionWorkSchedule(RegisteredNpcData resident)
+    {
+        ClearAssignedWorkSchedule(resident);
     }
 
     public void ClearAssignedSeatSchedule(RegisteredNpcData resident)

@@ -1,4 +1,4 @@
-﻿using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Registry.Tool;
 
 namespace Wyrdrasil.Registry.Actions;
 
@@ -14,15 +14,9 @@ public sealed class AssignTargetResidentToLatestConstructionProjectAction : IReg
             return;
         }
 
-        if (!context.ResidentService.TryGetTargetedRegisteredResident(out var resident))
+        if (!context.ResidentService.TryAssignTargetedResidentToConstructionProject(projectId, out var resident, out var workPostId, out var failureReason))
         {
-            context.Log.LogWarning("Aim at a registered resident to assign them to the latest construction project.");
-            return;
-        }
-
-        if (!context.ConstructionTestingApi.TryAssignResidentToProject(resident.Id, projectId, out var workPostId, out var failureReason))
-        {
-            context.Log.LogWarning($"Failed to assign resident #{resident.Id} to construction project {projectId}: {failureReason}");
+            context.Log.LogWarning(failureReason);
             return;
         }
 

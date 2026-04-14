@@ -20,9 +20,9 @@ public sealed class NpcNavigationService
 
     public void NavigateAlongRoute(Character character, IReadOnlyList<UnityEngine.Vector3> routePoints, OccupationTarget target)
     {
-        if (!_strategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var strategy))
+        if (!_strategyRegistry.TryGetStrategy(target.Execution.NavigationStrategyId, out var strategy))
         {
-            _log.LogWarning($"Missing occupation navigation strategy '{target.Execution.StrategyId}' for {target.Reference}. Falling back to direct position navigation.");
+            _log.LogWarning($"Missing occupation navigation strategy '{target.Execution.NavigationStrategyId}' for {target.Reference}. Falling back to direct position navigation.");
             NavigateAlongRouteToPosition(character, routePoints, target.Plan.EngagePosition, 0.3f, target.Plan.FacingDirection);
             return;
         }
@@ -32,9 +32,9 @@ public sealed class NpcNavigationService
 
     public void NavigateDirectly(Character character, OccupationTarget target)
     {
-        if (!_strategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var strategy))
+        if (!_strategyRegistry.TryGetStrategy(target.Execution.NavigationStrategyId, out var strategy))
         {
-            _log.LogWarning($"Missing occupation navigation strategy '{target.Execution.StrategyId}' for {target.Reference}. Falling back to direct position navigation.");
+            _log.LogWarning($"Missing occupation navigation strategy '{target.Execution.NavigationStrategyId}' for {target.Reference}. Falling back to direct position navigation.");
             NavigateDirectlyToPosition(character, target.Plan.EngagePosition, 0.3f, target.Plan.FacingDirection);
             return;
         }
@@ -218,53 +218,19 @@ public sealed class NpcNavigationService
         _log.LogInfo("Assigned resident configured for direct bed fallback.");
     }
 
-    private static void ReleaseLegacyControllers(Character character, bool detachIfAttached)
+    private static WyrdrasilRouteTraversalController EnsureRouteController(Character character)
     {
-        if (detachIfAttached)
+        if (!character.TryGetComponent<WyrdrasilRouteTraversalController>(out var controller))
         {
-            if (character is WyrdrasilVikingNpc viking && viking.IsAttached())
-            {
-                viking.ForceDetachFromCurrentAnchor();
-            }
-            else if (character is Humanoid humanoid && humanoid.IsAttached())
-            {
-                humanoid.AttachStop();
-            }
+            controller = character.gameObject.AddComponent<WyrdrasilRouteTraversalController>();
         }
 
-        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
-        if (vikingAi != null)
-        {
-            vikingAi.ClearSteering();
-            WyrdrasilSeatDebug.Log(character, "Cleared WyrdrasilVikingNpcAI steering state");
-        }
-
-        var slotController = character.GetComponent<WyrdrasilAssignedSlotController>();
-        if (slotController != null)
-        {
-            slotController.ReleaseControl();
-            WyrdrasilSeatDebug.Log(character, "Released WyrdrasilAssignedSlotController");
-        }
-
-        var routeController = character.GetComponent<WyrdrasilRouteTraversalController>();
-        if (routeController != null)
-        {
-            routeController.ReleaseControl();
-            WyrdrasilSeatDebug.Log(character, "Released WyrdrasilRouteTraversalController");
-        }
-
-        var routeFollower = character.GetComponent<WyrdrasilVikingRouteFollower>();
-        if (routeFollower != null)
-        {
-            routeFollower.ReleaseControl();
-            WyrdrasilSeatDebug.Log(character, "Released legacy WyrdrasilVikingRouteFollower");
-        }
+        return controller;
     }
 
     private static WyrdrasilAssignedSlotController EnsureAssignedSlotController(Character character)
     {
-        var controller = character.GetComponent<WyrdrasilAssignedSlotController>();
-        if (!controller)
+        if (!character.TryGetComponent<WyrdrasilAssignedSlotController>(out var controller))
         {
             controller = character.gameObject.AddComponent<WyrdrasilAssignedSlotController>();
         }
@@ -272,14 +238,16 @@ public sealed class NpcNavigationService
         return controller;
     }
 
-    private static WyrdrasilRouteTraversalController EnsureRouteController(Character character)
+    private static void ReleaseLegacyControllers(Character character, bool detachIfAttached)
     {
-        var controller = character.GetComponent<WyrdrasilRouteTraversalController>();
-        if (!controller)
+        if (character.TryGetComponent<WyrdrasilAssignedSlotController>(out var slotController))
         {
-            controller = character.gameObject.AddComponent<WyrdrasilRouteTraversalController>();
+            slotController.ReleaseControl();
         }
 
-        return controller;
+        if (character.TryGetComponent<WyrdrasilRouteTraversalController>(out var routeController))
+        {
+            routeController.ReleaseControl();
+        }
     }
 }

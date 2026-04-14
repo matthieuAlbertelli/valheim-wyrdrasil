@@ -3,7 +3,7 @@ using Wyrdrasil.Routines.Services;
 
 namespace Wyrdrasil.Routines.Occupations;
 
-public sealed class CraftStationOccupationNavigationStrategy : IOccupationNavigationStrategy
+public sealed class ApproachOccupationNavigationStrategy : IOccupationNavigationStrategy
 {
     public string StrategyId => OccupationExecutionProfile.ApproachNavigationStrategyId;
 

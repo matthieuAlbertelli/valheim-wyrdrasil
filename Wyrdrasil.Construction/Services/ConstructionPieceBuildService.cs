@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using Object = UnityEngine.Object;
 using Wyrdrasil.Construction.Diagnostics;
 using Wyrdrasil.Construction.Models;

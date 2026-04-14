@@ -1,4 +1,4 @@
-﻿using System.Linq;
+using System.Linq;
 using Wyrdrasil.Construction.Diagnostics;
 using Wyrdrasil.Construction.Models;
 
@@ -40,13 +40,13 @@ public sealed class ConstructionProjectProgressService
 
         foreach (var project in activeProjects)
         {
-            var assignedWorkerCount = _constructionProjectService.GetAssignedWorkerCount(project);
-            if (assignedWorkerCount <= 0)
+            var activeWorkerCount = _constructionProjectService.GetActiveWorkerCount(project.Id);
+            if (activeWorkerCount <= 0)
             {
                 continue;
             }
 
-            var workAmount = assignedWorkerCount * PieceRatePerWorkerPerGameHour * deltaGameHours;
+            var workAmount = activeWorkerCount * PieceRatePerWorkerPerGameHour * deltaGameHours;
             if (!_constructionProjectService.TryAddAccumulatedPieceWork(project.Id, workAmount, out _))
             {
                 continue;

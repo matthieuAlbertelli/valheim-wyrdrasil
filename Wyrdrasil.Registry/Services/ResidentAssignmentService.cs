@@ -1,4 +1,5 @@
-﻿using System.Linq;
+using System.Linq;
+using Wyrdrasil.Construction.Runtime;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Routines.Services;
@@ -15,6 +16,7 @@ public sealed class ResidentAssignmentService
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
     private readonly CraftStationService _craftStationService;
+    private readonly IConstructionRuntimeApi _constructionRuntimeApi;
     private readonly ResidentRuntimeService _runtimeService;
     private readonly ResidentScheduleService _scheduleService;
     private readonly ResidentOccupationService _occupationService;
@@ -26,6 +28,7 @@ public sealed class ResidentAssignmentService
         SeatService seatService,
         BedService bedService,
         CraftStationService craftStationService,
+        IConstructionRuntimeApi constructionRuntimeApi,
         ResidentRuntimeService runtimeService,
         ResidentScheduleService scheduleService,
         ResidentOccupationService occupationService,
@@ -36,6 +39,7 @@ public sealed class ResidentAssignmentService
         _seatService = seatService;
         _bedService = bedService;
         _craftStationService = craftStationService;
+        _constructionRuntimeApi = constructionRuntimeApi;
         _runtimeService = runtimeService;
         _scheduleService = scheduleService;
         _occupationService = occupationService;
@@ -271,6 +275,44 @@ public sealed class ResidentAssignmentService
         return true;
     }
 
+    public bool TryAssignToConstructionProject(RegisteredNpcData resident, int projectId, out int workPostId, out string failureReason)
+    {
+        if (!_constructionRuntimeApi.TryAssignResidentToProject(resident.Id, projectId, out var workPost, out failureReason))
+        {
+            workPostId = 0;
+            return false;
+        }
+
+        _slotService.ClearAssignmentForResident(resident.Id);
+        _craftStationService.ClearAssignmentForResident(resident.Id);
+        _occupationService.ReleaseOccupation(resident, detachIfAttached: false);
+        ClearWorkAssignment(resident, clearRole: true, clearConstructionRuntime: false);
+        _visualService.UpdateMarker(resident);
+        DetachResidentIfBound(resident);
+
+        resident.AssignConstructionWorkPost(workPost.Id);
+        _scheduleService.ApplyDefaultConstructionWorkSchedule(resident);
+        _visualService.UpdateMarker(resident);
+        workPostId = workPost.Id;
+        return true;
+    }
+
+    public bool TryClearConstructionAssignment(RegisteredNpcData resident, out int projectId, out int workPostId, out string failureReason)
+    {
+        _occupationService.ReleaseOccupation(resident, detachIfAttached: false);
+
+        if (!_constructionRuntimeApi.TryClearResidentAssignment(resident.Id, out projectId, out workPostId))
+        {
+            failureReason = $"Resident #{resident.Id} has no construction work assignment.";
+            return false;
+        }
+
+        ClearWorkAssignment(resident, clearRole: false);
+        _visualService.UpdateMarker(resident);
+        failureReason = string.Empty;
+        return true;
+    }
+
     public void HandleDeletedSlot(int slotId)
     {
         foreach (var resident in _catalogService.RegisteredNpcs.Where(candidate =>
@@ -323,11 +365,17 @@ public sealed class ResidentAssignmentService
         return resident.TryGetAssignedTargetId(purpose, targetKind, out var assignedTargetId) && assignedTargetId == targetId;
     }
 
-    private void ClearWorkAssignment(RegisteredNpcData resident, bool clearRole)
+    private void ClearWorkAssignment(RegisteredNpcData resident, bool clearRole, bool clearConstructionRuntime = true)
     {
         resident.ClearAssignment(ResidentAssignmentPurpose.Work);
         _scheduleService.ClearSlotSchedule(resident);
         _scheduleService.ClearCraftStationSchedule(resident);
+        _scheduleService.ClearConstructionWorkSchedule(resident);
+        if (clearConstructionRuntime)
+        {
+            _constructionRuntimeApi.TryClearResidentAssignment(resident.Id, out _, out _);
+        }
+
         if (clearRole && resident.Role == NpcRole.Innkeeper)
         {
             resident.SetRole(NpcRole.Villager);

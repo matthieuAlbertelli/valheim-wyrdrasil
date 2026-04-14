@@ -1,6 +1,5 @@
 namespace Wyrdrasil.Souls.Tool;
 
-
 public enum ResidentRoutineActivityType
 {
     None,
@@ -9,5 +8,6 @@ public enum ResidentRoutineActivityType
     WorkAtAssignedCraftStation,
     SitAtAvailablePublicSeat,
     SitAtAssignedSeat,
-    SleepAtAssignedBed
+    SleepAtAssignedBed,
+    WorkAtAssignedTarget
 }

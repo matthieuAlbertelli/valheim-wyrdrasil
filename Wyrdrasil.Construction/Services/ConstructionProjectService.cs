@@ -11,6 +11,7 @@ public sealed class ConstructionProjectService
     private readonly ConstructionDebugLogService _debugLogService;
     private readonly ConstructionWorkPostGenerationService _constructionWorkPostGenerationService;
     private readonly Dictionary<int, ConstructionProjectData> _projectsById = new();
+    private readonly Dictionary<int, int> _activeWorkPostIdsByResidentId = new();
     private int _nextProjectId = 1;
     private int _nextWorkPostId = 1;
 
@@ -62,6 +63,7 @@ public sealed class ConstructionProjectService
     public void LoadProjects(IEnumerable<ConstructionProjectData> projects, int nextProjectId)
     {
         _projectsById.Clear();
+        _activeWorkPostIdsByResidentId.Clear();
 
         var maxWorkPostId = 0;
         foreach (var project in projects)
@@ -85,6 +87,38 @@ public sealed class ConstructionProjectService
 
     public bool TryGetProject(int projectId, out ConstructionProjectData project) => _projectsById.TryGetValue(projectId, out project!);
 
+    public bool TryGetWorkPost(int workPostId, out ConstructionWorkPostData workPost)
+    {
+        foreach (var project in _projectsById.Values)
+        {
+            var match = project.WorkPosts.FirstOrDefault(candidate => candidate.Id == workPostId);
+            if (match != null)
+            {
+                workPost = match;
+                return true;
+            }
+        }
+
+        workPost = new ConstructionWorkPostData();
+        return false;
+    }
+
+    public bool TryGetAssignedWorkPost(int residentId, out ConstructionWorkPostData workPost)
+    {
+        foreach (var project in _projectsById.Values)
+        {
+            var match = project.WorkPosts.FirstOrDefault(candidate => candidate.AssignedResidentId == residentId);
+            if (match != null)
+            {
+                workPost = match;
+                return true;
+            }
+        }
+
+        workPost = new ConstructionWorkPostData();
+        return false;
+    }
+
     public bool IsProjectActive(int projectId)
     {
         return _projectsById.TryGetValue(projectId, out var project) &&
@@ -95,6 +129,15 @@ public sealed class ConstructionProjectService
     public int GetAssignedWorkerCount(ConstructionProjectData project)
     {
         return project.WorkPosts.Count(workPost => workPost.AssignedResidentId.HasValue);
+    }
+
+    public int GetActiveWorkerCount(int projectId)
+    {
+        return _activeWorkPostIdsByResidentId
+            .Where(entry => TryGetWorkPost(entry.Value, out var workPost) && workPost.ProjectId == projectId)
+            .Select(entry => entry.Key)
+            .Distinct()
+            .Count();
     }
 
     public bool TryAssignResidentToProject(int residentId, int projectId, out ConstructionWorkPostData workPost, out string failureReason)
@@ -135,6 +178,7 @@ public sealed class ConstructionProjectService
         if (existingPost != null)
         {
             existingPost.AssignedResidentId = null;
+            _activeWorkPostIdsByResidentId.Remove(residentId);
         }
 
         freePost.AssignedResidentId = residentId;
@@ -143,6 +187,23 @@ public sealed class ConstructionProjectService
         _debugLogService.Info(
             "Project",
             $"Assigned resident #{residentId} to construction project {projectId}, work post #{freePost.Id}.");
+        return true;
+    }
+
+    public bool TryRestoreResidentAssignment(int workPostId, int residentId)
+    {
+        if (!TryGetWorkPost(workPostId, out var workPost))
+        {
+            return false;
+        }
+
+        if (workPost.AssignedResidentId.HasValue && workPost.AssignedResidentId.Value != residentId)
+        {
+            return false;
+        }
+
+        workPost.AssignedResidentId = residentId;
+        _activeWorkPostIdsByResidentId.Remove(residentId);
         return true;
     }
 
@@ -158,9 +219,34 @@ public sealed class ConstructionProjectService
 
         workPost.AssignedResidentId = null;
         workPostId = workPost.Id;
+        _activeWorkPostIdsByResidentId.Remove(residentId);
         _debugLogService.Info(
             "Project",
             $"Cleared construction assignment for resident #{residentId} from project {projectId}, work post #{workPostId}.");
+        return true;
+    }
+
+    public bool TrySetResidentWorkActive(int residentId, int workPostId, bool isActive)
+    {
+        if (!TryGetWorkPost(workPostId, out var workPost) || workPost.AssignedResidentId != residentId)
+        {
+            if (!isActive)
+            {
+                _activeWorkPostIdsByResidentId.Remove(residentId);
+            }
+
+            return false;
+        }
+
+        if (isActive)
+        {
+            _activeWorkPostIdsByResidentId[residentId] = workPostId;
+        }
+        else
+        {
+            _activeWorkPostIdsByResidentId.Remove(residentId);
+        }
+
         return true;
     }
 
@@ -257,6 +343,7 @@ public sealed class ConstructionProjectService
         project.Progress.BuiltPieceCount = 0;
         project.Progress.AccumulatedPieceWork = 0f;
         project.State = project.Progress.TotalPieceCount == 0 ? ConstructionProjectState.Blocked : ConstructionProjectState.ReadyForWork;
+        _activeWorkPostIdsByResidentId.Clear();
         _debugLogService.Info("Testing", $"Reset construction project {projectId} to state {project.State}.");
         return true;
     }

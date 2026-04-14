@@ -158,7 +158,7 @@ public sealed class ResidentPresenceService
         float worldYawDegrees)
     {
         if (!TryResolveAssignedOccupationTarget(resident, purpose, out _, out var target) ||
-            !IsResidentUsingAssignedTarget(resident, target, isAttached))
+            !IsResidentUsingAssignedTarget(resident, target, isAttached, worldPosition))
         {
             return false;
         }
@@ -187,11 +187,13 @@ public sealed class ResidentPresenceService
         return RestoreResidentAtAssignedTarget(resident, purpose);
     }
 
-    private bool IsResidentUsingAssignedTarget(RegisteredNpcData resident, OccupationTarget target, bool isAttached)
+    private bool IsResidentUsingAssignedTarget(RegisteredNpcData resident, OccupationTarget target, bool isAttached, Vector3 worldPosition)
     {
         if (target.Execution.IsStand)
         {
-            return isAttached;
+            var delta = target.Plan.EngagePosition - worldPosition;
+            delta.y = 0f;
+            return delta.sqrMagnitude <= target.Plan.SustainRadius * target.Plan.SustainRadius;
         }
 
         if (target.Execution.IsSeat)
@@ -300,17 +302,10 @@ public sealed class ResidentPresenceService
         switch (purpose)
         {
             case ResidentAssignmentPurpose.Work:
-                if (resident.TryGetAssignedTarget(ResidentAssignmentPurpose.Work, out var workTarget))
+                if (resident.TryGetAssignedTarget(ResidentAssignmentPurpose.Work, out _))
                 {
-                    switch (workTarget.TargetKind)
-                    {
-                        case OccupationTargetKind.Slot:
-                            activityType = ResidentRoutineActivityType.WorkAtAssignedSlot;
-                            return true;
-                        case OccupationTargetKind.CraftStation:
-                            activityType = ResidentRoutineActivityType.WorkAtAssignedCraftStation;
-                            return true;
-                    }
+                    activityType = ResidentRoutineActivityType.WorkAtAssignedTarget;
+                    return true;
                 }
                 break;
             case ResidentAssignmentPurpose.Meal:

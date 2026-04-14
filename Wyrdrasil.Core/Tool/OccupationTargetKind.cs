@@ -5,5 +5,6 @@ public enum OccupationTargetKind
     Slot,
     Seat,
     Bed,
-    CraftStation
+    CraftStation,
+    ConstructionWorkPost
 }

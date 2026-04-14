@@ -9,6 +9,7 @@ using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Controllers;
+using Wyrdrasil.Registry.Occupations;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Registry.UI;
@@ -71,12 +72,13 @@ public class Plugin : BaseUnityPlugin
         occupationNavigationStrategyRegistry.Register(new StandOccupationNavigationStrategy());
         occupationNavigationStrategyRegistry.Register(new SeatOccupationNavigationStrategy());
         occupationNavigationStrategyRegistry.Register(new BedOccupationNavigationStrategy());
-        occupationNavigationStrategyRegistry.Register(new CraftStationOccupationNavigationStrategy());
+        occupationNavigationStrategyRegistry.Register(new ApproachOccupationNavigationStrategy());
 
         var occupationLifecycleStrategyRegistry = new OccupationLifecycleStrategyRegistry();
         occupationLifecycleStrategyRegistry.Register(new StandOccupationLifecycleStrategy());
         occupationLifecycleStrategyRegistry.Register(new SeatOccupationLifecycleStrategy());
         occupationLifecycleStrategyRegistry.Register(new BedOccupationLifecycleStrategy());
+        occupationLifecycleStrategyRegistry.Register(new AnchoredStandOccupationLifecycleStrategy());
         occupationLifecycleStrategyRegistry.Register(new CraftStationOccupationLifecycleStrategy());
 
         var occupationSustainStrategyRegistry = new OccupationSustainStrategyRegistry();
@@ -84,6 +86,7 @@ public class Plugin : BaseUnityPlugin
         occupationSustainStrategyRegistry.Register(new PassiveSeatOccupationSustainStrategy());
         occupationSustainStrategyRegistry.Register(new PassiveBedOccupationSustainStrategy());
         occupationSustainStrategyRegistry.Register(new CraftStationOccupationSustainStrategy());
+        occupationSustainStrategyRegistry.Register(new ConstructionWorkOccupationSustainStrategy(constructionBootstrap.RuntimeApi));
 
         var navigationService = new NpcNavigationService(Logger, occupationNavigationStrategyRegistry);
         var residentRuntimeService = new ResidentRuntimeService(Logger);
@@ -91,37 +94,38 @@ public class Plugin : BaseUnityPlugin
         var residentVisualService = new ResidentVisualService(modeService, residentRuntimeService);
         var scheduleService = new ResidentScheduleService();
 
-        var craftStationOccupationPlanBuilder = new CraftStationOccupationPlanBuilder();
+        var anchorOccupationPlanBuilder = new AnchorOccupationPlanBuilder();
 
         var occupationTargetCatalog = new OccupationTargetCatalog();
         occupationTargetCatalog.Register(new SlotOccupationTargetSource(slotService));
         occupationTargetCatalog.Register(new SeatOccupationTargetSource(seatService));
         occupationTargetCatalog.Register(new BedOccupationTargetSource(bedService));
-        occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(craftStationService, craftStationOccupationPlanBuilder));
+        occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(craftStationService, anchorOccupationPlanBuilder));
+        occupationTargetCatalog.Register(new ConstructionWorkPostOccupationTargetSource(constructionBootstrap.RuntimeApi, anchorOccupationPlanBuilder));
 
         var occupationClaimRegistry = new OccupationClaimRegistry();
         occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(seatService, occupationTargetCatalog));
 
         var occupationResolverRegistry = new OccupationResolverRegistry();
-        occupationResolverRegistry.Register(new AssignedOccupationResolver(
+        occupationResolverRegistry.Register(new AssignedPurposeOccupationResolver(
+            ResidentRoutineActivityType.WorkAtAssignedTarget,
+            ResidentAssignmentPurpose.Work,
+            occupationTargetCatalog));
+        occupationResolverRegistry.Register(new AssignedPurposeOccupationResolver(
             ResidentRoutineActivityType.WorkAtAssignedSlot,
             ResidentAssignmentPurpose.Work,
-            OccupationTargetKind.Slot,
             occupationTargetCatalog));
-        occupationResolverRegistry.Register(new AssignedOccupationResolver(
-            ResidentRoutineActivityType.SitAtAssignedSeat,
-            ResidentAssignmentPurpose.Meal,
-            OccupationTargetKind.Seat,
-            occupationTargetCatalog));
-        occupationResolverRegistry.Register(new AssignedOccupationResolver(
-            ResidentRoutineActivityType.SleepAtAssignedBed,
-            ResidentAssignmentPurpose.Sleep,
-            OccupationTargetKind.Bed,
-            occupationTargetCatalog));
-        occupationResolverRegistry.Register(new AssignedOccupationResolver(
+        occupationResolverRegistry.Register(new AssignedPurposeOccupationResolver(
             ResidentRoutineActivityType.WorkAtAssignedCraftStation,
             ResidentAssignmentPurpose.Work,
-            OccupationTargetKind.CraftStation,
+            occupationTargetCatalog));
+        occupationResolverRegistry.Register(new AssignedPurposeOccupationResolver(
+            ResidentRoutineActivityType.SitAtAssignedSeat,
+            ResidentAssignmentPurpose.Meal,
+            occupationTargetCatalog));
+        occupationResolverRegistry.Register(new AssignedPurposeOccupationResolver(
+            ResidentRoutineActivityType.SleepAtAssignedBed,
+            ResidentAssignmentPurpose.Sleep,
             occupationTargetCatalog));
         occupationResolverRegistry.Register(new ClaimedOccupationResolver(
             ResidentRoutineActivityType.SitAtAvailablePublicSeat,
@@ -156,6 +160,7 @@ public class Plugin : BaseUnityPlugin
             seatService,
             bedService,
             craftStationService,
+            constructionBootstrap.RuntimeApi,
             residentRuntimeService,
             scheduleService,
             occupationService,
@@ -223,6 +228,7 @@ public class Plugin : BaseUnityPlugin
             seatService,
             bedService,
             craftStationService,
+            constructionBootstrap.RuntimeApi,
             residentService,
             _residentRoutineService,
             persistenceCoordinator,

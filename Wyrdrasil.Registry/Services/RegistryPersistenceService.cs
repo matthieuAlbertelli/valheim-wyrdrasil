@@ -1,3 +1,4 @@
+using Wyrdrasil.Construction.Runtime;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -22,6 +23,7 @@ public sealed class RegistryPersistenceService
     private readonly SeatService _seatService;
     private readonly BedService _bedService;
     private readonly CraftStationService _craftStationService;
+    private readonly IConstructionRuntimeApi _constructionRuntimeApi;
     private readonly RegistryResidentService _residentService;
     private readonly ResidentRoutineService _residentRoutineService;
     private readonly WorldPersistenceCoordinator _coordinator;
@@ -36,6 +38,7 @@ public sealed class RegistryPersistenceService
         SeatService seatService,
         BedService bedService,
         CraftStationService craftStationService,
+        IConstructionRuntimeApi constructionRuntimeApi,
         RegistryResidentService residentService,
         ResidentRoutineService residentRoutineService,
         WorldPersistenceCoordinator coordinator,
@@ -46,6 +49,7 @@ public sealed class RegistryPersistenceService
         _seatService = seatService;
         _bedService = bedService;
         _craftStationService = craftStationService;
+        _constructionRuntimeApi = constructionRuntimeApi;
         _residentService = residentService;
         _residentRoutineService = residentRoutineService;
         _coordinator = coordinator;
@@ -222,6 +226,7 @@ public sealed class RegistryPersistenceService
             OccupationTargetKind.Seat => _seatService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
             OccupationTargetKind.Bed => _bedService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
             OccupationTargetKind.CraftStation => _craftStationService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
+            OccupationTargetKind.ConstructionWorkPost => _constructionRuntimeApi.TryRestoreResidentAssignment(assignment.Target.TargetId, resident.Id),
             _ => false
         };
     }

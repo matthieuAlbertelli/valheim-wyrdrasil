@@ -34,7 +34,7 @@ public sealed class OccupationExecutionService
         phase = OccupationPhase.None;
 
         if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character) ||
-            !_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var strategy))
+            !_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.LifecycleStrategyId, out var strategy))
         {
             return false;
         }
@@ -49,13 +49,13 @@ public sealed class OccupationExecutionService
         var target = session.Target;
 
         if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character) ||
-            !_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var lifecycleStrategy))
+            !_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.LifecycleStrategyId, out var lifecycleStrategy))
         {
             return false;
         }
 
         if (session.Phase == OccupationPhase.Sustain &&
-            _sustainStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var sustainStrategy))
+            _sustainStrategyRegistry.TryGetStrategy(target.Execution.SustainStrategyId, out var sustainStrategy))
         {
             var now = Time.time;
             if (!session.ShouldRunSustainTick(sustainStrategy.TickIntervalSeconds, now))
@@ -96,12 +96,12 @@ public sealed class OccupationExecutionService
             return;
         }
 
-        if (_sustainStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var sustainStrategy))
+        if (_sustainStrategyRegistry.TryGetStrategy(target.Execution.SustainStrategyId, out var sustainStrategy))
         {
             sustainStrategy.Release(this, resident, character, target, session);
         }
 
-        if (_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.StrategyId, out var lifecycleStrategy))
+        if (_lifecycleStrategyRegistry.TryGetStrategy(target.Execution.LifecycleStrategyId, out var lifecycleStrategy))
         {
             lifecycleStrategy.Release(this, resident, character, target);
         }

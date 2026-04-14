@@ -432,6 +432,31 @@ public sealed class RegistryResidentService
         _log.LogInfo($"Assigned designated bed #{bedData.Id} to registered NPC #{data.Id} ('{data.DisplayName}').");
     }
 
+    public bool TryAssignTargetedResidentToConstructionProject(int projectId, out RegisteredNpcData resident, out int workPostId, out string failureReason)
+    {
+        if (!TryGetTargetRegisteredResident(out resident))
+        {
+            workPostId = 0;
+            failureReason = "Aim at a registered resident to assign them to the construction project.";
+            return false;
+        }
+
+        return _assignmentService.TryAssignToConstructionProject(resident, projectId, out workPostId, out failureReason);
+    }
+
+    public bool TryClearTargetedResidentConstructionAssignment(out RegisteredNpcData resident, out int projectId, out int workPostId, out string failureReason)
+    {
+        if (!TryGetTargetRegisteredResident(out resident))
+        {
+            projectId = 0;
+            workPostId = 0;
+            failureReason = "Aim at a registered resident to clear their construction assignment.";
+            return false;
+        }
+
+        return _assignmentService.TryClearConstructionAssignment(resident, out projectId, out workPostId, out failureReason);
+    }
+
 
     private static Vector3 GetCraftStationActorFacing(Vector3 anchorForward)
     {

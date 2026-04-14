@@ -1,66 +1,92 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace Wyrdrasil.Routines.Occupations;
 
 public sealed class OccupationExecutionProfile
 {
+    public enum OccupationExecutionKind
+    {
+        Stand,
+        Seat,
+        Bed,
+        CraftStation
+    }
+
     public const string StandStrategyId = "stand";
     public const string SeatStrategyId = "seat";
     public const string BedStrategyId = "bed";
-    public const string CraftStationStrategyId = "craftstation";
+    public const string ApproachNavigationStrategyId = "approach";
+    public const string AnchoredStandLifecycleStrategyId = "anchored-stand.lifecycle";
+    public const string CraftStationLifecycleStrategyId = "craftstation.lifecycle";
+    public const string CraftStationSustainStrategyId = "craftstation.sustain";
+    public const string ConstructionWorkSustainStrategyId = "construction.work";
 
-    public string StrategyId { get; }
+    public string NavigationStrategyId { get; }
+    public string LifecycleStrategyId { get; }
+    public string SustainStrategyId { get; }
+    public OccupationExecutionKind Kind { get; }
     public Chair? ChairComponent { get; }
     public Bed? BedComponent { get; }
     public Transform? AttachPoint { get; }
     public Interactable? Interactable { get; }
 
     private OccupationExecutionProfile(
-        string strategyId,
+        string navigationStrategyId,
+        string lifecycleStrategyId,
+        string sustainStrategyId,
+        OccupationExecutionKind kind,
         Chair? chairComponent = null,
         Bed? bedComponent = null,
         Transform? attachPoint = null,
         Interactable? interactable = null)
     {
-        StrategyId = strategyId;
+        NavigationStrategyId = navigationStrategyId;
+        LifecycleStrategyId = lifecycleStrategyId;
+        SustainStrategyId = sustainStrategyId;
+        Kind = kind;
         ChairComponent = chairComponent;
         BedComponent = bedComponent;
         AttachPoint = attachPoint;
         Interactable = interactable;
     }
 
-    public bool IsStand => StrategyId == StandStrategyId;
-    public bool IsSeat => StrategyId == SeatStrategyId;
-    public bool IsBed => StrategyId == BedStrategyId;
-    public bool IsCraftStation => StrategyId == CraftStationStrategyId;
+    public bool IsStand => Kind == OccupationExecutionKind.Stand;
+    public bool IsSeat => Kind == OccupationExecutionKind.Seat;
+    public bool IsBed => Kind == OccupationExecutionKind.Bed;
+    public bool IsCraftStation => Kind == OccupationExecutionKind.CraftStation;
 
     public static OccupationExecutionProfile Stand()
     {
-        return new OccupationExecutionProfile(StandStrategyId);
+        return new OccupationExecutionProfile(StandStrategyId, StandStrategyId, StandStrategyId, OccupationExecutionKind.Stand);
+    }
+
+    public static OccupationExecutionProfile AnchoredStand(string sustainStrategyId)
+    {
+        return new OccupationExecutionProfile(ApproachNavigationStrategyId, AnchoredStandLifecycleStrategyId, sustainStrategyId, OccupationExecutionKind.Stand);
     }
 
     public static OccupationExecutionProfile Seat(Chair? chairComponent)
     {
-        return new OccupationExecutionProfile(SeatStrategyId, chairComponent: chairComponent);
+        return new OccupationExecutionProfile(SeatStrategyId, SeatStrategyId, SeatStrategyId, OccupationExecutionKind.Seat, chairComponent: chairComponent);
     }
 
     public static OccupationExecutionProfile Bed(Bed? bedComponent, Transform? attachPoint)
     {
-        return new OccupationExecutionProfile(BedStrategyId, bedComponent: bedComponent, attachPoint: attachPoint);
+        return new OccupationExecutionProfile(BedStrategyId, BedStrategyId, BedStrategyId, OccupationExecutionKind.Bed, bedComponent: bedComponent, attachPoint: attachPoint);
     }
 
     public static OccupationExecutionProfile CraftStation(Interactable? interactable)
     {
-        return new OccupationExecutionProfile(CraftStationStrategyId, interactable: interactable);
+        return new OccupationExecutionProfile(
+            ApproachNavigationStrategyId,
+            CraftStationLifecycleStrategyId,
+            CraftStationSustainStrategyId,
+            OccupationExecutionKind.CraftStation,
+            interactable: interactable);
     }
 
-    public static OccupationExecutionProfile Custom(
-        string strategyId,
-        Chair? chairComponent = null,
-        Bed? bedComponent = null,
-        Transform? attachPoint = null,
-        Interactable? interactable = null)
+    public static OccupationExecutionProfile ConstructionWork()
     {
-        return new OccupationExecutionProfile(strategyId, chairComponent, bedComponent, attachPoint, interactable);
+        return AnchoredStand(ConstructionWorkSustainStrategyId);
     }
 }

@@ -26,7 +26,7 @@ public sealed class CraftStationOccupationLifecycleStrategy : IOccupationLifecyc
 
     private readonly Dictionary<int, PosePendingState> _posePendingStatesByResidentId = new();
 
-    public string StrategyId => OccupationExecutionProfile.CraftStationStrategyId;
+    public string StrategyId => OccupationExecutionProfile.CraftStationLifecycleStrategyId;
 
     public OccupationPhase Begin(OccupationExecutionService executionService, RegisteredNpcData resident, Character character, OccupationTarget target)
     {

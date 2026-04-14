@@ -7,7 +7,7 @@
     <ValheimDir>C:\Program Files (x86)\Steam\steamapps\common\Valheim</ValheimDir>
     <ManagedDir>$(ValheimDir)\valheim_Data\Managed</ManagedDir>
     <BepInExCoreDir>$(ValheimDir)\BepInEx\core</BepInExCoreDir>
-      <AssemblyName>Wyrdrasil.Routines</AssemblyName>
+    <AssemblyName>Wyrdrasil.Routines</AssemblyName>
     <RootNamespace>Wyrdrasil.Routines</RootNamespace>
   </PropertyGroup>
 
@@ -48,16 +48,22 @@
       <HintPath>$(ManagedDir)\assembly_valheim.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="assembly_utils">
+      <HintPath>$(ManagedDir)\assembly_utils.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.AnimationModule">
       <HintPath>$(ManagedDir)\UnityEngine.AnimationModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Wyrdrasil.Core\Wyrdrasil.Core.csproj" />
     <ProjectReference Include="..\Wyrdrasil.Settlements\Wyrdrasil.Settlements.csproj" />
     <ProjectReference Include="..\Wyrdrasil.Souls\Wyrdrasil.Souls.csproj" />
   </ItemGroup>
+
   <ItemGroup>
     <Compile Remove="Occupations\AssignedBedOccupationResolver.cs" />
     <Compile Remove="Occupations\AssignedSeatOccupationResolver.cs" />

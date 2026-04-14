@@ -24,6 +24,8 @@ public sealed class ConstructionRuntimeApi : IConstructionRuntimeApi
 
     public void ReleaseWorkItem(int residentId)
     {
+        _constructionProjectService.TryGetAssignedWorkPost(residentId, out var workPost);
+        _constructionProjectService.TrySetResidentWorkActive(residentId, workPost.Id, false);
         _debugLogService.Verbose("Runtime", $"Resident {residentId} released a construction work item.");
     }
 
@@ -38,6 +40,41 @@ public sealed class ConstructionRuntimeApi : IConstructionRuntimeApi
         }
 
         return success;
+    }
+
+    public bool TryAssignResidentToProject(int residentId, int projectId, out ConstructionWorkPostData workPost, out string failureReason)
+    {
+        return _constructionProjectService.TryAssignResidentToProject(residentId, projectId, out workPost, out failureReason);
+    }
+
+    public bool TryClearResidentAssignment(int residentId, out int projectId, out int workPostId)
+    {
+        return _constructionProjectService.TryClearResidentAssignment(residentId, out projectId, out workPostId);
+    }
+
+    public bool TryRestoreResidentAssignment(int workPostId, int residentId)
+    {
+        return _constructionProjectService.TryRestoreResidentAssignment(workPostId, residentId);
+    }
+
+    public bool TryGetWorkPost(int workPostId, out ConstructionWorkPostData workPost)
+    {
+        return _constructionProjectService.TryGetWorkPost(workPostId, out workPost);
+    }
+
+    public bool TryGetAssignedWorkPost(int residentId, out ConstructionWorkPostData workPost)
+    {
+        return _constructionProjectService.TryGetAssignedWorkPost(residentId, out workPost);
+    }
+
+    public bool TrySetResidentWorkActive(int residentId, int workPostId, bool isActive)
+    {
+        return _constructionProjectService.TrySetResidentWorkActive(residentId, workPostId, isActive);
+    }
+
+    public int GetActiveWorkerCount(int projectId)
+    {
+        return _constructionProjectService.GetActiveWorkerCount(projectId);
     }
 
     public bool IsProjectActive(int projectId) => _constructionProjectService.IsProjectActive(projectId);
