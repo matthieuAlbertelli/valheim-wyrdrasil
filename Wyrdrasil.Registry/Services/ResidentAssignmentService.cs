@@ -246,6 +246,11 @@ public sealed class ResidentAssignmentService
 
     public bool TryForceAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData)
     {
+        if (_constructionRuntimeApi.TryGetProjectIdByCraftStation(craftStationData.Id, out var reservedProjectId))
+        {
+            return false;
+        }
+
         if (resident.TryGetAssignedTargetId(ResidentAssignmentPurpose.Work, OccupationTargetKind.CraftStation, out var craftStationId) && craftStationId == craftStationData.Id)
         {
             return true;

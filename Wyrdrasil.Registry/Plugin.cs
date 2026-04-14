@@ -51,8 +51,6 @@ public class Plugin : BaseUnityPlugin
         _constructionProjectProgressService = constructionBootstrap.ConstructionProjectProgressService;
         _constructionProjectMarkerService = constructionBootstrap.ConstructionProjectMarkerService;
         _constructionProjectService = constructionBootstrap.ConstructionProjectService;
-        _constructionProjectMarkerService = constructionBootstrap.ConstructionProjectMarkerService;
-        _constructionProjectService = constructionBootstrap.ConstructionProjectService;
         var modeService = new RegistryModeService(Logger);
         var buildingService = new BuildingService(Logger);
         var anchorPolicyService = new ZonePlacementPolicyService();
@@ -273,6 +271,8 @@ public class Plugin : BaseUnityPlugin
             flushService,
             constructionBootstrap.AuthoringApi,
             constructionBootstrap.TestingApi,
+            constructionBootstrap.RuntimeApi,
+            constructionBootstrap.ConstructionProjectMarkerService,
             constructionBootstrap.ConstructionPlacementPreviewService,
             constructionDebugSessionService,
             _worldClockService);
@@ -336,8 +336,10 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new CaptureBlueprintFromTargetZoneAction());
         registry.Register(new SpawnTestConstructionProjectAction());
         registry.Register(new DumpLatestConstructionProjectStateAction());
+        registry.Register(new AssignTargetCraftStationToConstructionProjectAction());
         registry.Register(new AssignTargetResidentToLatestConstructionProjectAction());
         registry.Register(new ClearTargetResidentConstructionAssignmentAction());
+        registry.Register(new DeleteConstructionInTargetZoneAction());
         registry.Register(new ForceCompleteLatestConstructionProjectAction());
         registry.Register(new ResetLatestConstructionProjectAction());
         registry.Register(new ToggleConstructionVerboseLoggingAction());
@@ -365,7 +367,6 @@ public class Plugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
-        _constructionProjectMarkerService?.Reset();
         _constructionProjectMarkerService?.Reset();
         _persistenceService?.SaveWorldState();
         _harmony?.UnpatchSelf();

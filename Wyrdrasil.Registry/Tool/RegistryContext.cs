@@ -1,5 +1,6 @@
 using BepInEx.Logging;
 using Wyrdrasil.Construction.Authoring;
+using Wyrdrasil.Construction.Runtime;
 using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Construction.Testing;
 using Wyrdrasil.Registry.Services;
@@ -27,6 +28,8 @@ public sealed class RegistryContext
     public WorldClockService WorldClockService { get; }
     public IConstructionAuthoringApi ConstructionAuthoringApi { get; }
     public IConstructionTestingApi ConstructionTestingApi { get; }
+    public IConstructionRuntimeApi ConstructionRuntimeApi { get; }
+    public ConstructionProjectMarkerService ConstructionProjectMarkerService { get; }
     public ConstructionPlacementPreviewService ConstructionPlacementPreviewService { get; }
     public ConstructionDebugSessionService ConstructionDebugSessionService { get; }
 
@@ -46,6 +49,8 @@ public sealed class RegistryContext
         RegistryFlushService flushService,
         IConstructionAuthoringApi constructionAuthoringApi,
         IConstructionTestingApi constructionTestingApi,
+        IConstructionRuntimeApi constructionRuntimeApi,
+        ConstructionProjectMarkerService constructionProjectMarkerService,
         ConstructionPlacementPreviewService constructionPlacementPreviewService,
         ConstructionDebugSessionService constructionDebugSessionService,
         WorldClockService worldClockService)
@@ -65,6 +70,8 @@ public sealed class RegistryContext
         FlushService = flushService;
         ConstructionAuthoringApi = constructionAuthoringApi;
         ConstructionTestingApi = constructionTestingApi;
+        ConstructionRuntimeApi = constructionRuntimeApi;
+        ConstructionProjectMarkerService = constructionProjectMarkerService;
         ConstructionPlacementPreviewService = constructionPlacementPreviewService;
         ConstructionDebugSessionService = constructionDebugSessionService;
         WorldClockService = worldClockService;

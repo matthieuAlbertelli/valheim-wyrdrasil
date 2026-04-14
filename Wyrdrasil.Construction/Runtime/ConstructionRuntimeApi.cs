@@ -47,6 +47,16 @@ public sealed class ConstructionRuntimeApi : IConstructionRuntimeApi
         return _constructionProjectService.TryAssignResidentToProject(residentId, projectId, out workPost, out failureReason);
     }
 
+    public bool TryAssignCraftStationToProject(int craftStationId, int projectId, out ConstructionWorkPostData workPost, out string failureReason)
+    {
+        return _constructionProjectService.TryAssignCraftStationToProject(craftStationId, projectId, out workPost, out failureReason);
+    }
+
+    public bool TryGetProjectIdByCraftStation(int craftStationId, out int projectId)
+    {
+        return _constructionProjectService.TryGetProjectIdByCraftStation(craftStationId, out projectId);
+    }
+
     public bool TryClearResidentAssignment(int residentId, out int projectId, out int workPostId)
     {
         return _constructionProjectService.TryClearResidentAssignment(residentId, out projectId, out workPostId);

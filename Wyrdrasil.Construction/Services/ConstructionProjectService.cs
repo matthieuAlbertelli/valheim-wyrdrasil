@@ -57,7 +57,7 @@ public sealed class ConstructionProjectService
         _projectsById[project.Id] = project;
         _debugLogService.Info(
             "Project",
-            $"Created construction project {project.Id} from blueprint '{blueprint.Id}' with {totalPieceCount} pieces and {workPosts.Count} external work posts.");
+            $"Created construction project {project.Id} from blueprint '{blueprint.Id}' with {totalPieceCount} pieces and {workPosts.Count} logical construction slot(s).");
         return project;
     }
 
@@ -176,6 +176,65 @@ public sealed class ConstructionProjectService
         return project.WorkPosts.Count(workPost => workPost.AssignedResidentId.HasValue);
     }
 
+
+    public bool TryAssignCraftStationToProject(int craftStationId, int projectId, out ConstructionWorkPostData workPost, out string failureReason)
+    {
+        if (!_projectsById.TryGetValue(projectId, out var project))
+        {
+            workPost = new ConstructionWorkPostData();
+            failureReason = $"Unknown construction project {projectId}.";
+            return false;
+        }
+
+        if (project.State == ConstructionProjectState.Completed || project.State == ConstructionProjectState.Blocked)
+        {
+            workPost = new ConstructionWorkPostData();
+            failureReason = $"Construction project {projectId} is not accepting a workbench because it is in state {project.State}.";
+            return false;
+        }
+
+        if (TryGetProjectIdByCraftStation(craftStationId, out var existingProjectId) && existingProjectId != projectId)
+        {
+            workPost = new ConstructionWorkPostData();
+            failureReason = $"Craft station #{craftStationId} is already reserved by construction project {existingProjectId}.";
+            return false;
+        }
+
+        var targetWorkPost = project.WorkPosts.FirstOrDefault();
+        if (targetWorkPost == null)
+        {
+            workPost = new ConstructionWorkPostData();
+            failureReason = $"Construction project {projectId} has no logical work slot.";
+            return false;
+        }
+
+        targetWorkPost.CraftStationId = craftStationId;
+        workPost = targetWorkPost;
+        failureReason = string.Empty;
+        _debugLogService.Info("Project", $"Associated craft station #{craftStationId} with construction project {projectId}, work post #{targetWorkPost.Id}.");
+        return true;
+    }
+
+    public bool TryGetProjectIdByCraftStation(int craftStationId, out int projectId)
+    {
+        foreach (var project in _projectsById.Values)
+        {
+            if (project.WorkPosts.Any(workPost => workPost.CraftStationId == craftStationId))
+            {
+                projectId = project.Id;
+                return true;
+            }
+        }
+
+        projectId = 0;
+        return false;
+    }
+
+    public bool IsCraftStationReservedByAnotherProject(int craftStationId, int projectId)
+    {
+        return TryGetProjectIdByCraftStation(craftStationId, out var existingProjectId) && existingProjectId != projectId;
+    }
+
     public int GetActiveWorkerCount(int projectId)
     {
         return _activeWorkPostIdsByResidentId
@@ -201,6 +260,14 @@ public sealed class ConstructionProjectService
             return false;
         }
 
+        var targetWorkPost = project.WorkPosts.FirstOrDefault();
+        if (targetWorkPost == null)
+        {
+            workPost = new ConstructionWorkPostData();
+            failureReason = $"Construction project {projectId} has no logical work slot.";
+            return false;
+        }
+
         var existingPost = FindAssignedWorkPost(residentId, out var existingProjectId);
         if (existingPost != null)
         {
@@ -210,28 +277,22 @@ public sealed class ConstructionProjectService
                 failureReason = string.Empty;
                 return true;
             }
-        }
 
-        var freePost = project.WorkPosts.FirstOrDefault(candidate => !candidate.AssignedResidentId.HasValue);
-        if (freePost == null)
-        {
-            workPost = new ConstructionWorkPostData();
-            failureReason = $"Construction project {projectId} has no free work post.";
-            return false;
-        }
-
-        if (existingPost != null)
-        {
             existingPost.AssignedResidentId = null;
             _activeWorkPostIdsByResidentId.Remove(residentId);
         }
 
-        freePost.AssignedResidentId = residentId;
-        workPost = freePost;
+        if (targetWorkPost.AssignedResidentId.HasValue && targetWorkPost.AssignedResidentId.Value != residentId)
+        {
+            workPost = new ConstructionWorkPostData();
+            failureReason = $"Construction project {projectId} already has a resident assigned to its logical work slot.";
+            return false;
+        }
+
+        targetWorkPost.AssignedResidentId = residentId;
+        workPost = targetWorkPost;
         failureReason = string.Empty;
-        _debugLogService.Info(
-            "Project",
-            $"Assigned resident #{residentId} to construction project {projectId}, work post #{freePost.Id}.");
+        _debugLogService.Info("Project", $"Assigned resident #{residentId} to construction project {projectId}, work post #{targetWorkPost.Id}.");
         return true;
     }
 
@@ -423,10 +484,10 @@ public sealed class ConstructionProjectService
             report.Messages.Add("Project is missing a blueprint id.");
         }
 
-        if (project.WorkPosts.Count != 4)
+        if (project.WorkPosts.Count != 1)
         {
             report.IsValid = false;
-            report.Messages.Add($"Project should expose 4 external work posts but currently exposes {project.WorkPosts.Count}.");
+            report.Messages.Add($"Project should expose 1 logical construction slot but currently exposes {project.WorkPosts.Count}.");
         }
 
         if (project.Progress.BuiltPieceCount > project.Progress.TotalPieceCount)

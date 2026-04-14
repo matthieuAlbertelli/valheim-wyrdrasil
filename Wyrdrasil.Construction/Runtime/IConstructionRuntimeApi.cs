@@ -8,6 +8,8 @@ public interface IConstructionRuntimeApi
     void ReleaseWorkItem(int residentId);
     bool TryContributeWork(int residentId, int projectId, int pieceId, float workAmount);
     bool TryAssignResidentToProject(int residentId, int projectId, out ConstructionWorkPostData workPost, out string failureReason);
+    bool TryAssignCraftStationToProject(int craftStationId, int projectId, out ConstructionWorkPostData workPost, out string failureReason);
+    bool TryGetProjectIdByCraftStation(int craftStationId, out int projectId);
     bool TryClearResidentAssignment(int residentId, out int projectId, out int workPostId);
     bool TryRestoreResidentAssignment(int workPostId, int residentId);
     bool TryGetWorkPost(int workPostId, out ConstructionWorkPostData workPost);

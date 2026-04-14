@@ -46,6 +46,7 @@ public enum RegistryActionType
     PlaceBlueprintInstantly,
     CaptureBlueprintFromTargetZone,
     AssignTargetResidentToLatestConstructionProject,
+    AssignTargetCraftStationToConstructionProject,
     ClearTargetResidentConstructionAssignment,
     DeleteConstructionInTargetZone,
     FlushRegistryState

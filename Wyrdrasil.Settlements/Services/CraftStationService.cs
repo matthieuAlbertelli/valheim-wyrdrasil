@@ -164,23 +164,35 @@ public sealed class CraftStationService
 
     public void DesignateCraftStationAtCrosshair()
     {
+        if (!TryGetOrDesignateCraftStationAtCrosshair(out _, out var failureReason))
+        {
+            _log.LogWarning($"[CraftStation][Authoring] {failureReason}");
+        }
+    }
+
+    public bool TryGetOrDesignateCraftStationAtCrosshair(out RegisteredCraftStationData craftStationData, out string failureReason)
+    {
         if (!TryGetCraftStationAtCrosshair(out var furnitureRoot, out var craftingStation))
         {
-            _log.LogWarning("[CraftStation][Authoring] Cannot designate craft station: targeted object is not a valid Valheim crafting station.");
-            return;
+            craftStationData = null!;
+            failureReason = "Cannot designate craft station: targeted object is not a valid Valheim crafting station.";
+            return false;
         }
 
-        if (FindCraftStationByFurniture(furnitureRoot) != null)
+        var existingStation = FindCraftStationByFurniture(furnitureRoot);
+        if (existingStation != null)
         {
-            _log.LogWarning("[CraftStation][Authoring] Cannot designate craft station: this furniture is already registered.");
-            return;
+            craftStationData = existingStation;
+            failureReason = string.Empty;
+            return true;
         }
 
         var zone = _zoneService.FindZoneContainingPointHorizontally(GetReferencePosition(craftingStation));
         if (zone == null)
         {
-            _log.LogWarning("[CraftStation][Authoring] Cannot designate craft station yet: no functional zone footprint found at the targeted table.");
-            return;
+            craftStationData = null!;
+            failureReason = "Cannot designate craft station yet: no functional zone footprint found at the targeted table.";
+            return false;
         }
 
         var persistentFurnitureId = BuildPersistentFurnitureId(craftingStation);
@@ -205,7 +217,10 @@ public sealed class CraftStationService
         UpdateMarker(data);
         UpdateAnchorIndicator(data);
 
+        craftStationData = data;
+        failureReason = string.Empty;
         _log.LogInfo($"[CraftStation][Authoring] Designated station #{data.Id} on '{data.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) with profile='{profile.ProfileId}' and persistentId='{persistentFurnitureId}'.");
+        return true;
     }
 
     public bool TryGetCraftStationAtCrosshair(out RegisteredCraftStationData craftStationData)

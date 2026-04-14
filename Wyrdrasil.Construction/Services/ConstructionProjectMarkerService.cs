@@ -47,6 +47,47 @@ public sealed class ConstructionProjectMarkerService
         }
     }
 
+
+    public bool TryGetTargetedProjectId(out int projectId)
+    {
+        projectId = 0;
+        var camera = Camera.main;
+        if (camera == null || _markersByProjectId.Count == 0)
+        {
+            return false;
+        }
+
+        var screenCenter = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+        var bestDistance = 72f;
+        var found = false;
+
+        foreach (var entry in _markersByProjectId)
+        {
+            if (entry.Value == null)
+            {
+                continue;
+            }
+
+            var screenPoint = camera.WorldToScreenPoint(entry.Value.transform.position + new Vector3(0f, 3.8f, 0f));
+            if (screenPoint.z <= 0f)
+            {
+                continue;
+            }
+
+            var distance = Vector2.Distance(screenCenter, new Vector2(screenPoint.x, screenPoint.y));
+            if (distance > bestDistance)
+            {
+                continue;
+            }
+
+            bestDistance = distance;
+            projectId = entry.Key;
+            found = true;
+        }
+
+        return found;
+    }
+
     public void Reset()
     {
         foreach (var marker in _markersByProjectId.Values)

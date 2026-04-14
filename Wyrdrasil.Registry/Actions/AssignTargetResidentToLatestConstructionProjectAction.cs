@@ -8,18 +8,34 @@ public sealed class AssignTargetResidentToLatestConstructionProjectAction : IReg
 
     public void Execute(RegistryContext context)
     {
-        if (!context.ConstructionDebugSessionService.TryGetLatestProjectId(out var projectId))
+        if (!context.ConstructionDebugSessionService.TryGetPendingResidentProjectId(out var projectId))
         {
-            context.Log.LogWarning("No latest construction project is available for resident assignment.");
+            if (!context.ConstructionProjectMarkerService.TryGetTargetedProjectId(out projectId))
+            {
+                context.Log.LogWarning("Aim at a construction marker to select a chantier for resident assignment.");
+                return;
+            }
+
+            context.ConstructionDebugSessionService.BeginPendingResidentSelection(projectId);
+            context.Log.LogInfo($"Selected construction project #{projectId} for resident assignment. Now aim at a registered resident and click again.");
+            return;
+        }
+
+        if (context.ConstructionProjectMarkerService.TryGetTargetedProjectId(out var reselectedProjectId))
+        {
+            context.ConstructionDebugSessionService.BeginPendingResidentSelection(reselectedProjectId);
+            context.Log.LogInfo($"Switched selected construction project to #{reselectedProjectId} for resident assignment. Now aim at a registered resident and click again.");
             return;
         }
 
         if (!context.ResidentService.TryAssignTargetedResidentToConstructionProject(projectId, out var resident, out var workPostId, out var failureReason))
         {
-            context.Log.LogWarning(failureReason);
+            context.Log.LogWarning($"Failed to assign targeted resident to construction project #{projectId}: {failureReason}");
             return;
         }
 
-        context.Log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project {projectId}, workbench binding #{workPostId}.");
+        context.ConstructionDebugSessionService.ClearPendingResidentSelection();
+        context.ConstructionDebugSessionService.SetLatestProjectId(projectId);
+        context.Log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project #{projectId}, logical slot #{workPostId}.");
     }
 }
