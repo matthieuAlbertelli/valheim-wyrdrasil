@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
 using Wyrdrasil.Core.Persistence;
-using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Tool;
 

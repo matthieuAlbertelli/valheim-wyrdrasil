@@ -1,6 +1,6 @@
 using System;
 using BepInEx.Logging;
-using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Core.Services;
 

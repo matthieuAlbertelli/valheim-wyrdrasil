@@ -1,5 +1,5 @@
 using UnityEngine;
-using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Registry.UI;
@@ -10,36 +10,16 @@ public sealed class RegistryHudRenderer
     private GUIStyle? _textStyle;
     private GUIStyle? _hintStyle;
 
-    public void Draw(
-        RegistryToolState state,
-        KeyCode toggleKey,
-        KeyCode nextCategoryKey,
-        KeyCode nextActionKey,
-        int zoneCount,
-        int waypointCount,
-        int? pendingLinkStartWaypointId,
-        int slotCount,
-        int seatCount,
-        int bedCount,
-        int residentCount,
-        PendingZoneAuthoringSnapshot? pendingZoneAuthoring,
-        string worldClockLabel,
-        string worldClockModeLabel,
-        bool isCraftAnchorEditorActive,
-        string craftAnchorEditorStatus,
-        string craftAnchorEditorControls,
-        bool isConstructionPlacementPreviewActive,
-        string constructionPlacementPreviewStatus,
-        string constructionPlacementPreviewControls)
+    public void Draw(RegistryHudState hudState)
     {
-        if (!state.IsRegistryModeEnabled)
+        if (!hudState.ToolState.IsRegistryModeEnabled)
         {
             return;
         }
 
         EnsureStyles();
-        var panelHeight = pendingZoneAuthoring == null ? 408f : 504f;
-        if (isConstructionPlacementPreviewActive)
+        var panelHeight = hudState.PendingZoneAuthoring == null ? 432f : 528f;
+        if (hudState.IsConstructionPlacementPreviewActive)
         {
             panelHeight += 48f;
         }
@@ -49,29 +29,30 @@ public sealed class RegistryHudRenderer
         GUI.Box(panelRect, GUIContent.none);
         GUI.Label(new Rect(35f, 190f, 320f, 24f), "Registre des Âmes", _titleStyle!);
         GUI.Label(new Rect(35f, 218f, 360f, 20f), "Mode Registre actif", _textStyle!);
-        GUI.Label(new Rect(35f, 242f, 680f, 20f), worldClockLabel, _textStyle!);
-        GUI.Label(new Rect(35f, 266f, 760f, 20f), worldClockModeLabel, _textStyle!);
-        GUI.Label(new Rect(35f, 290f, 680f, 20f), $"Catégorie : {FormatCategory(state.SelectedCategory)}", _textStyle!);
-        GUI.Label(new Rect(35f, 314f, 760f, 20f), $"Action : {FormatAction(state.SelectedAction)}", _textStyle!);
-        GUI.Label(new Rect(35f, 338f, 420f, 20f), $"Zones : {zoneCount}", _textStyle!);
-        GUI.Label(new Rect(35f, 362f, 420f, 20f), $"Waypoints : {waypointCount}", _textStyle!);
-        GUI.Label(new Rect(35f, 386f, 540f, 20f), $"Départ de lien sélectionné : {FormatPendingLink(pendingLinkStartWaypointId)}", _textStyle!);
-        GUI.Label(new Rect(35f, 410f, 420f, 20f), $"Slots aubergiste : {slotCount}", _textStyle!);
-        GUI.Label(new Rect(35f, 434f, 420f, 20f), $"Sièges désignés : {seatCount}", _textStyle!);
-        GUI.Label(new Rect(35f, 458f, 420f, 20f), $"Lits désignés : {bedCount}", _textStyle!);
-        GUI.Label(new Rect(35f, 482f, 420f, 20f), $"PNJ enregistrés : {residentCount}", _textStyle!);
-        GUI.Label(new Rect(35f, 506f, 760f, 20f), $"Résident sélectionné pour force assign : {FormatPendingResidentForceAssign(state)}", _textStyle!);
+        GUI.Label(new Rect(35f, 242f, 760f, 20f), $"Interaction active : {hudState.InteractionModeName}", _textStyle!);
+        GUI.Label(new Rect(35f, 266f, 680f, 20f), hudState.WorldClockLabel, _textStyle!);
+        GUI.Label(new Rect(35f, 290f, 760f, 20f), hudState.WorldClockModeLabel, _textStyle!);
+        GUI.Label(new Rect(35f, 314f, 680f, 20f), $"Catégorie : {FormatCategory(hudState.ToolState.SelectedCategory)}", _textStyle!);
+        GUI.Label(new Rect(35f, 338f, 760f, 20f), $"Action : {FormatAction(hudState.ToolState.SelectedAction)}", _textStyle!);
+        GUI.Label(new Rect(35f, 362f, 420f, 20f), $"Zones : {hudState.ZoneCount}", _textStyle!);
+        GUI.Label(new Rect(35f, 386f, 420f, 20f), $"Waypoints : {hudState.WaypointCount}", _textStyle!);
+        GUI.Label(new Rect(35f, 410f, 540f, 20f), $"Départ de lien sélectionné : {FormatPendingLink(hudState.PendingLinkStartWaypointId)}", _textStyle!);
+        GUI.Label(new Rect(35f, 434f, 420f, 20f), $"Slots aubergiste : {hudState.SlotCount}", _textStyle!);
+        GUI.Label(new Rect(35f, 458f, 420f, 20f), $"Sièges désignés : {hudState.SeatCount}", _textStyle!);
+        GUI.Label(new Rect(35f, 482f, 420f, 20f), $"Lits désignés : {hudState.BedCount}", _textStyle!);
+        GUI.Label(new Rect(35f, 506f, 420f, 20f), $"PNJ enregistrés : {hudState.ResidentCount}", _textStyle!);
+        GUI.Label(new Rect(35f, 530f, 760f, 20f), $"Résident sélectionné pour force assign : {FormatPendingResidentForceAssign(hudState.ToolState)}", _textStyle!);
 
-        var nextLineY = 530f;
-        if (pendingZoneAuthoring != null)
+        var nextLineY = 554f;
+        if (hudState.PendingZoneAuthoring != null)
         {
-            GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"Création zone : {FormatZoneAuthoringPhase(pendingZoneAuthoring.Phase)}", _textStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"Création zone : {FormatZoneAuthoringPhase(hudState.PendingZoneAuthoring.Phase)}", _textStyle!);
             nextLineY += 24f;
-            GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"Points : {pendingZoneAuthoring.PointCount} | Fermeture possible : {(pendingZoneAuthoring.CanCloseFootprint ? "Oui" : "Non")}", _textStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"Points : {hudState.PendingZoneAuthoring.PointCount} | Fermeture possible : {(hudState.PendingZoneAuthoring.CanCloseFootprint ? "Oui" : "Non")}", _textStyle!);
             nextLineY += 24f;
-            if (pendingZoneAuthoring.Phase == ZoneAuthoringPhase.Height)
+            if (hudState.PendingZoneAuthoring.Phase == ZoneAuthoringPhase.Height)
             {
-                GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"BaseY : {pendingZoneAuthoring.BaseY:0.00} | TopY : {pendingZoneAuthoring.TopY:0.00}", _textStyle!);
+                GUI.Label(new Rect(35f, nextLineY, 760f, 20f), $"BaseY : {hudState.PendingZoneAuthoring.BaseY:0.00} | TopY : {hudState.PendingZoneAuthoring.TopY:0.00}", _textStyle!);
                 nextLineY += 24f;
                 GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Molette : ajuste TopY | Shift + Molette : ajuste BaseY | Clic gauche : confirmer | Clic droit : annuler", _hintStyle!);
                 nextLineY += 24f;
@@ -83,31 +64,31 @@ public sealed class RegistryHudRenderer
             }
         }
 
-        if (state.SelectedCategory == RegistryCategory.Construction)
+        if (hudState.ToolState.SelectedCategory == RegistryCategory.Construction)
         {
             GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Construction : capturer un blueprint, lancer une preview, confirmer pour créer un chantier, puis lier librement un workbench et un PNJ via son marqueur.", _hintStyle!);
             nextLineY += 24f;
         }
 
-        if (isConstructionPlacementPreviewActive)
+        if (hudState.IsConstructionPlacementPreviewActive)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), constructionPlacementPreviewStatus, _textStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), hudState.ConstructionPlacementPreviewStatus, _textStyle!);
             nextLineY += 24f;
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), constructionPlacementPreviewControls, _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), hudState.ConstructionPlacementPreviewControls, _hintStyle!);
             nextLineY += 24f;
         }
 
-        if (state.SelectedCategory == RegistryCategory.Diagnostics)
+        if (hudState.ToolState.SelectedCategory == RegistryCategory.Diagnostics)
         {
             GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Diagnostics : inspection IA, édition anchor craft, simulation temps, purge radicale de construction ciblée et flush registre.", _hintStyle!);
             nextLineY += 24f;
         }
 
-        if (isCraftAnchorEditorActive)
+        if (hudState.IsCraftAnchorEditorActive)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), craftAnchorEditorStatus, _textStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), hudState.CraftAnchorEditorStatus, _textStyle!);
             nextLineY += 24f;
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), craftAnchorEditorControls, _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), hudState.CraftAnchorEditorControls, _hintStyle!);
             nextLineY += 24f;
         }
 
@@ -115,7 +96,7 @@ public sealed class RegistryHudRenderer
         nextLineY += 24f;
         GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Astuce : avec 'Force assign', vise d'abord un PNJ enregistré, puis vise un slot, un siège, un lit ou un poste d'artisanat.", _hintStyle!);
         nextLineY += 24f;
-        GUI.Label(new Rect(35f, nextLineY, 820f, 20f), $"{toggleKey} : mode | {nextCategoryKey} : catégorie | {nextActionKey} : action | Clic gauche : créer/éditer | Clic droit : supprimer/annuler auteur", _hintStyle!);
+        GUI.Label(new Rect(35f, nextLineY, 820f, 20f), $"{hudState.ToggleKey} : mode | {hudState.NextCategoryKey} : catégorie | {hudState.NextActionKey} : action | Clic gauche : créer/éditer | Clic droit : supprimer/annuler auteur", _hintStyle!);
     }
 
     private void EnsureStyles()

@@ -1,4 +1,4 @@
-namespace Wyrdrasil.Registry.Tool;
+namespace Wyrdrasil.Core.Tool;
 
 public enum RegistryCategory
 {

@@ -74,6 +74,17 @@ public sealed class CraftStationAnchorEditorService
         _log.LogInfo($"[CraftStation][Authoring] Anchor editor started for station #{station.Id} ('{station.DisplayName}').");
     }
 
+    public void CancelEditing()
+    {
+        if (_editedStation == null)
+        {
+            return;
+        }
+
+        RestoreOriginalAnchorState();
+        EndEditing(false);
+    }
+
     public void Update(out bool shouldSave)
     {
         shouldSave = false;

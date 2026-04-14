@@ -4,6 +4,7 @@ using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Components;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Settlements.Tool;

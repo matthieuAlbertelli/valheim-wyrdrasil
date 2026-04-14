@@ -1,7 +1,7 @@
 using System;
 using BepInEx.Logging;
 using UnityEngine;
-using Wyrdrasil.Registry.Tool;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Souls.Tool;
 using Wyrdrasil.Souls.Components;
 
