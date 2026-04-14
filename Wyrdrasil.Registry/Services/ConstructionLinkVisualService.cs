@@ -76,6 +76,7 @@ public sealed class ConstructionLinkVisualService
     private int? _hoveredWorkbenchCraftStationId;
     private int? _hoveredResidentProjectId;
     private int? _hoveredResidentId;
+    private bool _isVisible;
 
     public ConstructionLinkVisualService(
         ConstructionProjectService constructionProjectService,
@@ -95,6 +96,11 @@ public sealed class ConstructionLinkVisualService
         };
     }
 
+
+    public void SetVisible(bool isVisible)
+    {
+        _isVisible = isVisible;
+    }
     public void SetHoveredWorkbenchLink(int? projectId, int? craftStationId)
     {
         _hoveredWorkbenchProjectId = projectId;
@@ -109,6 +115,12 @@ public sealed class ConstructionLinkVisualService
 
     public void Update()
     {
+        if (!_isVisible)
+        {
+            HideAllLinks();
+            return;
+        }
+
         UpdatePersistentLinks();
         UpdateHoverWorkbenchLink();
         UpdateHoverResidentLink();
@@ -128,6 +140,14 @@ public sealed class ConstructionLinkVisualService
         if (_lineMaterialTemplate != null)
         {
             Object.Destroy(_lineMaterialTemplate);
+        }
+    }
+
+    private void HideAllLinks()
+    {
+        foreach (var link in _persistentLinks.Values)
+        {
+            link.SetActive(false);
         }
     }
 

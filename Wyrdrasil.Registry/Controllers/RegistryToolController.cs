@@ -77,17 +77,20 @@ public sealed class RegistryToolController
             }
 
             _modeService.ToggleRegistryMode();
+            _constructionLinkVisualService.SetVisible(false);
             ClearSelectionFeedbackVisuals();
             return;
         }
 
         if (!_modeService.IsRegistryModeEnabled)
         {
+            _constructionLinkVisualService.SetVisible(false);
             ClearSelectionFeedbackVisuals();
             return;
         }
 
         var selectedAction = _modeService.State.SelectedAction;
+        _constructionLinkVisualService.SetVisible(_modeService.State.SelectedCategory == RegistryCategory.Construction);
         UpdateForceAssignFeedback();
         UpdateConstructionAssignmentFeedback(selectedAction);
         _zoneService.UpdateTargetedZoneHighlight();
