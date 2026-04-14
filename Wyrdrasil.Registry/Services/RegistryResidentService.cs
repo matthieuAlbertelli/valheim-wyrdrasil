@@ -124,6 +124,12 @@ public sealed class RegistryResidentService
         _visualService.SetPendingForceAssignResidentVisual(residentId);
     }
 
+
+    public void SetPendingConstructionAssignmentResidentVisual(int? residentId)
+    {
+        _visualService.SetPendingConstructionAssignmentResidentVisual(residentId);
+    }
+
     public void RegisterNpcAtCrosshair()
     {
         if (!TryGetTargetCharacter(out var targetCharacter))

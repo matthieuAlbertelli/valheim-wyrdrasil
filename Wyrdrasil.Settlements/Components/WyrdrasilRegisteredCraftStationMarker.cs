@@ -16,6 +16,7 @@ public sealed class WyrdrasilRegisteredCraftStationMarker : MonoBehaviour
     private readonly List<MaterialState> _states = new();
     private bool _isVisible;
     private bool _isAssigned;
+    private bool _isPendingConstructionTarget;
     private int _craftStationId;
 
     public void Initialize(int craftStationId)
@@ -69,6 +70,12 @@ public sealed class WyrdrasilRegisteredCraftStationMarker : MonoBehaviour
         ApplyVisualization();
     }
 
+    public void SetPendingConstructionTarget(bool isPending)
+    {
+        _isPendingConstructionTarget = isPending;
+        ApplyVisualization();
+    }
+
     private void ApplyVisualization()
     {
         foreach (var state in _states)
@@ -87,9 +94,11 @@ public sealed class WyrdrasilRegisteredCraftStationMarker : MonoBehaviour
                     continue;
                 }
 
-                var glowColor = _isAssigned
-                    ? new Color(0.25f, 1f, 0.35f, 1f)
-                    : new Color(1f, 0.75f, 0.2f, 1f);
+                var glowColor = _isPendingConstructionTarget
+                    ? new Color(1f, 0.95f, 0.35f, 1f)
+                    : _isAssigned
+                        ? new Color(0.25f, 1f, 0.35f, 1f)
+                        : new Color(1f, 0.75f, 0.2f, 1f);
 
                 if (material.HasProperty("_Color"))
                 {

@@ -17,6 +17,7 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
     private readonly List<LineRenderer> _pendingDashRenderers = new();
     private bool _isVisible;
     private bool _isPendingForceAssign;
+    private bool _isPendingConstructionAssign;
 
     public int RegisteredNpcId { get; private set; }
 
@@ -63,9 +64,15 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
         RefreshVisualization();
     }
 
+    public void SetPendingConstructionAssign(bool isPending)
+    {
+        _isPendingConstructionAssign = isPending;
+        RefreshVisualization();
+    }
+
     private void Update()
     {
-        if (_isVisible && _isPendingForceAssign && _pendingDashRoot != null)
+        if (_isVisible && (_isPendingForceAssign || _isPendingConstructionAssign) && _pendingDashRoot != null)
         {
             _pendingDashRoot.Rotate(0f, PendingRotationSpeed * Time.deltaTime, 0f, Space.Self);
         }
@@ -130,8 +137,9 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
 
     private void RefreshVisualization()
     {
-        var showNormalRing = _isVisible && !_isPendingForceAssign;
-        var showPendingRing = _isVisible && _isPendingForceAssign;
+        var hasPendingState = _isPendingForceAssign || _isPendingConstructionAssign;
+        var showNormalRing = _isVisible && !hasPendingState;
+        var showPendingRing = _isVisible && hasPendingState;
 
         if (_lineRenderer != null)
         {
@@ -142,6 +150,8 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
         {
             _pendingDashRoot.gameObject.SetActive(showPendingRing);
         }
+
+        ApplyPendingColor();
     }
 
     private void ApplyRoleColor()
@@ -161,7 +171,9 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
 
     private void ApplyPendingColor()
     {
-        var color = new Color(1f, 0.95f, 0.35f, 1f);
+        var color = _isPendingConstructionAssign
+            ? new Color(1f, 0.75f, 0.2f, 1f)
+            : new Color(1f, 0.95f, 0.35f, 1f);
 
         foreach (var dashRenderer in _pendingDashRenderers)
         {

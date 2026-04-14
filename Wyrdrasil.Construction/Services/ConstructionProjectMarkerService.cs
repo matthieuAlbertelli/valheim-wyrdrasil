@@ -11,6 +11,7 @@ public sealed class ConstructionProjectMarkerService
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly Dictionary<int, GameObject> _markersByProjectId = new();
     private Material? _markerMaterial;
+    private int? _hoveredProjectId;
 
     public ConstructionProjectMarkerService(ConstructionProjectService constructionProjectService)
     {
@@ -44,6 +45,7 @@ public sealed class ConstructionProjectMarkerService
 
             marker.transform.position = project.OriginPosition;
             marker.transform.rotation = Quaternion.identity;
+            ApplyMarkerVisual(project.Id, marker);
         }
     }
 
@@ -88,6 +90,11 @@ public sealed class ConstructionProjectMarkerService
         return found;
     }
 
+
+    public void SetHoveredProject(int? projectId)
+    {
+        _hoveredProjectId = projectId;
+    }
     public void Reset()
     {
         foreach (var marker in _markersByProjectId.Values)
@@ -129,6 +136,46 @@ public sealed class ConstructionProjectMarkerService
         return root;
     }
 
+    private void ApplyMarkerVisual(int projectId, GameObject root)
+    {
+        var isHovered = _hoveredProjectId.HasValue && _hoveredProjectId.Value == projectId;
+        var baseColor = isHovered
+            ? new Color(1f, 0.95f, 0.35f, 0.95f)
+            : new Color(1f, 0.55f, 0.15f, 0.90f);
+        var emissionColor = isHovered
+            ? new Color(0.6f, 0.45f, 0.05f, 1f)
+            : new Color(0.45f, 0.18f, 0.02f, 1f);
+
+        foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
+        {
+            if (renderer == null)
+            {
+                continue;
+            }
+
+            var material = renderer.material;
+            if (material == null)
+            {
+                continue;
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.color = baseColor;
+            }
+
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", baseColor);
+            }
+
+            if (material.HasProperty("_EmissionColor"))
+            {
+                material.SetColor("_EmissionColor", emissionColor);
+            }
+        }
+    }
+
     private void ConfigurePrimitive(GameObject primitive)
     {
         var collider = primitive.GetComponent<Collider>();
@@ -141,7 +188,7 @@ public sealed class ConstructionProjectMarkerService
         {
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
-            renderer.sharedMaterial = GetMarkerMaterial();
+            renderer.material = new Material(GetMarkerMaterial());
         }
 
         primitive.layer = LayerMask.NameToLayer("Ignore Raycast");

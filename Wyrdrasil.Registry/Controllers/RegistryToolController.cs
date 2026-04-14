@@ -74,16 +74,19 @@ public sealed class RegistryToolController
             }
 
             _modeService.ToggleRegistryMode();
+            ClearSelectionFeedbackVisuals();
             return;
         }
 
         if (!_modeService.IsRegistryModeEnabled)
         {
+            ClearSelectionFeedbackVisuals();
             return;
         }
 
         var selectedAction = _modeService.State.SelectedAction;
         UpdateForceAssignFeedback();
+        UpdateConstructionAssignmentFeedback(selectedAction);
         _zoneService.UpdateTargetedZoneHighlight();
 
         if (_actionContext.ConstructionPlacementPreviewService.IsPreviewActive)
@@ -304,6 +307,70 @@ public sealed class RegistryToolController
             return;
         }
 
+        _slotService.SetPendingForceAssignTarget(null);
+        _seatService.SetPendingForceAssignTarget(null);
+        _bedService.SetPendingForceAssignTarget(null);
+    }
+
+    private void UpdateConstructionAssignmentFeedback(RegistryActionType selectedAction)
+    {
+        _actionContext.ConstructionProjectMarkerService.SetHoveredProject(null);
+        _craftStationService.SetPendingConstructionTarget(null);
+        _residentService.SetPendingConstructionAssignmentResidentVisual(null);
+
+        if (selectedAction == RegistryActionType.AssignTargetCraftStationToConstructionProject)
+        {
+            var hasHoveredProject = _actionContext.ConstructionProjectMarkerService.TryGetTargetedProjectId(out var hoveredProjectId);
+            if (hasHoveredProject)
+            {
+                _actionContext.ConstructionProjectMarkerService.SetHoveredProject(hoveredProjectId);
+            }
+
+            if (_actionContext.ConstructionDebugSessionService.TryGetPendingCraftStationProjectId(out var pendingProjectId))
+            {
+                if (!hasHoveredProject)
+                {
+                    _actionContext.ConstructionProjectMarkerService.SetHoveredProject(pendingProjectId);
+                }
+
+                if (_craftStationService.TryGetCraftStationAtCrosshair(out var craftStation))
+                {
+                    _craftStationService.SetPendingConstructionTarget(craftStation.Id);
+                }
+            }
+
+            return;
+        }
+
+        if (selectedAction == RegistryActionType.AssignTargetResidentToLatestConstructionProject)
+        {
+            var hasHoveredProject = _actionContext.ConstructionProjectMarkerService.TryGetTargetedProjectId(out var hoveredProjectId);
+            if (hasHoveredProject)
+            {
+                _actionContext.ConstructionProjectMarkerService.SetHoveredProject(hoveredProjectId);
+            }
+
+            if (_actionContext.ConstructionDebugSessionService.TryGetPendingResidentProjectId(out var pendingProjectId))
+            {
+                if (!hasHoveredProject)
+                {
+                    _actionContext.ConstructionProjectMarkerService.SetHoveredProject(pendingProjectId);
+                }
+
+                if (_residentService.TryGetTargetedRegisteredResident(out var resident))
+                {
+                    _residentService.SetPendingConstructionAssignmentResidentVisual(resident.Id);
+                }
+            }
+        }
+    }
+
+    private void ClearSelectionFeedbackVisuals()
+    {
+        _actionContext.ConstructionProjectMarkerService.SetHoveredProject(null);
+        _craftStationService.SetPendingConstructionTarget(null);
+        _residentService.SetPendingConstructionAssignmentResidentVisual(null);
+        _residentService.SetPendingForceAssignResidentVisual(null);
         _slotService.SetPendingForceAssignTarget(null);
         _seatService.SetPendingForceAssignTarget(null);
         _bedService.SetPendingForceAssignTarget(null);

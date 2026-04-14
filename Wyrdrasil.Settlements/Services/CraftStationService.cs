@@ -19,6 +19,7 @@ public sealed class CraftStationService
     private readonly Dictionary<int, GameObject> _anchorRoots = new();
     private int _nextCraftStationId = 1;
     private bool _visualsVisible;
+    private int? _pendingConstructionTargetCraftStationId;
 
     public IReadOnlyList<RegisteredCraftStationData> CraftStations => _craftStations;
     public int NextCraftStationId => _nextCraftStationId;
@@ -242,6 +243,15 @@ public sealed class CraftStationService
         return true;
     }
 
+    public void SetPendingConstructionTarget(int? craftStationId)
+    {
+        _pendingConstructionTargetCraftStationId = craftStationId;
+        foreach (var station in _craftStations)
+        {
+            UpdateMarker(station);
+        }
+    }
+
     public bool TryGetInteractionProfile(RegisteredCraftStationData station, out CraftStationInteractionProfile profile)
     {
         if (CraftStationInteractionProfileRegistry.TryGetProfileById(station.InteractionProfileId, out profile))
@@ -404,6 +414,7 @@ public sealed class CraftStationService
         if (_markers.TryGetValue(station.Id, out var marker) && marker != null)
         {
             marker.SetVisualizationVisible(_visualsVisible, station.AssignedRegisteredNpcId.HasValue);
+            marker.SetPendingConstructionTarget(_pendingConstructionTargetCraftStationId == station.Id);
         }
     }
 

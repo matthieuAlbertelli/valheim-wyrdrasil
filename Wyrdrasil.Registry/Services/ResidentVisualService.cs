@@ -58,6 +58,19 @@ public sealed class ResidentVisualService
         }
     }
 
+    public void SetPendingConstructionAssignmentResidentVisual(int? residentId)
+    {
+        foreach (var pair in _markers)
+        {
+            if (pair.Value == null)
+            {
+                continue;
+            }
+
+            pair.Value.SetPendingConstructionAssign(residentId.HasValue && pair.Key == residentId.Value);
+        }
+    }
+
     public void ClearAll()
     {
         foreach (var marker in _markers.Values)
@@ -68,6 +81,7 @@ public sealed class ResidentVisualService
             }
 
             marker.SetPendingForceAssign(false);
+            marker.SetPendingConstructionAssign(false);
             marker.SetVisualizationVisible(false);
         }
 
