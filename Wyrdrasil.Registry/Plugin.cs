@@ -36,6 +36,8 @@ public class Plugin : BaseUnityPlugin
     private ResidentRoutineService _residentRoutineService = null!;
     private TargetDiagnosticsService _diagnosticsService = null!;
     private ConstructionProjectProgressService _constructionProjectProgressService = null!;
+    private ConstructionProjectMarkerService _constructionProjectMarkerService = null!;
+    private ConstructionProjectService _constructionProjectService = null!;
     private Harmony? _harmony;
 
     private void Awake()
@@ -45,6 +47,12 @@ public class Plugin : BaseUnityPlugin
         RegistryModuleBootstrap.ApplyHarmony(_harmony);
         RoutinesModuleBootstrap.ApplyHarmony(_harmony);
 
+        var constructionBootstrap = ConstructionModuleBootstrap.Create(Logger);
+        _constructionProjectProgressService = constructionBootstrap.ConstructionProjectProgressService;
+        _constructionProjectMarkerService = constructionBootstrap.ConstructionProjectMarkerService;
+        _constructionProjectService = constructionBootstrap.ConstructionProjectService;
+        _constructionProjectMarkerService = constructionBootstrap.ConstructionProjectMarkerService;
+        _constructionProjectService = constructionBootstrap.ConstructionProjectService;
         var modeService = new RegistryModeService(Logger);
         var buildingService = new BuildingService(Logger);
         var anchorPolicyService = new ZonePlacementPolicyService();
@@ -54,8 +62,6 @@ public class Plugin : BaseUnityPlugin
         var seatService = new SeatService(Logger, modeService, zoneService, anchorPolicyService);
         var bedService = new BedService(Logger, modeService, zoneService, anchorPolicyService);
         var craftStationService = new CraftStationService(Logger, modeService, zoneService);
-        var constructionBootstrap = ConstructionModuleBootstrap.Create(Logger, craftStationService);
-        _constructionProjectProgressService = constructionBootstrap.ConstructionProjectProgressService;
 
         var appearanceCatalog = new NpcAppearanceCatalog();
         var equipmentCatalog = new NpcEquipmentCatalog();
@@ -332,7 +338,6 @@ public class Plugin : BaseUnityPlugin
         registry.Register(new DumpLatestConstructionProjectStateAction());
         registry.Register(new AssignTargetResidentToLatestConstructionProjectAction());
         registry.Register(new ClearTargetResidentConstructionAssignmentAction());
-        registry.Register(new DeleteConstructionInTargetZoneAction());
         registry.Register(new ForceCompleteLatestConstructionProjectAction());
         registry.Register(new ResetLatestConstructionProjectAction());
         registry.Register(new ToggleConstructionVerboseLoggingAction());
@@ -348,6 +353,8 @@ public class Plugin : BaseUnityPlugin
         _persistenceService.Update();
         _residentRoutineService.Update();
         _constructionProjectProgressService.Update();
+        _constructionProjectMarkerService.Update();
+        _constructionProjectService.PruneCompletedProjects();
         _registryToolController.Update();
     }
 
@@ -358,6 +365,8 @@ public class Plugin : BaseUnityPlugin
 
     private void OnDestroy()
     {
+        _constructionProjectMarkerService?.Reset();
+        _constructionProjectMarkerService?.Reset();
         _persistenceService?.SaveWorldState();
         _harmony?.UnpatchSelf();
     }

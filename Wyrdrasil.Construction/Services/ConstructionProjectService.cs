@@ -3,19 +3,14 @@ using System.Linq;
 using UnityEngine;
 using Wyrdrasil.Construction.Diagnostics;
 using Wyrdrasil.Construction.Models;
-using Wyrdrasil.Settlements.Services;
 using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Construction.Services;
 
 public sealed class ConstructionProjectService
 {
-    private const float WorkbenchConstructionRadius = 20f;
-    private const float WorkbenchConstructionRadiusSqr = WorkbenchConstructionRadius * WorkbenchConstructionRadius;
-
     private readonly ConstructionDebugLogService _debugLogService;
-    private readonly BlueprintCatalogService _blueprintCatalogService;
-    private readonly CraftStationService _craftStationService;
+    private readonly ConstructionWorkPostGenerationService _constructionWorkPostGenerationService;
     private readonly Dictionary<int, ConstructionProjectData> _projectsById = new();
     private readonly Dictionary<int, int> _activeWorkPostIdsByResidentId = new();
     private int _nextProjectId = 1;
@@ -23,12 +18,10 @@ public sealed class ConstructionProjectService
 
     public ConstructionProjectService(
         ConstructionDebugLogService debugLogService,
-        BlueprintCatalogService blueprintCatalogService,
-        CraftStationService craftStationService)
+        ConstructionWorkPostGenerationService constructionWorkPostGenerationService)
     {
         _debugLogService = debugLogService;
-        _blueprintCatalogService = blueprintCatalogService;
-        _craftStationService = craftStationService;
+        _constructionWorkPostGenerationService = constructionWorkPostGenerationService;
     }
 
     public IReadOnlyList<ConstructionProjectData> Projects => _projectsById.Values.OrderBy(project => project.Id).ToList();
@@ -37,6 +30,13 @@ public sealed class ConstructionProjectService
     public ConstructionProjectData CreateProject(StructureBlueprintData blueprint, Vector3 originPosition, Quaternion originRotation)
     {
         var projectId = _nextProjectId++;
+        var workPosts = _constructionWorkPostGenerationService.GenerateWorkPosts(
+            projectId,
+            blueprint,
+            originPosition,
+            originRotation,
+            AllocateWorkPostId);
+
         var totalPieceCount = blueprint.Pieces.Count;
         var project = new ConstructionProjectData
         {
@@ -51,13 +51,13 @@ public sealed class ConstructionProjectService
                 BuiltPieceCount = 0,
                 AccumulatedPieceWork = 0f
             },
-            WorkPosts = new List<ConstructionWorkPostData>()
+            WorkPosts = workPosts
         };
 
         _projectsById[project.Id] = project;
         _debugLogService.Info(
             "Project",
-            $"Created construction project {project.Id} from blueprint '{blueprint.Id}' with {totalPieceCount} pieces. Workers now require real registered workbenches in range of the chantier.");
+            $"Created construction project {project.Id} from blueprint '{blueprint.Id}' with {totalPieceCount} pieces and {workPosts.Count} external work posts.");
         return project;
     }
 
@@ -70,16 +70,11 @@ public sealed class ConstructionProjectService
         foreach (var project in projects)
         {
             project.Progress ??= new ConstructionProjectProgressData();
-            project.WorkPosts = (project.WorkPosts ?? new List<ConstructionWorkPostData>())
-                .Where(candidate => candidate.CraftStationId > 0)
-                .OrderBy(candidate => candidate.Id)
-                .ToList();
-
+            project.WorkPosts ??= new List<ConstructionWorkPostData>();
             _projectsById[project.Id] = project;
 
             foreach (var workPost in project.WorkPosts)
             {
-                SyncWorkPostAnchor(workPost);
                 if (workPost.Id > maxWorkPostId)
                 {
                     maxWorkPostId = workPost.Id;
@@ -96,7 +91,7 @@ public sealed class ConstructionProjectService
     public IReadOnlyList<int> GetProjectIdsIntersectingZone(FunctionalZoneData zone)
     {
         return _projectsById.Values
-            .Where(project => ProjectIntersectsZone(project, zone))
+            .Where(project => zone.ContainsPoint(project.OriginPosition))
             .OrderBy(project => project.Id)
             .Select(project => project.Id)
             .ToList();
@@ -109,24 +104,33 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        foreach (var residentId in project.WorkPosts
-                     .Where(candidate => candidate.AssignedResidentId.HasValue)
-                     .Select(candidate => candidate.AssignedResidentId!.Value)
-                     .Distinct()
-                     .ToList())
+        foreach (var workPost in project.WorkPosts)
         {
-            _activeWorkPostIdsByResidentId.Remove(residentId);
-        }
-
-        foreach (var workPost in project.WorkPosts.Where(candidate => candidate.CraftStationId > 0))
-        {
-            _craftStationService.ClearCraftStationAssignment(workPost.CraftStationId, out _);
+            if (workPost.AssignedResidentId.HasValue)
+            {
+                _activeWorkPostIdsByResidentId.Remove(workPost.AssignedResidentId.Value);
+            }
         }
 
         _projectsById.Remove(projectId);
         _debugLogService.Info("Project", $"Deleted construction project {projectId}.");
         return true;
     }
+
+    public void PruneCompletedProjects()
+    {
+        var completedIds = _projectsById.Values
+            .Where(project => project.State == ConstructionProjectState.Completed)
+            .Select(project => project.Id)
+            .ToList();
+
+        foreach (var completedId in completedIds)
+        {
+            _projectsById.Remove(completedId);
+            _debugLogService.Info("Project", $"Dissolved completed construction project {completedId}. Its built pieces are now treated as regular world construction.");
+        }
+    }
+
 
     public bool TryGetWorkPost(int workPostId, out ConstructionWorkPostData workPost)
     {
@@ -135,7 +139,6 @@ public sealed class ConstructionProjectService
             var match = project.WorkPosts.FirstOrDefault(candidate => candidate.Id == workPostId);
             if (match != null)
             {
-                SyncWorkPostAnchor(match);
                 workPost = match;
                 return true;
             }
@@ -147,12 +150,11 @@ public sealed class ConstructionProjectService
 
     public bool TryGetAssignedWorkPost(int residentId, out ConstructionWorkPostData workPost)
     {
-        foreach (var project in _projectsById.Values.OrderBy(candidate => candidate.Id))
+        foreach (var project in _projectsById.Values)
         {
             var match = project.WorkPosts.FirstOrDefault(candidate => candidate.AssignedResidentId == residentId);
             if (match != null)
             {
-                SyncWorkPostAnchor(match);
                 workPost = match;
                 return true;
             }
@@ -176,33 +178,11 @@ public sealed class ConstructionProjectService
 
     public int GetActiveWorkerCount(int projectId)
     {
-        if (!_projectsById.TryGetValue(projectId, out var project))
-        {
-            return 0;
-        }
-
-        var activeResidentIds = new HashSet<int>();
-        foreach (var entry in _activeWorkPostIdsByResidentId)
-        {
-            if (!TryGetWorkPost(entry.Value, out var workPost) || workPost.ProjectId != projectId)
-            {
-                continue;
-            }
-
-            if (!workPost.AssignedResidentId.HasValue || workPost.AssignedResidentId.Value != entry.Key)
-            {
-                continue;
-            }
-
-            if (!IsWorkPostInRangeOfCurrentPiece(project, workPost))
-            {
-                continue;
-            }
-
-            activeResidentIds.Add(entry.Key);
-        }
-
-        return activeResidentIds.Count;
+        return _activeWorkPostIdsByResidentId
+            .Where(entry => TryGetWorkPost(entry.Value, out var workPost) && workPost.ProjectId == projectId)
+            .Select(entry => entry.Key)
+            .Distinct()
+            .Count();
     }
 
     public bool TryAssignResidentToProject(int residentId, int projectId, out ConstructionWorkPostData workPost, out string failureReason)
@@ -224,59 +204,40 @@ public sealed class ConstructionProjectService
         var existingPost = FindAssignedWorkPost(residentId, out var existingProjectId);
         if (existingPost != null)
         {
-            if (existingProjectId == projectId && existingPost.CraftStationId > 0)
+            if (existingProjectId == projectId)
             {
-                SyncWorkPostAnchor(existingPost);
                 workPost = existingPost;
                 failureReason = string.Empty;
                 return true;
             }
-
-            RemoveWorkPostBinding(existingPost, residentId);
         }
 
-        if (!TryFindAvailableCraftStation(project, residentId, out var craftStation, out failureReason))
+        var freePost = project.WorkPosts.FirstOrDefault(candidate => !candidate.AssignedResidentId.HasValue);
+        if (freePost == null)
         {
             workPost = new ConstructionWorkPostData();
+            failureReason = $"Construction project {projectId} has no free work post.";
             return false;
         }
 
-        var newWorkPost = new ConstructionWorkPostData
+        if (existingPost != null)
         {
-            Id = AllocateWorkPostId(),
-            ProjectId = projectId,
-            CraftStationId = craftStation.Id,
-            AssignedResidentId = residentId
-        };
-
-        if (!_craftStationService.ForceAssignCraftStation(craftStation.Id, residentId, out var previousResidentId, out var resolvedCraftStation) || resolvedCraftStation == null)
-        {
-            workPost = new ConstructionWorkPostData();
-            failureReason = $"Failed to reserve workbench #{craftStation.Id} for construction project {projectId}.";
-            return false;
+            existingPost.AssignedResidentId = null;
+            _activeWorkPostIdsByResidentId.Remove(residentId);
         }
 
-        if (previousResidentId.HasValue && previousResidentId.Value != residentId)
-        {
-            _craftStationService.ClearCraftStationAssignment(craftStation.Id, out _);
-            workPost = new ConstructionWorkPostData();
-            failureReason = $"Workbench #{craftStation.Id} is already used by resident #{previousResidentId.Value}.";
-            return false;
-        }
-
-        SyncWorkPostAnchor(newWorkPost, resolvedCraftStation);
-        project.WorkPosts.Add(newWorkPost);
-        workPost = newWorkPost;
+        freePost.AssignedResidentId = residentId;
+        workPost = freePost;
         failureReason = string.Empty;
         _debugLogService.Info(
             "Project",
-            $"Assigned resident #{residentId} to construction project {projectId} using craft station #{newWorkPost.CraftStationId} (binding #{newWorkPost.Id}).");
+            $"Assigned resident #{residentId} to construction project {projectId}, work post #{freePost.Id}.");
         return true;
     }
 
     public bool TryRestoreResidentAssignment(int workPostId, int residentId)
     {
-        if (!TryGetWorkPost(workPostId, out var workPost) || workPost.CraftStationId <= 0)
+        if (!TryGetWorkPost(workPostId, out var workPost))
         {
             return false;
         }
@@ -286,20 +247,8 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        if (!_craftStationService.ForceAssignCraftStation(workPost.CraftStationId, residentId, out var previousResidentId, out var craftStation) || craftStation == null)
-        {
-            return false;
-        }
-
-        if (previousResidentId.HasValue && previousResidentId.Value != residentId)
-        {
-            _craftStationService.ClearCraftStationAssignment(workPost.CraftStationId, out _);
-            return false;
-        }
-
         workPost.AssignedResidentId = residentId;
         _activeWorkPostIdsByResidentId.Remove(residentId);
-        SyncWorkPostAnchor(workPost, craftStation);
         return true;
     }
 
@@ -313,11 +262,12 @@ public sealed class ConstructionProjectService
             return false;
         }
 
+        workPost.AssignedResidentId = null;
         workPostId = workPost.Id;
-        RemoveWorkPostBinding(workPost, residentId);
+        _activeWorkPostIdsByResidentId.Remove(residentId);
         _debugLogService.Info(
             "Project",
-            $"Cleared construction assignment for resident #{residentId} from project {projectId}, binding #{workPostId}.");
+            $"Cleared construction assignment for resident #{residentId} from project {projectId}, work post #{workPostId}.");
         return true;
     }
 
@@ -473,26 +423,10 @@ public sealed class ConstructionProjectService
             report.Messages.Add("Project is missing a blueprint id.");
         }
 
-        foreach (var workPost in project.WorkPosts)
-        {
-            if (workPost.CraftStationId <= 0)
-            {
-                report.IsValid = false;
-                report.Messages.Add($"Binding #{workPost.Id} has no linked craft station.");
-            }
-        }
-
-        var duplicateStationIds = project.WorkPosts
-            .Where(candidate => candidate.CraftStationId > 0)
-            .GroupBy(candidate => candidate.CraftStationId)
-            .Where(group => group.Count() > 1)
-            .Select(group => group.Key)
-            .ToList();
-
-        foreach (var craftStationId in duplicateStationIds)
+        if (project.WorkPosts.Count != 4)
         {
             report.IsValid = false;
-            report.Messages.Add($"Craft station #{craftStationId} is bound more than once to project {projectId}.");
+            report.Messages.Add($"Project should expose 4 external work posts but currently exposes {project.WorkPosts.Count}.");
         }
 
         if (project.Progress.BuiltPieceCount > project.Progress.TotalPieceCount)
@@ -525,166 +459,5 @@ public sealed class ConstructionProjectService
 
         projectId = 0;
         return null;
-    }
-
-    private void RemoveWorkPostBinding(ConstructionWorkPostData workPost, int residentId)
-    {
-        _activeWorkPostIdsByResidentId.Remove(residentId);
-        if (workPost.CraftStationId > 0)
-        {
-            _craftStationService.ClearCraftStationAssignment(workPost.CraftStationId, out _);
-        }
-
-        if (_projectsById.TryGetValue(workPost.ProjectId, out var project))
-        {
-            project.WorkPosts.Remove(workPost);
-        }
-    }
-
-    private bool TryFindAvailableCraftStation(ConstructionProjectData project, int residentId, out RegisteredCraftStationData craftStation, out string failureReason)
-    {
-        var eligibleStations = _craftStationService.CraftStations
-            .Where(candidate => candidate.HasRuntimeBinding)
-            .Where(candidate => !candidate.AssignedRegisteredNpcId.HasValue || candidate.AssignedRegisteredNpcId.Value == residentId)
-            .Where(candidate => !IsCraftStationBoundToAnotherProject(candidate.Id, project.Id))
-            .Where(candidate => IsCraftStationEligibleForProject(candidate, project))
-            .OrderBy(candidate => (candidate.ReferenceWorldPosition - project.OriginPosition).sqrMagnitude)
-            .ThenBy(candidate => candidate.Id)
-            .ToList();
-
-        if (eligibleStations.Count == 0)
-        {
-            craftStation = null!;
-            failureReason = $"Construction project {project.Id} has no eligible free workbench in range. Place and register a workbench near the chantier.";
-            return false;
-        }
-
-        craftStation = eligibleStations[0];
-        failureReason = string.Empty;
-        return true;
-    }
-
-    private bool IsCraftStationBoundToAnotherProject(int craftStationId, int projectId)
-    {
-        return _projectsById.Values.Any(project =>
-            project.Id != projectId &&
-            project.WorkPosts.Any(workPost => workPost.CraftStationId == craftStationId));
-    }
-
-    private bool ProjectIntersectsZone(ConstructionProjectData project, FunctionalZoneData zone)
-    {
-        if (zone.ContainsPoint(project.OriginPosition))
-        {
-            return true;
-        }
-
-        if (!TryGetOrderedBlueprintPieces(project, out var orderedPieces))
-        {
-            return false;
-        }
-
-        foreach (var piece in orderedPieces)
-        {
-            var worldPosition = project.OriginPosition + (project.OriginRotation * piece.LocalPosition);
-            if (zone.ContainsPoint(worldPosition))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-
-    private bool IsCraftStationEligibleForProject(RegisteredCraftStationData craftStation, ConstructionProjectData project)
-    {
-        if (!TryGetOrderedBlueprintPieces(project, out var orderedPieces))
-        {
-            return false;
-        }
-
-        var stationPosition = craftStation.ReferenceWorldPosition;
-        var firstRemainingIndex = System.Math.Max(0, System.Math.Min(project.Progress.BuiltPieceCount, orderedPieces.Count));
-        for (var index = firstRemainingIndex; index < orderedPieces.Count; index++)
-        {
-            var worldPosition = project.OriginPosition + (project.OriginRotation * orderedPieces[index].LocalPosition);
-            if ((worldPosition - stationPosition).sqrMagnitude <= WorkbenchConstructionRadiusSqr)
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private bool IsWorkPostInRangeOfCurrentPiece(ConstructionProjectData project, ConstructionWorkPostData workPost)
-    {
-        if (workPost.CraftStationId <= 0 ||
-            !_craftStationService.TryGetCraftStationById(workPost.CraftStationId, out var craftStation) ||
-            !craftStation.HasRuntimeBinding)
-        {
-            return false;
-        }
-
-        if (!TryGetNextPieceWorldPosition(project, out var nextPieceWorldPosition))
-        {
-            return false;
-        }
-
-        return (nextPieceWorldPosition - craftStation.ReferenceWorldPosition).sqrMagnitude <= WorkbenchConstructionRadiusSqr;
-    }
-
-    private bool TryGetNextPieceWorldPosition(ConstructionProjectData project, out Vector3 nextPieceWorldPosition)
-    {
-        nextPieceWorldPosition = Vector3.zero;
-
-        if (!TryGetOrderedBlueprintPieces(project, out var orderedPieces))
-        {
-            return false;
-        }
-
-        var pieceIndex = project.Progress.BuiltPieceCount;
-        if (pieceIndex < 0 || pieceIndex >= orderedPieces.Count)
-        {
-            return false;
-        }
-
-        nextPieceWorldPosition = project.OriginPosition + (project.OriginRotation * orderedPieces[pieceIndex].LocalPosition);
-        return true;
-    }
-
-    private bool TryGetOrderedBlueprintPieces(ConstructionProjectData project, out List<BlueprintPieceData> orderedPieces)
-    {
-        orderedPieces = new List<BlueprintPieceData>();
-        if (!_blueprintCatalogService.TryGetBlueprint(project.BlueprintId, out var blueprint))
-        {
-            return false;
-        }
-
-        orderedPieces = blueprint.Pieces
-            .OrderBy(piece => piece.BuildOrder)
-            .ThenBy(piece => piece.PieceId)
-            .ToList();
-
-        return orderedPieces.Count > 0;
-    }
-
-    private bool SyncWorkPostAnchor(ConstructionWorkPostData workPost)
-    {
-        return workPost.CraftStationId > 0 &&
-               _craftStationService.TryGetCraftStationById(workPost.CraftStationId, out var craftStation) &&
-               SyncWorkPostAnchor(workPost, craftStation);
-    }
-
-    private static bool SyncWorkPostAnchor(ConstructionWorkPostData workPost, RegisteredCraftStationData craftStation)
-    {
-        if (!craftStation.TryResolveWorldAnchor(out var anchorWorldPosition, out var anchorWorldForward))
-        {
-            return false;
-        }
-
-        workPost.WorldPosition = anchorWorldPosition;
-        workPost.WorldRotation = Quaternion.LookRotation(anchorWorldForward, Vector3.up);
-        return true;
     }
 }

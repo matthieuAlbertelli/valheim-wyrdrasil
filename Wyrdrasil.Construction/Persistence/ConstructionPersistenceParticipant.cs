@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Wyrdrasil.Construction.Diagnostics;
 using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Core.Persistence;
@@ -36,7 +37,7 @@ public sealed class ConstructionPersistenceParticipant : IWorldPersistencePartic
         var saveData = new ConstructionModuleSaveData
         {
             Blueprints = new List<Models.StructureBlueprintData>(_blueprintCatalogService.Blueprints),
-            Projects = new List<Models.ConstructionProjectData>(_constructionProjectService.Projects),
+            Projects = new List<Models.ConstructionProjectData>(_constructionProjectService.Projects.Where(project => project.State != Models.ConstructionProjectState.Completed)),
             NextProjectId = _constructionProjectService.NextProjectId
         };
 

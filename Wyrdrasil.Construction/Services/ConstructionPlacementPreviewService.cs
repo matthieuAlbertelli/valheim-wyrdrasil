@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using UnityEngine.Rendering;
 using Object = UnityEngine.Object;
 using Wyrdrasil.Construction.Diagnostics;
 using Wyrdrasil.Construction.Models;
@@ -27,7 +26,6 @@ public sealed class ConstructionPlacementPreviewService
     private static readonly Color ValidColor = new Color(0.2f, 1f, 0.35f, 0.30f);
     private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.30f);
     private const float RotationStepDegrees = 45f;
-    private const float VerticalOffsetStep = 0.5f;
 
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
@@ -35,15 +33,14 @@ public sealed class ConstructionPlacementPreviewService
     private readonly ConstructionDebugLogService _debugLogService;
     private readonly List<PreviewPiece> _previewPieces = new();
 
-    private Material? _validGhostMaterial;
-    private Material? _invalidGhostMaterial;
-
     private StructureBlueprintData? _activeBlueprint;
     private Vector3 _anchorPosition;
     private float _verticalOffset;
     private int _rotationStepIndex;
     private bool _isPlacementValid;
     private string _validationMessage = "No active construction preview.";
+    private Material? _validGhostMaterial;
+    private Material? _invalidGhostMaterial;
 
     public ConstructionPlacementPreviewService(
         BlueprintCatalogService blueprintCatalogService,
@@ -61,8 +58,8 @@ public sealed class ConstructionPlacementPreviewService
     public string ActiveBlueprintId => _activeBlueprint?.Id ?? string.Empty;
     public string StatusLabel => !IsPreviewActive
         ? "Construction preview inactive."
-        : $"Construction preview: {ActiveBlueprintId} | Valid: {(_isPlacementValid ? "Yes" : "No")} | Y Offset: {_verticalOffset:0.00} | {_validationMessage}";
-    public string ControlsLabel => "Construction preview: Molette = pivoter | Shift + Molette = élever/enfoncer | Clic gauche = lancer le chantier | Clic droit = annuler";
+        : $"Construction preview: {ActiveBlueprintId} | Valid: {(_isPlacementValid ? "Yes" : "No")} | Y Offset: {_verticalOffset:0.0} | {_validationMessage}";
+    public string ControlsLabel => "Construction preview: Molette = pivoter | Shift + molette = hauteur | Clic gauche = lancer le chantier | Clic droit = annuler";
 
     public bool TryBeginPreview(string blueprintId, Vector3 originPosition, Quaternion initialRotation, out string failureReason)
     {
@@ -107,7 +104,7 @@ public sealed class ConstructionPlacementPreviewService
             return;
         }
 
-        _verticalOffset += scrollDelta > 0f ? VerticalOffsetStep : -VerticalOffsetStep;
+        _verticalOffset += scrollDelta > 0f ? 0.5f : -0.5f;
         RefreshPreview(out _);
     }
 
@@ -152,15 +149,7 @@ public sealed class ConstructionPlacementPreviewService
 
     public void CancelPreview()
     {
-        foreach (var previewPiece in _previewPieces)
-        {
-            if (previewPiece.Root != null)
-            {
-                Object.Destroy(previewPiece.Root);
-            }
-        }
-
-        _previewPieces.Clear();
+        CancelPreviewObjectsOnly();
         DestroyGhostMaterials();
         _activeBlueprint = null;
         _anchorPosition = Vector3.zero;
@@ -189,7 +178,7 @@ public sealed class ConstructionPlacementPreviewService
         {
             _isPlacementValid = false;
             _validationMessage = failureReason;
-            ApplyPreviewColor(InvalidColor);
+            ApplyPreviewColor(isValid: false);
             return false;
         }
 
@@ -197,7 +186,7 @@ public sealed class ConstructionPlacementPreviewService
         UpdatePreviewTransforms(placements);
 
         _isPlacementValid = EvaluateBlockingOverlaps(out _validationMessage);
-        ApplyPreviewColor(_isPlacementValid ? ValidColor : InvalidColor);
+        ApplyPreviewColor(_isPlacementValid);
         return true;
     }
 
@@ -226,12 +215,76 @@ public sealed class ConstructionPlacementPreviewService
 
         foreach (var placement in placements)
         {
-            var root = Object.Instantiate(placement.Prefab, placement.WorldPosition, placement.WorldRotation);
-            root.name = $"{placement.Prefab.name}_ConstructionPreview";
-            PrepareGhostHierarchy(root);
-
+            var root = CreatePreviewVisualRoot(placement.Prefab, placement.PieceId);
+            root.transform.SetPositionAndRotation(placement.WorldPosition, placement.WorldRotation);
             var renderers = root.GetComponentsInChildren<Renderer>(true).ToList();
             _previewPieces.Add(new PreviewPiece(placement.PieceId, root, renderers));
+        }
+    }
+
+    private GameObject CreatePreviewVisualRoot(GameObject prefab, int pieceId)
+    {
+        var root = new GameObject($"{prefab.name}_ConstructionPreview_{pieceId}");
+        CloneVisualHierarchy(prefab.transform, root.transform, isRoot: true);
+        PrepareGhostHierarchy(root);
+        return root;
+    }
+
+    private static void CloneVisualHierarchy(Transform source, Transform parent, bool isRoot = false)
+    {
+        Transform currentTransform;
+        GameObject currentObject;
+
+        if (isRoot)
+        {
+            currentTransform = parent;
+            currentObject = parent.gameObject;
+            currentTransform.localPosition = Vector3.zero;
+            currentTransform.localRotation = Quaternion.identity;
+            currentTransform.localScale = Vector3.one;
+        }
+        else
+        {
+            currentObject = new GameObject(source.name);
+            currentTransform = currentObject.transform;
+            currentTransform.SetParent(parent, false);
+            currentTransform.localPosition = source.localPosition;
+            currentTransform.localRotation = source.localRotation;
+            currentTransform.localScale = source.localScale;
+        }
+
+        if (source.TryGetComponent<MeshFilter>(out var sourceMeshFilter) && sourceMeshFilter.sharedMesh != null)
+        {
+            var targetMeshFilter = currentObject.AddComponent<MeshFilter>();
+            targetMeshFilter.sharedMesh = sourceMeshFilter.sharedMesh;
+        }
+
+        if (source.TryGetComponent<MeshRenderer>(out var sourceMeshRenderer))
+        {
+            var targetMeshRenderer = currentObject.AddComponent<MeshRenderer>();
+            targetMeshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            targetMeshRenderer.receiveShadows = false;
+            targetMeshRenderer.sharedMaterials = new Material[sourceMeshRenderer.sharedMaterials.Length];
+        }
+
+        if (source.TryGetComponent<LineRenderer>(out var sourceLineRenderer))
+        {
+            var targetLineRenderer = currentObject.AddComponent<LineRenderer>();
+            targetLineRenderer.positionCount = sourceLineRenderer.positionCount;
+            var positions = new Vector3[sourceLineRenderer.positionCount];
+            sourceLineRenderer.GetPositions(positions);
+            targetLineRenderer.SetPositions(positions);
+            targetLineRenderer.widthMultiplier = sourceLineRenderer.widthMultiplier;
+            targetLineRenderer.alignment = sourceLineRenderer.alignment;
+            targetLineRenderer.useWorldSpace = false;
+            targetLineRenderer.loop = sourceLineRenderer.loop;
+            targetLineRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            targetLineRenderer.receiveShadows = false;
+        }
+
+        foreach (Transform child in source)
+        {
+            CloneVisualHierarchy(child, currentTransform);
         }
     }
 
@@ -339,9 +392,11 @@ public sealed class ConstructionPlacementPreviewService
         return false;
     }
 
-    private void ApplyPreviewColor(Color color)
+    private void ApplyPreviewColor(bool isValid)
     {
-        var ghostMaterial = GetGhostMaterial(color);
+        var color = isValid ? ValidColor : InvalidColor;
+        var material = GetGhostMaterial(isValid, color);
+
         foreach (var previewPiece in _previewPieces)
         {
             foreach (var renderer in previewPiece.Renderers)
@@ -351,7 +406,7 @@ public sealed class ConstructionPlacementPreviewService
                     continue;
                 }
 
-                renderer.shadowCastingMode = ShadowCastingMode.Off;
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
                 renderer.receiveShadows = false;
 
                 if (renderer is LineRenderer lineRenderer)
@@ -361,52 +416,62 @@ public sealed class ConstructionPlacementPreviewService
                     continue;
                 }
 
-                var slotCount = renderer.sharedMaterials != null && renderer.sharedMaterials.Length > 0
-                    ? renderer.sharedMaterials.Length
-                    : 1;
-                var replacementMaterials = new Material[slotCount];
-                for (var index = 0; index < slotCount; index++)
+                var materialCount = renderer.sharedMaterials.Length;
+                if (materialCount <= 0)
                 {
-                    replacementMaterials[index] = ghostMaterial;
+                    renderer.sharedMaterial = material;
+                    continue;
                 }
 
-                renderer.sharedMaterials = replacementMaterials;
+                var replacements = new Material[materialCount];
+                for (var index = 0; index < materialCount; index++)
+                {
+                    replacements[index] = material;
+                }
+
+                renderer.sharedMaterials = replacements;
             }
         }
     }
 
-    private Material GetGhostMaterial(Color color)
+    private Material GetGhostMaterial(bool isValid, Color color)
     {
-        if (ApproximatelySameColor(color, ValidColor))
+        if (isValid)
         {
-            return _validGhostMaterial ??= CreateGhostMaterial(color);
+            if (_validGhostMaterial == null)
+            {
+                _validGhostMaterial = CreateGhostMaterial(color);
+            }
+            else
+            {
+                ConfigureGhostMaterial(_validGhostMaterial, color);
+            }
+
+            return _validGhostMaterial;
         }
 
-        return _invalidGhostMaterial ??= CreateGhostMaterial(color);
-    }
+        if (_invalidGhostMaterial == null)
+        {
+            _invalidGhostMaterial = CreateGhostMaterial(color);
+        }
+        else
+        {
+            ConfigureGhostMaterial(_invalidGhostMaterial, color);
+        }
 
-    private static bool ApproximatelySameColor(Color left, Color right)
-    {
-        return Mathf.Abs(left.r - right.r) <= 0.0001f &&
-               Mathf.Abs(left.g - right.g) <= 0.0001f &&
-               Mathf.Abs(left.b - right.b) <= 0.0001f &&
-               Mathf.Abs(left.a - right.a) <= 0.0001f;
+        return _invalidGhostMaterial;
     }
 
     private static Material CreateGhostMaterial(Color color)
     {
-        var shader = Shader.Find("Standard") ??
-                     Shader.Find("Legacy Shaders/Transparent/Diffuse") ??
-                     Shader.Find("Unlit/Color") ??
-                     Shader.Find("Sprites/Default");
-        if (shader == null)
-        {
-            throw new System.InvalidOperationException("Unable to find a shader for construction ghost preview.");
-        }
+        var shader = Shader.Find("Legacy Shaders/Transparent/Diffuse")
+                     ?? Shader.Find("Unlit/Color")
+                     ?? Shader.Find("Standard")
+                     ?? Shader.Find("Sprites/Default");
 
         var material = new Material(shader)
         {
-            name = $"Wyrdrasil_ConstructionGhost_{color.r:0.00}_{color.g:0.00}_{color.b:0.00}_{color.a:0.00}"
+            name = $"WyrdrasilConstructionGhost_{shader?.name ?? "Fallback"}"
         };
 
         ConfigureGhostMaterial(material, color);
@@ -442,12 +507,12 @@ public sealed class ConstructionPlacementPreviewService
 
         if (material.HasProperty("_SrcBlend"))
         {
-            material.SetInt("_SrcBlend", (int)BlendMode.SrcAlpha);
+            material.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
         }
 
         if (material.HasProperty("_DstBlend"))
         {
-            material.SetInt("_DstBlend", (int)BlendMode.OneMinusSrcAlpha);
+            material.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
         }
 
         if (material.HasProperty("_ZWrite"))
@@ -455,12 +520,11 @@ public sealed class ConstructionPlacementPreviewService
             material.SetInt("_ZWrite", 0);
         }
 
+        material.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
         material.DisableKeyword("_ALPHATEST_ON");
         material.EnableKeyword("_ALPHABLEND_ON");
         material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
-        material.renderQueue = (int)RenderQueue.Transparent;
     }
-
 
     private void DestroyGhostMaterials()
     {
@@ -479,7 +543,7 @@ public sealed class ConstructionPlacementPreviewService
 
     private Vector3 GetCurrentOriginPosition()
     {
-        return _anchorPosition + (Vector3.up * _verticalOffset);
+        return _anchorPosition + new Vector3(0f, _verticalOffset, 0f);
     }
 
     private Quaternion GetCurrentRotation()

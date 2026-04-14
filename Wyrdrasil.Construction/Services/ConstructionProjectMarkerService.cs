@@ -1,0 +1,144 @@
+using System.Collections.Generic;
+using System.Linq;
+using UnityEngine;
+using Object = UnityEngine.Object;
+using Wyrdrasil.Construction.Models;
+
+namespace Wyrdrasil.Construction.Services;
+
+public sealed class ConstructionProjectMarkerService
+{
+    private readonly ConstructionProjectService _constructionProjectService;
+    private readonly Dictionary<int, GameObject> _markersByProjectId = new();
+    private Material? _markerMaterial;
+
+    public ConstructionProjectMarkerService(ConstructionProjectService constructionProjectService)
+    {
+        _constructionProjectService = constructionProjectService;
+    }
+
+    public void Update()
+    {
+        var visibleProjects = _constructionProjectService.Projects
+            .Where(project => project.State != ConstructionProjectState.Completed)
+            .ToList();
+
+        var visibleIds = new HashSet<int>(visibleProjects.Select(project => project.Id));
+        foreach (var staleId in _markersByProjectId.Keys.Where(id => !visibleIds.Contains(id)).ToList())
+        {
+            if (_markersByProjectId.TryGetValue(staleId, out var staleMarker) && staleMarker != null)
+            {
+                Object.Destroy(staleMarker);
+            }
+
+            _markersByProjectId.Remove(staleId);
+        }
+
+        foreach (var project in visibleProjects)
+        {
+            if (!_markersByProjectId.TryGetValue(project.Id, out var marker) || marker == null)
+            {
+                marker = CreateMarker(project.Id);
+                _markersByProjectId[project.Id] = marker;
+            }
+
+            marker.transform.position = project.OriginPosition;
+            marker.transform.rotation = Quaternion.identity;
+        }
+    }
+
+    public void Reset()
+    {
+        foreach (var marker in _markersByProjectId.Values)
+        {
+            if (marker != null)
+            {
+                Object.Destroy(marker);
+            }
+        }
+
+        _markersByProjectId.Clear();
+
+        if (_markerMaterial != null)
+        {
+            Object.Destroy(_markerMaterial);
+            _markerMaterial = null;
+        }
+    }
+
+    private GameObject CreateMarker(int projectId)
+    {
+        var root = new GameObject($"WyrdrasilConstructionProjectMarker_{projectId}");
+        root.layer = LayerMask.NameToLayer("Ignore Raycast");
+
+        var shaft = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        shaft.name = "Shaft";
+        shaft.transform.SetParent(root.transform, false);
+        shaft.transform.localPosition = new Vector3(0f, 1.75f, 0f);
+        shaft.transform.localScale = new Vector3(0.18f, 1.75f, 0.18f);
+        ConfigurePrimitive(shaft);
+
+        var beacon = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        beacon.name = "Beacon";
+        beacon.transform.SetParent(root.transform, false);
+        beacon.transform.localPosition = new Vector3(0f, 3.8f, 0f);
+        beacon.transform.localScale = Vector3.one * 0.45f;
+        ConfigurePrimitive(beacon);
+
+        return root;
+    }
+
+    private void ConfigurePrimitive(GameObject primitive)
+    {
+        var collider = primitive.GetComponent<Collider>();
+        if (collider != null)
+        {
+            Object.Destroy(collider);
+        }
+
+        if (primitive.TryGetComponent<Renderer>(out var renderer))
+        {
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+            renderer.sharedMaterial = GetMarkerMaterial();
+        }
+
+        primitive.layer = LayerMask.NameToLayer("Ignore Raycast");
+    }
+
+    private Material GetMarkerMaterial()
+    {
+        if (_markerMaterial != null)
+        {
+            return _markerMaterial;
+        }
+
+        var shader = Shader.Find("Unlit/Color")
+                     ?? Shader.Find("Legacy Shaders/Transparent/Diffuse")
+                     ?? Shader.Find("Standard")
+                     ?? Shader.Find("Sprites/Default");
+
+        _markerMaterial = new Material(shader)
+        {
+            name = "WyrdrasilConstructionProjectMarkerMaterial"
+        };
+
+        var color = new Color(1f, 0.55f, 0.15f, 0.90f);
+        if (_markerMaterial.HasProperty("_Color"))
+        {
+            _markerMaterial.color = color;
+        }
+
+        if (_markerMaterial.HasProperty("_BaseColor"))
+        {
+            _markerMaterial.SetColor("_BaseColor", color);
+        }
+
+        if (_markerMaterial.HasProperty("_EmissionColor"))
+        {
+            _markerMaterial.SetColor("_EmissionColor", new Color(0.45f, 0.18f, 0.02f, 1f));
+        }
+
+        return _markerMaterial;
+    }
+}
