@@ -54,13 +54,15 @@ public class Plugin : BaseUnityPlugin
         _constructionProjectService = constructionBootstrap.ConstructionProjectService;
         var modeService = new RegistryModeService(Logger);
         var buildingService = new BuildingService(Logger);
-        var anchorPolicyService = new ZonePlacementPolicyService();
+        var zoneDefinitionCatalog = new ZoneDefinitionCatalog();
+        var anchorPolicyService = new ZonePlacementPolicyService(zoneDefinitionCatalog);
         var zoneService = new FunctionalZoneService(Logger, modeService, buildingService);
         var waypointService = new NavigationWaypointService(Logger, modeService, zoneService);
         var slotService = new ZoneSlotService(Logger, modeService, zoneService, anchorPolicyService);
-        var seatService = new SeatService(Logger, modeService, zoneService, anchorPolicyService);
-        var bedService = new BedService(Logger, modeService, zoneService, anchorPolicyService);
-        var craftStationService = new CraftStationService(Logger, modeService, zoneService);
+        var seatService = new SeatService(Logger, modeService, buildingService, zoneService, anchorPolicyService);
+        var bedService = new BedService(Logger, modeService, buildingService, zoneService, anchorPolicyService);
+        var craftStationService = new CraftStationService(Logger, modeService, buildingService, zoneService, anchorPolicyService);
+        var zoneRuntimeService = new FunctionalZoneRuntimeService(zoneDefinitionCatalog, zoneService, slotService, seatService, bedService, craftStationService);
 
         var appearanceCatalog = new NpcAppearanceCatalog();
         var equipmentCatalog = new NpcEquipmentCatalog();
@@ -109,7 +111,7 @@ public class Plugin : BaseUnityPlugin
         occupationTargetCatalog.Register(new ConstructionWorkPostOccupationTargetSource(constructionBootstrap.RuntimeApi, craftStationService, anchorOccupationPlanBuilder));
 
         var occupationClaimRegistry = new OccupationClaimRegistry();
-        occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(seatService, occupationTargetCatalog));
+        occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(seatService, occupationTargetCatalog, zoneRuntimeService));
 
         var occupationResolverRegistry = new OccupationResolverRegistry();
         occupationResolverRegistry.Register(new AssignedPurposeOccupationResolver(

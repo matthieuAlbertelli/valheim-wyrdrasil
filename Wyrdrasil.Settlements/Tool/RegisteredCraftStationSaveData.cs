@@ -8,7 +8,7 @@ public sealed class RegisteredCraftStationSaveData
 {
     public int Id;
     public int BuildingId;
-    public int ZoneId;
+    public int? ZoneId;
     public string DisplayName = string.Empty;
     public string PersistentFurnitureId = string.Empty;
     public Float3SaveData AnchorLocalPosition = new();

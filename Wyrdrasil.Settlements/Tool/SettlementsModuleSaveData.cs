@@ -6,7 +6,7 @@ namespace Wyrdrasil.Settlements.Tool;
 [Serializable]
 public sealed class SettlementsModuleSaveData
 {
-    public int SchemaVersion = 3;
+    public int SchemaVersion = 4;
     public int NextBuildingId = 1;
     public int NextZoneId = 1;
     public int NextWaypointId = 1;

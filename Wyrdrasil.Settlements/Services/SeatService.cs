@@ -15,6 +15,7 @@ public sealed class SeatService
     private const float ResolveSeatDistance = 2f;
 
     private readonly ManualLogSource _log;
+    private readonly BuildingService _buildingService;
     private readonly FunctionalZoneService _zoneService;
     private readonly ZonePlacementPolicyService _anchorPolicyService;
     private readonly List<RegisteredSeatData> _seats = new();
@@ -28,9 +29,10 @@ public sealed class SeatService
     public IReadOnlyList<RegisteredSeatData> Seats => _seats;
     public int NextSeatId => _nextSeatId;
 
-    public SeatService(ManualLogSource log, RegistryModeService modeService, FunctionalZoneService zoneService, ZonePlacementPolicyService anchorPolicyService)
+    public SeatService(ManualLogSource log, RegistryModeService modeService, BuildingService buildingService, FunctionalZoneService zoneService, ZonePlacementPolicyService anchorPolicyService)
     {
         _log = log;
+        _buildingService = buildingService;
         _zoneService = zoneService;
         _anchorPolicyService = anchorPolicyService;
         _visualsVisible = modeService.IsRegistryModeEnabled;
@@ -202,29 +204,26 @@ public sealed class SeatService
         var referencePosition = GetSeatReferencePosition(chairComponent);
         var zone = _zoneService.FindZoneContainingPointHorizontally(referencePosition);
 
-        if (_anchorPolicyService.RequiresZone(defaultUsageType) && zone == null)
+        var shouldAssociateZone = zone != null && _anchorPolicyService.ShouldAssociateSeatWithZone(defaultUsageType, zone.ZoneType);
+        if (zone == null && !_anchorPolicyService.CanDesignateStandalone(defaultUsageType))
         {
             _log.LogWarning("Cannot designate seat: this seat usage requires a functional zone, but no zone was found.");
             return;
         }
 
-        if (zone == null)
-        {
-            _log.LogWarning("Cannot designate seat yet: no functional zone footprint was found at the targeted chair, and standalone building assignment is not authored in this iteration.");
-            return;
-        }
+        var buildingId = zone != null
+            ? zone.BuildingId
+            : _buildingService.CreateImplicitBuildingForDesignation("Seat", referencePosition).Id;
 
-        if (!_anchorPolicyService.IsZoneTypeAllowed(defaultUsageType, zone.ZoneType))
-        {
-            _log.LogWarning($"Cannot designate seat: zone type '{zone.ZoneType}' is not compatible with seat usage '{defaultUsageType}'.");
-            return;
-        }
+        var zoneId = shouldAssociateZone && zone != null
+            ? zone.Id
+            : (int?)null;
 
         var persistentFurnitureId = BuildPersistentFurnitureId(chairComponent);
         var seatData = new RegisteredSeatData(
             _nextSeatId++,
-            zone.BuildingId,
-            zone.Id,
+            buildingId,
+            zoneId,
             defaultUsageType,
             furnitureRoot.name,
             persistentFurnitureId,
@@ -235,7 +234,14 @@ public sealed class SeatService
         _seatRoots[seatData.Id] = furnitureRoot;
         EnsureMarker(seatData);
 
-        _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) as {seatData.UsageType} with persistentId='{persistentFurnitureId}'.");
+        if (zoneId.HasValue)
+        {
+            _log.LogInfo($"Designated seat #{seatData.Id} on chair '{seatData.DisplayName}' in zone #{zoneId.Value} (building #{buildingId}) as {seatData.UsageType} with persistentId='{persistentFurnitureId}'.");
+        }
+        else
+        {
+            _log.LogInfo($"Designated standalone seat #{seatData.Id} on chair '{seatData.DisplayName}' in building #{buildingId} as {seatData.UsageType} with persistentId='{persistentFurnitureId}'.");
+        }
     }
 
     public bool TryGetSeatAtCrosshair(out RegisteredSeatData seatData)
@@ -290,7 +296,7 @@ public sealed class SeatService
         return false;
     }
 
-    public bool TryReservePublicTavernSeat(int registeredNpcId, out RegisteredSeatData? seatData)
+    public bool TryReservePublicSeat(int registeredNpcId, System.Func<RegisteredSeatData, bool> eligibilityPredicate, out RegisteredSeatData? seatData)
     {
         if (TryGetOccupiedSeatForResident(registeredNpcId, out var occupiedSeat))
         {
@@ -300,7 +306,12 @@ public sealed class SeatService
 
         foreach (var seat in _seats.OrderBy(candidate => candidate.Id))
         {
-            if (!IsEligiblePublicMealSeat(seat))
+            if (seat.UsageType != SeatUsageType.Public || seat.AssignedRegisteredNpcId.HasValue || seat.IsTemporarilyOccupied)
+            {
+                continue;
+            }
+
+            if (!eligibilityPredicate(seat))
             {
                 continue;
             }
@@ -316,6 +327,11 @@ public sealed class SeatService
 
         seatData = null;
         return false;
+    }
+
+    public bool TryReservePublicTavernSeat(int registeredNpcId, out RegisteredSeatData? seatData)
+    {
+        return TryReservePublicSeat(registeredNpcId, IsEligiblePublicMealSeat, out seatData);
     }
 
     public void ReleasePublicSeatOccupation(int registeredNpcId)

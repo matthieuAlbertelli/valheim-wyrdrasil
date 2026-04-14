@@ -16,6 +16,7 @@ public sealed class BedService
     private const float ResolveBedDistance = 2.5f;
 
     private readonly ManualLogSource _log;
+    private readonly BuildingService _buildingService;
     private readonly FunctionalZoneService _zoneService;
     private readonly ZonePlacementPolicyService _anchorPolicyService;
     private readonly List<RegisteredBedData> _beds = new();
@@ -32,10 +33,12 @@ public sealed class BedService
     public BedService(
         ManualLogSource log,
         RegistryModeService modeService,
+        BuildingService buildingService,
         FunctionalZoneService zoneService,
         ZonePlacementPolicyService anchorPolicyService)
     {
         _log = log;
+        _buildingService = buildingService;
         _zoneService = zoneService;
         _anchorPolicyService = anchorPolicyService;
         _visualsVisible = modeService.IsRegistryModeEnabled;
@@ -190,29 +193,26 @@ public sealed class BedService
         var referencePosition = GetBedReferencePosition(bedComponent);
         var zone = _zoneService.FindZoneContainingPointHorizontally(referencePosition);
 
-        if (_anchorPolicyService.RequiresZoneForBed() && zone == null)
+        var shouldAssociateZone = zone != null && _anchorPolicyService.ShouldAssociateBedWithZone(zone.ZoneType);
+        if (zone == null && !_anchorPolicyService.CanDesignateBedStandalone())
         {
             _log.LogWarning("Cannot designate bed: this bed requires a functional zone, but no zone was found.");
             return;
         }
 
-        if (zone == null)
-        {
-            _log.LogWarning("Cannot designate bed: no compatible bedroom-style zone was found.");
-            return;
-        }
+        var buildingId = zone != null
+            ? zone.BuildingId
+            : _buildingService.CreateImplicitBuildingForDesignation("Bed", referencePosition).Id;
 
-        if (!_anchorPolicyService.IsZoneTypeAllowedForBed(zone.ZoneType))
-        {
-            _log.LogWarning($"Cannot designate bed: zone type '{zone.ZoneType}' is not compatible with beds.");
-            return;
-        }
+        var zoneId = shouldAssociateZone && zone != null
+            ? zone.Id
+            : (int?)null;
 
         var persistentFurnitureId = BuildPersistentFurnitureId(bedComponent);
         var bedData = new RegisteredBedData(
             _nextBedId++,
-            zone.BuildingId,
-            zone.Id,
+            buildingId,
+            zoneId,
             furnitureRoot.name,
             persistentFurnitureId,
             furnitureRoot,
@@ -222,7 +222,14 @@ public sealed class BedService
         _bedRoots[bedData.Id] = furnitureRoot;
         EnsureMarker(bedData);
 
-        _log.LogInfo($"Designated bed #{bedData.Id} on bed '{bedData.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) with persistentId='{persistentFurnitureId}'.");
+        if (zoneId.HasValue)
+        {
+            _log.LogInfo($"Designated bed #{bedData.Id} on bed '{bedData.DisplayName}' in zone #{zoneId.Value} (building #{buildingId}) with persistentId='{persistentFurnitureId}'.");
+        }
+        else
+        {
+            _log.LogInfo($"Designated standalone bed #{bedData.Id} on bed '{bedData.DisplayName}' in building #{buildingId} with persistentId='{persistentFurnitureId}'.");
+        }
     }
 
     public bool TryGetBedAtCrosshair(out RegisteredBedData bedData)

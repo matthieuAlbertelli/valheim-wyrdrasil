@@ -13,7 +13,7 @@ public sealed class RegisteredCraftStationData
 
     public int Id { get; }
     public int BuildingId { get; }
-    public int ZoneId { get; }
+    public int? ZoneId { get; }
     public string DisplayName { get; }
     public string PersistentFurnitureId { get; }
     public string InteractionProfileId { get; private set; }
@@ -29,7 +29,7 @@ public sealed class RegisteredCraftStationData
     public RegisteredCraftStationData(
         int id,
         int buildingId,
-        int zoneId,
+        int? zoneId,
         string displayName,
         string persistentFurnitureId,
         Vector3 referenceWorldPosition,

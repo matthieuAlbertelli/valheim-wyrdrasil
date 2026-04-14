@@ -1,8 +1,6 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace Wyrdrasil.Settlements.Tool;
-
 
 public sealed class RegisteredBedData
 {
@@ -16,7 +14,7 @@ public sealed class RegisteredBedData
 
     public int Id { get; }
     public int BuildingId { get; }
-    public int ZoneId { get; }
+    public int? ZoneId { get; }
     public string DisplayName { get; }
     public string PersistentFurnitureId { get; }
 
@@ -64,7 +62,7 @@ public sealed class RegisteredBedData
     public RegisteredBedData(
         int id,
         int buildingId,
-        int zoneId,
+        int? zoneId,
         string displayName,
         string persistentFurnitureId,
         GameObject furnitureRoot,
@@ -81,7 +79,7 @@ public sealed class RegisteredBedData
     public RegisteredBedData(
         int id,
         int buildingId,
-        int zoneId,
+        int? zoneId,
         string displayName,
         string persistentFurnitureId,
         Vector3 sleepPosition,

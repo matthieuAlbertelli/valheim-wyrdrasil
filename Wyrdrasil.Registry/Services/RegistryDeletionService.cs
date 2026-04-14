@@ -79,7 +79,7 @@ public sealed class RegistryDeletionService
         {
             if (deletedZone != null)
             {
-                _buildingService.DeleteBuildingIfUnused(deletedZone.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats);
+                _buildingService.DeleteBuildingIfUnused(deletedZone.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats, _bedService.Beds, _craftStationService.CraftStations);
             }
 
             _log.LogInfo($"Deleted zone #{zone.Id}.");
@@ -97,45 +97,57 @@ public sealed class RegistryDeletionService
         if (_slotService.DeleteSlot(slot.Id))
         {
             _residentService.HandleDeletedSlot(slot.Id);
-            _buildingService.DeleteBuildingIfUnused(slot.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats);
+            _buildingService.DeleteBuildingIfUnused(slot.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats, _bedService.Beds, _craftStationService.CraftStations);
             _log.LogInfo($"Deleted slot #{slot.Id}.");
         }
     }
 
     public void DeleteDesignatedSeatAtCrosshair()
     {
-        if (_seatService.DeleteSeatAtCrosshair(out var seatId))
+        if (!_seatService.TryGetSeatAtCrosshair(out var seat))
         {
-            _residentService.HandleDeletedSeat(seatId);
-            _log.LogInfo($"Deleted designated seat #{seatId}.");
+            _log.LogWarning("Cannot delete designated seat: no registered seat furniture was found under the crosshair.");
             return;
         }
 
-        _log.LogWarning("Cannot delete designated seat: no registered seat furniture was found under the crosshair.");
+        if (_seatService.DeleteSeat(seat.Id))
+        {
+            _residentService.HandleDeletedSeat(seat.Id);
+            _buildingService.DeleteBuildingIfUnused(seat.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats, _bedService.Beds, _craftStationService.CraftStations);
+            _log.LogInfo($"Deleted designated seat #{seat.Id}.");
+        }
     }
 
     public void DeleteDesignatedBedAtCrosshair()
     {
-        if (_bedService.DeleteBedAtCrosshair(out var bedId))
+        if (!_bedService.TryGetBedAtCrosshair(out var bed))
         {
-            _residentService.HandleDeletedBed(bedId);
-            _log.LogInfo($"Deleted designated bed #{bedId}.");
+            _log.LogWarning("Cannot delete designated bed: no registered bed furniture was found under the crosshair.");
             return;
         }
 
-        _log.LogWarning("Cannot delete designated bed: no registered bed furniture was found under the crosshair.");
+        if (_bedService.DeleteBed(bed.Id))
+        {
+            _residentService.HandleDeletedBed(bed.Id);
+            _buildingService.DeleteBuildingIfUnused(bed.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats, _bedService.Beds, _craftStationService.CraftStations);
+            _log.LogInfo($"Deleted designated bed #{bed.Id}.");
+        }
     }
 
     public void DeleteDesignatedCraftStationAtCrosshair()
     {
-        if (_craftStationService.DeleteCraftStationAtCrosshair(out var craftStationId))
+        if (!_craftStationService.TryGetCraftStationAtCrosshair(out var craftStation))
         {
-            _residentService.HandleDeletedCraftStation(craftStationId);
-            _log.LogInfo($"Deleted designated craft station #{craftStationId}.");
+            _log.LogWarning("Cannot delete designated craft station: no registered craft station furniture was found under the crosshair.");
             return;
         }
 
-        _log.LogWarning("Cannot delete designated craft station: no registered craft station furniture was found under the crosshair.");
+        if (_craftStationService.DeleteCraftStation(craftStation.Id))
+        {
+            _residentService.HandleDeletedCraftStation(craftStation.Id);
+            _buildingService.DeleteBuildingIfUnused(craftStation.BuildingId, _zoneService.Zones, _slotService.Slots, _seatService.Seats, _bedService.Beds, _craftStationService.CraftStations);
+            _log.LogInfo($"Deleted designated craft station #{craftStation.Id}.");
+        }
     }
 
     public void DeleteNavigationWaypointAtCrosshair()

@@ -45,7 +45,7 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
     }
 
     public string ModuleId => "settlements";
-    public int SchemaVersion => 3;
+    public int SchemaVersion => 4;
 
     public void ResetForWorldChange()
     {

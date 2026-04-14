@@ -228,7 +228,7 @@ public sealed class ZoneSlotService
             return;
         }
 
-        if (_anchorPolicyService.RequiresZone(slotType) && !_anchorPolicyService.IsZoneTypeAllowed(slotType, zone.ZoneType))
+        if (_anchorPolicyService.RequiresZone(slotType) && !_anchorPolicyService.ShouldAssociateWithZone(slotType, zone.ZoneType))
         {
             _log.LogWarning($"Cannot create slot '{slotType}': zone type '{zone.ZoneType}' is not compatible.");
             return;

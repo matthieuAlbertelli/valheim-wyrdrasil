@@ -13,7 +13,9 @@ public sealed class CraftStationService
     private const float ResolveStationDistance = 2.5f;
 
     private readonly ManualLogSource _log;
+    private readonly BuildingService _buildingService;
     private readonly FunctionalZoneService _zoneService;
+    private readonly ZonePlacementPolicyService _anchorPolicyService;
     private readonly List<RegisteredCraftStationData> _craftStations = new();
     private readonly Dictionary<int, WyrdrasilRegisteredCraftStationMarker> _markers = new();
     private readonly Dictionary<int, GameObject> _anchorRoots = new();
@@ -24,10 +26,12 @@ public sealed class CraftStationService
     public IReadOnlyList<RegisteredCraftStationData> CraftStations => _craftStations;
     public int NextCraftStationId => _nextCraftStationId;
 
-    public CraftStationService(ManualLogSource log, RegistryModeService modeService, FunctionalZoneService zoneService)
+    public CraftStationService(ManualLogSource log, RegistryModeService modeService, BuildingService buildingService, FunctionalZoneService zoneService, ZonePlacementPolicyService anchorPolicyService)
     {
         _log = log;
+        _buildingService = buildingService;
         _zoneService = zoneService;
+        _anchorPolicyService = anchorPolicyService;
         _visualsVisible = modeService.IsRegistryModeEnabled;
         modeService.RegistryModeChanged += OnRegistryModeChanged;
     }
@@ -189,10 +193,11 @@ public sealed class CraftStationService
         }
 
         var zone = _zoneService.FindZoneContainingPointHorizontally(GetReferencePosition(craftingStation));
-        if (zone == null)
+        var shouldAssociateZone = zone != null && _anchorPolicyService.ShouldAssociateCraftStationWithZone(zone.ZoneType);
+        if (zone == null && !_anchorPolicyService.CanDesignateCraftStationStandalone())
         {
             craftStationData = null!;
-            failureReason = "Cannot designate craft station yet: no functional zone footprint found at the targeted table.";
+            failureReason = "Cannot designate craft station: this station requires a functional zone, but no zone was found.";
             return false;
         }
 
@@ -200,10 +205,18 @@ public sealed class CraftStationService
         var referenceWorldPosition = GetReferencePosition(craftingStation);
         var profile = ResolveProfileForFurniture(furnitureRoot.name);
 
+        var buildingId = zone != null
+            ? zone.BuildingId
+            : _buildingService.CreateImplicitBuildingForDesignation("Craft Station", referenceWorldPosition).Id;
+
+        var zoneId = shouldAssociateZone && zone != null
+            ? zone.Id
+            : (int?)null;
+
         var data = new RegisteredCraftStationData(
             _nextCraftStationId++,
-            zone.BuildingId,
-            zone.Id,
+            buildingId,
+            zoneId,
             furnitureRoot.name,
             persistentFurnitureId,
             referenceWorldPosition,
@@ -220,7 +233,15 @@ public sealed class CraftStationService
 
         craftStationData = data;
         failureReason = string.Empty;
-        _log.LogInfo($"[CraftStation][Authoring] Designated station #{data.Id} on '{data.DisplayName}' in zone #{zone.Id} (building #{zone.BuildingId}) with profile='{profile.ProfileId}' and persistentId='{persistentFurnitureId}'.");
+        if (zoneId.HasValue)
+        {
+            _log.LogInfo($"[CraftStation][Authoring] Designated station #{data.Id} on '{data.DisplayName}' in zone #{zoneId.Value} (building #{buildingId}) with profile='{profile.ProfileId}' and persistentId='{persistentFurnitureId}'.");
+        }
+        else
+        {
+            _log.LogInfo($"[CraftStation][Authoring] Designated standalone station #{data.Id} on '{data.DisplayName}' in building #{buildingId} with profile='{profile.ProfileId}' and persistentId='{persistentFurnitureId}'.");
+        }
+
         return true;
     }
 
