@@ -93,10 +93,10 @@ public sealed class ConstructionProjectService
 
     public bool TryGetProject(int projectId, out ConstructionProjectData project) => _projectsById.TryGetValue(projectId, out project!);
 
-    public IReadOnlyList<int> GetProjectIdsInZone(FunctionalZoneData zone)
+    public IReadOnlyList<int> GetProjectIdsIntersectingZone(FunctionalZoneData zone)
     {
         return _projectsById.Values
-            .Where(project => zone.ContainsPointHorizontally(project.OriginPosition))
+            .Where(project => ProjectIntersectsZone(project, zone))
             .OrderBy(project => project.Id)
             .Select(project => project.Id)
             .ToList();
@@ -570,6 +570,31 @@ public sealed class ConstructionProjectService
             project.Id != projectId &&
             project.WorkPosts.Any(workPost => workPost.CraftStationId == craftStationId));
     }
+
+    private bool ProjectIntersectsZone(ConstructionProjectData project, FunctionalZoneData zone)
+    {
+        if (zone.ContainsPoint(project.OriginPosition))
+        {
+            return true;
+        }
+
+        if (!TryGetOrderedBlueprintPieces(project, out var orderedPieces))
+        {
+            return false;
+        }
+
+        foreach (var piece in orderedPieces)
+        {
+            var worldPosition = project.OriginPosition + (project.OriginRotation * piece.LocalPosition);
+            if (zone.ContainsPoint(worldPosition))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
 
     private bool IsCraftStationEligibleForProject(RegisteredCraftStationData craftStation, ConstructionProjectData project)
     {

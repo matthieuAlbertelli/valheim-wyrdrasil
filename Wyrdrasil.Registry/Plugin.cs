@@ -202,7 +202,8 @@ public class Plugin : BaseUnityPlugin
             bedService,
             craftStationService,
             waypointService,
-            residentService);
+            residentService,
+            constructionBootstrap.TestingApi);
 
         var persistenceCoordinator = new WorldPersistenceCoordinator();
         var persistenceParticipants = new List<IWorldPersistenceParticipant>

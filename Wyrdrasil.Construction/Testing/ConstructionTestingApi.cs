@@ -181,8 +181,8 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         return true;
     }
 
-    public bool TryDeleteConstructionInZone(FunctionalZoneData zone, out int deletedProjectCount, out int destroyedPieceCount, out string failureReason)
+    public bool TryPurgeAllConstructionInZone(FunctionalZoneData zone, out ZoneConstructionPurgeReport report, out string failureReason)
     {
-        return _constructionProjectCleanupService.TryDeleteProjectsInZone(zone, out deletedProjectCount, out destroyedPieceCount, out failureReason);
+        return _constructionProjectCleanupService.TryPurgeAllConstructionInZone(zone, out report, out failureReason);
     }
 }

@@ -1,5 +1,8 @@
+using System.Collections.Generic;
 using BepInEx.Logging;
+using Wyrdrasil.Construction.Testing;
 using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 
@@ -14,6 +17,7 @@ public sealed class RegistryDeletionService
     private readonly CraftStationService _craftStationService;
     private readonly NavigationWaypointService _waypointService;
     private readonly RegistryResidentService _residentService;
+    private readonly IConstructionTestingApi _constructionTestingApi;
 
     public RegistryDeletionService(
         ManualLogSource log,
@@ -24,7 +28,8 @@ public sealed class RegistryDeletionService
         BedService bedService,
         CraftStationService craftStationService,
         NavigationWaypointService waypointService,
-        RegistryResidentService residentService)
+        RegistryResidentService residentService,
+        IConstructionTestingApi constructionTestingApi)
     {
         _log = log;
         _buildingService = buildingService;
@@ -35,6 +40,7 @@ public sealed class RegistryDeletionService
         _craftStationService = craftStationService;
         _waypointService = waypointService;
         _residentService = residentService;
+        _constructionTestingApi = constructionTestingApi;
     }
 
     public void DeleteZoneAtCrosshair()
@@ -140,5 +146,108 @@ public sealed class RegistryDeletionService
         }
 
         _log.LogWarning("Cannot delete waypoint: no navigation waypoint was found under the crosshair.");
+    }
+
+    public void PurgeAllConstructionInTargetZone()
+    {
+        if (!_zoneService.TryGetPlacementPoint(out var point) || !_zoneService.TryFindZoneAtPoint(point, out var zone))
+        {
+            _log.LogWarning("Cannot purge construction: no functional zone was found under the crosshair.");
+            return;
+        }
+
+        var seatIdsToDelete = FindSeatIdsIntersectingZone(zone);
+        var bedIdsToDelete = FindBedIdsIntersectingZone(zone);
+        var craftStationIdsToDelete = FindCraftStationIdsIntersectingZone(zone);
+
+        if (!_constructionTestingApi.TryPurgeAllConstructionInZone(zone, out var report, out var failureReason))
+        {
+            _log.LogWarning(failureReason);
+            return;
+        }
+
+        foreach (var seatId in seatIdsToDelete)
+        {
+            if (_seatService.DeleteSeat(seatId))
+            {
+                _residentService.HandleDeletedSeat(seatId);
+            }
+        }
+
+        foreach (var bedId in bedIdsToDelete)
+        {
+            if (_bedService.DeleteBed(bedId))
+            {
+                _residentService.HandleDeletedBed(bedId);
+            }
+        }
+
+        foreach (var craftStationId in craftStationIdsToDelete)
+        {
+            if (_craftStationService.DeleteCraftStation(craftStationId))
+            {
+                _residentService.HandleDeletedCraftStation(craftStationId);
+            }
+        }
+
+        var clearedConstructionAssignments = _residentService.ClearStaleConstructionAssignments();
+        _log.LogInfo($"Purged all construction in zone #{zone.Id}: destroyed {report.DestroyedPieceCount} piece instance(s), deleted {report.DeletedProjectCount} chantier project(s), removed {seatIdsToDelete.Count} seat designation(s), {bedIdsToDelete.Count} bed designation(s) and {craftStationIdsToDelete.Count} craft station designation(s). Cleared {clearedConstructionAssignments} stale chantier assignment(s).");
+    }
+
+    private List<int> FindSeatIdsIntersectingZone(FunctionalZoneData zone)
+    {
+        var ids = new List<int>();
+        foreach (var seat in _seatService.Seats)
+        {
+            if (seat.FurnitureRoot == null || !ZoneVolumeOverlapUtility.TryGetWorldBounds(seat.FurnitureRoot, out var bounds))
+            {
+                continue;
+            }
+
+            if (ZoneVolumeOverlapUtility.IntersectsZone(zone, bounds))
+            {
+                ids.Add(seat.Id);
+            }
+        }
+
+        return ids;
+    }
+
+    private List<int> FindBedIdsIntersectingZone(FunctionalZoneData zone)
+    {
+        var ids = new List<int>();
+        foreach (var bed in _bedService.Beds)
+        {
+            if (bed.FurnitureRoot == null || !ZoneVolumeOverlapUtility.TryGetWorldBounds(bed.FurnitureRoot, out var bounds))
+            {
+                continue;
+            }
+
+            if (ZoneVolumeOverlapUtility.IntersectsZone(zone, bounds))
+            {
+                ids.Add(bed.Id);
+            }
+        }
+
+        return ids;
+    }
+
+    private List<int> FindCraftStationIdsIntersectingZone(FunctionalZoneData zone)
+    {
+        var ids = new List<int>();
+        foreach (var craftStation in _craftStationService.CraftStations)
+        {
+            if (craftStation.FurnitureRoot == null || !ZoneVolumeOverlapUtility.TryGetWorldBounds(craftStation.FurnitureRoot, out var bounds))
+            {
+                continue;
+            }
+
+            if (ZoneVolumeOverlapUtility.IntersectsZone(zone, bounds))
+            {
+                ids.Add(craftStation.Id);
+            }
+        }
+
+        return ids;
     }
 }

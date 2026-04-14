@@ -99,7 +99,7 @@ public sealed class RegistryHudRenderer
 
         if (state.SelectedCategory == RegistryCategory.Diagnostics)
         {
-            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Diagnostics : inspection IA, édition anchor craft, simulation temps, suppression de construction ciblée et flush registre.", _hintStyle!);
+            GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Diagnostics : inspection IA, édition anchor craft, simulation temps, purge radicale de construction ciblée et flush registre.", _hintStyle!);
             nextLineY += 24f;
         }
 
@@ -175,7 +175,7 @@ public sealed class RegistryHudRenderer
         RegistryActionType.DumpLatestConstructionProjectState => "Construction : dump du dernier projet",
         RegistryActionType.AssignTargetResidentToLatestConstructionProject => "Construction : assigner le PNJ visé au dernier chantier",
         RegistryActionType.ClearTargetResidentConstructionAssignment => "Construction : retirer le PNJ visé de son chantier",
-        RegistryActionType.DeleteConstructionInTargetZone => "Diagnostic : supprimer les constructions de la zone visée",
+        RegistryActionType.DeleteConstructionInTargetZone => "Diagnostic : purger radicalement les constructions de la zone visée",
         RegistryActionType.ForceCompleteLatestConstructionProject => "Construction : compléter le dernier projet",
         RegistryActionType.ResetLatestConstructionProject => "Construction : reset du dernier projet",
         RegistryActionType.ToggleConstructionVerboseLogging => "Construction : basculer logs verbeux",

@@ -2,6 +2,7 @@
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Wyrdrasil.Construction.Diagnostics;
+using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Construction.Services;
@@ -19,40 +20,39 @@ public sealed class ConstructionProjectCleanupService
         _debugLogService = debugLogService;
     }
 
-    public bool TryDeleteProjectsInZone(FunctionalZoneData zone, out int deletedProjectCount, out int destroyedPieceCount, out string failureReason)
+    public bool TryPurgeAllConstructionInZone(FunctionalZoneData zone, out ZoneConstructionPurgeReport report, out string failureReason)
     {
-        deletedProjectCount = 0;
-        destroyedPieceCount = 0;
+        report = new ZoneConstructionPurgeReport();
 
-        var projectIds = _constructionProjectService.GetProjectIdsInZone(zone);
-        if (projectIds.Count == 0)
-        {
-            failureReason = $"No construction project was found inside zone #{zone.Id}.";
-            return false;
-        }
+        report.DestroyedPieceCount = DestroyAllPiecesIntersectingZone(zone);
 
+        var projectIds = _constructionProjectService.GetProjectIdsIntersectingZone(zone);
         foreach (var projectId in projectIds)
         {
-            destroyedPieceCount += DestroyBuiltPiecesForProject(projectId);
             if (!_constructionProjectService.DeleteProject(projectId))
             {
                 failureReason = $"Failed to delete construction project {projectId}.";
                 return false;
             }
 
-            deletedProjectCount++;
+            report.DeletedProjectCount++;
+        }
+
+        if (report.DestroyedPieceCount <= 0 && report.DeletedProjectCount <= 0)
+        {
+            failureReason = $"No construction piece or chantier was found inside zone #{zone.Id}.";
+            return false;
         }
 
         failureReason = string.Empty;
         _debugLogService.Info(
             "Cleanup",
-            $"Deleted {deletedProjectCount} construction project(s) in zone #{zone.Id} and destroyed {destroyedPieceCount} built piece instance(s).");
+            $"Purged all construction in zone #{zone.Id}: destroyed {report.DestroyedPieceCount} piece instance(s) and deleted {report.DeletedProjectCount} project(s).");
         return true;
     }
 
-    private static int DestroyBuiltPiecesForProject(int projectId)
+    private static int DestroyAllPiecesIntersectingZone(FunctionalZoneData zone)
     {
-        var marker = $"_ConstructionProject_{projectId}_Piece_";
         var destroyedRootIds = new HashSet<int>();
         var destroyedCount = 0;
 
@@ -64,17 +64,23 @@ public sealed class ConstructionProjectCleanupService
             }
 
             var root = piece.gameObject;
-            if (!root.name.Contains(marker))
-            {
-                continue;
-            }
-
             var instanceId = root.GetInstanceID();
-            if (!destroyedRootIds.Add(instanceId))
+            if (destroyedRootIds.Contains(instanceId))
             {
                 continue;
             }
 
+            if (!ZoneVolumeOverlapUtility.TryGetWorldBounds(root, out var bounds))
+            {
+                bounds = new Bounds(root.transform.position, Vector3.zero);
+            }
+
+            if (!ZoneVolumeOverlapUtility.IntersectsZone(zone, bounds))
+            {
+                continue;
+            }
+
+            destroyedRootIds.Add(instanceId);
             Object.Destroy(root);
             destroyedCount++;
         }
