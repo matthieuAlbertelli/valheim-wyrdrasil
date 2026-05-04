@@ -1,22 +1,22 @@
 using UnityEngine;
 using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Authoring;
 using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Registry.Services.Interactions;
 
 public sealed class RegistryZoneAuthoringInteractionService
 {
-    private readonly FunctionalZoneService _zoneService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public RegistryZoneAuthoringInteractionService(FunctionalZoneService zoneService)
+    public RegistryZoneAuthoringInteractionService(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _zoneService = zoneService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
-    public PendingZoneAuthoringSnapshot? CurrentSnapshot => _zoneService.GetPendingZoneAuthoringSnapshot();
+    public PendingZoneAuthoringSnapshot? CurrentSnapshot => _settlementsAuthoringApi.GetPendingZoneAuthoringSnapshot();
 
-    public bool IsActive => _zoneService.IsZoneAuthoringActive;
+    public bool IsActive => _settlementsAuthoringApi.IsZoneAuthoringActive;
 
     public bool ShouldHandle(RegistryActionType selectedAction)
     {
@@ -29,7 +29,7 @@ public sealed class RegistryZoneAuthoringInteractionService
     {
         if (selectedAction == RegistryActionType.CreateTavernZone || selectedAction == RegistryActionType.CreateBedroomZone)
         {
-            _zoneService.UpdatePendingZoneAuthoringPreview();
+            _settlementsAuthoringApi.UpdatePendingZoneAuthoringPreview();
         }
     }
 
@@ -40,13 +40,13 @@ public sealed class RegistryZoneAuthoringInteractionService
             return false;
         }
 
-        _zoneService.HandleZoneAuthoringSecondaryInput();
+        _settlementsAuthoringApi.HandleZoneAuthoringSecondaryInput();
         return true;
     }
 
     public bool TryHandleHeightAdjustment()
     {
-        if (!_zoneService.IsZoneHeightEditingActive)
+        if (!_settlementsAuthoringApi.IsZoneHeightEditingActive)
         {
             return false;
         }
@@ -59,15 +59,15 @@ public sealed class RegistryZoneAuthoringInteractionService
 
         var direction = scrollDelta > 0f ? 1 : -1;
         var adjustBase = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
-        _zoneService.AdjustPendingZoneHeight(direction, adjustBase);
+        _settlementsAuthoringApi.AdjustPendingZoneHeight(direction, adjustBase);
         return true;
     }
 
     public void CancelIfActive()
     {
-        if (_zoneService.IsZoneAuthoringActive)
+        if (_settlementsAuthoringApi.IsZoneAuthoringActive)
         {
-            _zoneService.CancelPendingZoneAuthoring();
+            _settlementsAuthoringApi.CancelPendingZoneAuthoring();
         }
     }
 }

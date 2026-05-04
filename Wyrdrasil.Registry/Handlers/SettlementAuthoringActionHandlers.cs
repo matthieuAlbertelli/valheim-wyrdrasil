@@ -1,125 +1,125 @@
 using Wyrdrasil.Registry.Services;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Authoring;
 
 namespace Wyrdrasil.Registry.Handlers;
 
 public sealed class CreateTavernZoneHandler : IRegistryActionHandler
 {
-    private readonly FunctionalZoneService _zoneService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public CreateTavernZoneHandler(FunctionalZoneService zoneService)
+    public CreateTavernZoneHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _zoneService = zoneService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _zoneService.CreateTavernZone();
+        _settlementsAuthoringApi.CreateTavernZone();
     }
 }
 
 public sealed class CreateBedroomZoneHandler : IRegistryActionHandler
 {
-    private readonly FunctionalZoneService _zoneService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public CreateBedroomZoneHandler(FunctionalZoneService zoneService)
+    public CreateBedroomZoneHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _zoneService = zoneService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _zoneService.CreateBedroomZone();
+        _settlementsAuthoringApi.CreateBedroomZone();
     }
 }
 
 public sealed class CreateNavigationWaypointHandler : IRegistryActionHandler
 {
-    private readonly NavigationWaypointService _waypointService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public CreateNavigationWaypointHandler(NavigationWaypointService waypointService)
+    public CreateNavigationWaypointHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _waypointService = waypointService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _waypointService.CreateNavigationWaypoint();
+        _settlementsAuthoringApi.CreateNavigationWaypoint();
     }
 }
 
 public sealed class ConnectNavigationWaypointsHandler : IRegistryActionHandler
 {
-    private readonly NavigationWaypointService _waypointService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public ConnectNavigationWaypointsHandler(NavigationWaypointService waypointService)
+    public ConnectNavigationWaypointsHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _waypointService = waypointService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _waypointService.ConnectNavigationWaypoints();
+        _settlementsAuthoringApi.ConnectNavigationWaypoints();
     }
 }
 
 public sealed class CreateInnkeeperSlotHandler : IRegistryActionHandler
 {
-    private readonly ZoneSlotService _slotService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public CreateInnkeeperSlotHandler(ZoneSlotService slotService)
+    public CreateInnkeeperSlotHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _slotService = slotService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _slotService.CreateInnkeeperSlot();
+        _settlementsAuthoringApi.CreateInnkeeperSlot();
     }
 }
 
 public sealed class DesignateSeatFurnitureHandler : IRegistryActionHandler
 {
-    private readonly SeatService _seatService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public DesignateSeatFurnitureHandler(SeatService seatService)
+    public DesignateSeatFurnitureHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _seatService = seatService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _seatService.DesignateSeatAtCrosshair();
+        _settlementsAuthoringApi.DesignateSeatAtCrosshair();
     }
 }
 
 public sealed class DesignateBedFurnitureHandler : IRegistryActionHandler
 {
-    private readonly BedService _bedService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public DesignateBedFurnitureHandler(BedService bedService)
+    public DesignateBedFurnitureHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _bedService = bedService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _bedService.DesignateBedAtCrosshair();
+        _settlementsAuthoringApi.DesignateBedAtCrosshair();
     }
 }
 
 public sealed class DesignateCraftStationFurnitureHandler : IRegistryActionHandler
 {
-    private readonly CraftStationService _craftStationService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
 
-    public DesignateCraftStationFurnitureHandler(CraftStationService craftStationService)
+    public DesignateCraftStationFurnitureHandler(ISettlementsAuthoringApi settlementsAuthoringApi)
     {
-        _craftStationService = craftStationService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
     }
 
     public void Execute()
     {
-        _craftStationService.DesignateCraftStationAtCrosshair();
+        _settlementsAuthoringApi.DesignateCraftStationAtCrosshair();
     }
 }
 

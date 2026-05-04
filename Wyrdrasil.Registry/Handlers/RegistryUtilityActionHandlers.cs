@@ -1,20 +1,20 @@
 using Wyrdrasil.Registry.Services;
-using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Authoring;
 
 namespace Wyrdrasil.Registry.Handlers;
 
 public sealed class SpawnTestVikingHandler : IRegistryActionHandler
 {
-    private readonly NpcSpawnService _spawnService;
+    private readonly ISoulsAuthoringApi _soulsAuthoringApi;
 
-    public SpawnTestVikingHandler(NpcSpawnService spawnService)
+    public SpawnTestVikingHandler(ISoulsAuthoringApi soulsAuthoringApi)
     {
-        _spawnService = spawnService;
+        _soulsAuthoringApi = soulsAuthoringApi;
     }
 
     public void Execute()
     {
-        _spawnService.SpawnTestViking();
+        _soulsAuthoringApi.SpawnTestViking();
     }
 }
 

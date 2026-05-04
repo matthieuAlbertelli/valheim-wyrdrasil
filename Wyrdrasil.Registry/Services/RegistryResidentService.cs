@@ -1,18 +1,18 @@
-using System;
 using System.Collections.Generic;
 using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Registry.Tool;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Authoring;
+using Wyrdrasil.Settlements.Runtime;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Routines.Components;
-using Wyrdrasil.Routines.Services;
-using Wyrdrasil.Souls.Services;
-using Wyrdrasil.Souls.Tool;
+using Wyrdrasil.Routines.Runtime;
+using Wyrdrasil.Souls.Authoring;
 using Wyrdrasil.Souls.Components;
+using Wyrdrasil.Souls.Runtime;
+using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 
@@ -20,61 +20,54 @@ public sealed class RegistryResidentService
 {
     private readonly ManualLogSource _log;
     private readonly RegistryToolState _toolState;
-    private readonly ZoneSlotService _slotService;
-    private readonly SeatService _seatService;
-    private readonly BedService _bedService;
-    private readonly CraftStationService _craftStationService;
-    private readonly ResidentRuntimeService _runtimeService;
-    private readonly NpcIdentityGenerator _identityGenerator;
-    private readonly NpcCustomizationApplier _customizationApplier;
-    private readonly ResidentCatalogService _catalogService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
+    private readonly ISettlementsRuntimeApi _settlementsRuntimeApi;
+    private readonly ISoulsRuntimeApi _soulsRuntimeApi;
+    private readonly ISoulsAuthoringApi _soulsAuthoringApi;
     private readonly ResidentVisualService _visualService;
     private readonly ResidentPresenceService _presenceService;
     private readonly ResidentAssignmentService _assignmentService;
-    private readonly ResidentScheduleService _scheduleService;
+    private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
 
-    public IReadOnlyList<RegisteredNpcData> RegisteredNpcs => _catalogService.RegisteredNpcs;
-    public int NextRegisteredNpcId => _catalogService.NextRegisteredNpcId;
+    public IReadOnlyList<RegisteredNpcData> RegisteredNpcs => _soulsRuntimeApi.RegisteredNpcs;
+    public int NextRegisteredNpcId => _soulsRuntimeApi.NextRegisteredNpcId;
 
     public RegistryResidentService(
         ManualLogSource log,
         RegistryToolState toolState,
-        ZoneSlotService slotService,
-        SeatService seatService,
-        BedService bedService,
-        CraftStationService craftStationService,
-        ResidentRuntimeService runtimeService,
-        NpcIdentityGenerator identityGenerator,
-        NpcCustomizationApplier customizationApplier,
-        ResidentCatalogService catalogService,
+        ISettlementsAuthoringApi settlementsAuthoringApi,
+        ISettlementsRuntimeApi settlementsRuntimeApi,
+        ISoulsRuntimeApi soulsRuntimeApi,
+        ISoulsAuthoringApi soulsAuthoringApi,
+        IRoutinesRuntimeApi routinesRuntimeApi,
         ResidentVisualService visualService,
         ResidentPresenceService presenceService,
-        ResidentAssignmentService assignmentService,
-        ResidentScheduleService scheduleService)
+        ResidentAssignmentService assignmentService)
     {
         _log = log;
         _toolState = toolState;
-        _slotService = slotService;
-        _seatService = seatService;
-        _bedService = bedService;
-        _craftStationService = craftStationService;
-        _runtimeService = runtimeService;
-        _identityGenerator = identityGenerator;
-        _customizationApplier = customizationApplier;
-        _catalogService = catalogService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
+        _settlementsRuntimeApi = settlementsRuntimeApi;
+        _soulsRuntimeApi = soulsRuntimeApi;
+        _soulsAuthoringApi = soulsAuthoringApi;
+        _routinesRuntimeApi = routinesRuntimeApi;
         _visualService = visualService;
         _presenceService = presenceService;
         _assignmentService = assignmentService;
-        _scheduleService = scheduleService;
     }
 
     public IReadOnlyDictionary<int, WyrdrasilRegisteredNpcMarker> Markers => _visualService.Markers;
 
     public void LoadResidents(IEnumerable<RegisteredNpcData> residents, int nextResidentId)
     {
-        _catalogService.LoadResidents(residents, nextResidentId);
+        _soulsRuntimeApi.LoadResidents(residents, nextResidentId);
 
-        foreach (var resident in _catalogService.RegisteredNpcs)
+        NormalizeResidentsAfterLoad();
+    }
+
+    public void NormalizeResidentsAfterLoad()
+    {
+        foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
         {
             NormalizeResidentAfterLoad(resident);
         }
@@ -84,7 +77,7 @@ public sealed class RegistryResidentService
 
     public bool TryGetResidentById(int residentId, out RegisteredNpcData resident)
     {
-        return _catalogService.TryGetResidentById(residentId, out resident!);
+        return _soulsRuntimeApi.TryGetResidentById(residentId, out resident!);
     }
 
     public bool TryGetTargetedRegisteredResident(out RegisteredNpcData resident)
@@ -109,13 +102,13 @@ public sealed class RegistryResidentService
 
     public void ClearAllResidents()
     {
-        foreach (var resident in _catalogService.RegisteredNpcs)
+        foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
         {
-            _runtimeService.TryDespawnResident(resident.Id);
+            _soulsRuntimeApi.TryDespawnResident(resident.Id);
             resident.PresenceSnapshot.Clear();
         }
 
-        _catalogService.Clear();
+        _soulsRuntimeApi.ClearResidents();
         _visualService.ClearAll();
         _toolState.ClearPendingResidentForceAssign();
     }
@@ -146,7 +139,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (_runtimeService.TryGetResidentId(targetCharacter, out _))
+        if (_soulsRuntimeApi.TryGetResidentId(targetCharacter, out _))
         {
             _log.LogWarning("Cannot register NPC: this character is already registered.");
             return;
@@ -154,10 +147,10 @@ public sealed class RegistryResidentService
 
         var displayName = GetCharacterName(targetCharacter);
         var identity = ResolveOrCreateIdentity(targetCharacter, NpcRole.Villager, out var createdIdentity);
-        var data = new RegisteredNpcData(_catalogService.AllocateResidentId(), displayName, identity);
-        _scheduleService.EnsureDefaultAutonomySchedules(data);
-        _catalogService.AddResident(data);
-        _runtimeService.BindResident(data.Id, targetCharacter);
+        var data = new RegisteredNpcData(_soulsRuntimeApi.AllocateResidentId(), displayName, identity);
+        _routinesRuntimeApi.EnsureDefaultAutonomySchedules(data);
+        _soulsRuntimeApi.AddResident(data);
+        _soulsRuntimeApi.BindResident(data.Id, targetCharacter);
         data.PresenceSnapshot.SetWorldPosition(targetCharacter.transform.position, targetCharacter.transform.eulerAngles.y);
         _visualService.EnsureMarker(data);
 
@@ -173,7 +166,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (!_toolState.PendingResidentForceAssignId.HasValue || !_catalogService.TryGetResidentById(_toolState.PendingResidentForceAssignId.Value, out var pendingResident))
+        if (!_toolState.PendingResidentForceAssignId.HasValue || !_soulsRuntimeApi.TryGetResidentById(_toolState.PendingResidentForceAssignId.Value, out var pendingResident))
         {
             _toolState.ClearPendingResidentForceAssign();
             _log.LogWarning("Cannot force assign: target a registered resident first.");
@@ -183,7 +176,7 @@ public sealed class RegistryResidentService
         var crosshairDescription = DescribeCrosshairTarget();
         _log.LogInfo($"Force assign resolution for resident #{pendingResident.Id}: target={crosshairDescription}.");
 
-        if (_slotService.TryGetSlotAtCrosshair(out var slotData))
+        if (_settlementsAuthoringApi.TryGetSlotAtCrosshair(out var slotData))
         {
             _log.LogInfo($"Force assign matched innkeeper slot #{slotData.Id}.");
             if (_assignmentService.TryForceAssignToSlot(pendingResident, slotData))
@@ -195,7 +188,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (_seatService.TryGetSeatAtCrosshair(out var seatData))
+        if (_settlementsAuthoringApi.TryGetSeatAtCrosshair(out var seatData))
         {
             _log.LogInfo($"Force assign matched seat #{seatData.Id} (usage={seatData.UsageType}).");
             if (_assignmentService.TryForceAssignToSeat(pendingResident, seatData))
@@ -211,7 +204,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (_bedService.TryGetBedAtCrosshair(out var bedData))
+        if (_settlementsAuthoringApi.TryGetBedAtCrosshair(out var bedData))
         {
             _log.LogInfo($"Force assign matched bed #{bedData.Id}.");
             if (_assignmentService.TryForceAssignToBed(pendingResident, bedData))
@@ -223,7 +216,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (_craftStationService.TryGetCraftStationAtCrosshair(out var craftStationData))
+        if (_settlementsAuthoringApi.TryGetCraftStationAtCrosshair(out var craftStationData))
         {
             _log.LogInfo($"Force assign matched craft station #{craftStationData.Id} ('{craftStationData.DisplayName}').");
             if (_assignmentService.TryForceAssignToCraftStation(pendingResident, craftStationData))
@@ -269,7 +262,7 @@ public sealed class RegistryResidentService
 
     public void ClearTargetInnkeeperSlotAssignmentAtCrosshair()
     {
-        if (!_slotService.TryGetSlotAtCrosshair(out var slotData))
+        if (!_settlementsAuthoringApi.TryGetSlotAtCrosshair(out var slotData))
         {
             _log.LogWarning("Cannot clear slot assignment: no innkeeper slot is under the crosshair.");
             return;
@@ -283,7 +276,7 @@ public sealed class RegistryResidentService
 
     public void ClearTargetSeatAssignmentAtCrosshair()
     {
-        if (!_seatService.TryGetSeatAtCrosshair(out var seatData))
+        if (!_settlementsAuthoringApi.TryGetSeatAtCrosshair(out var seatData))
         {
             _log.LogWarning("Cannot clear seat assignment: no designated seat is under the crosshair.");
             return;
@@ -297,7 +290,7 @@ public sealed class RegistryResidentService
 
     public void ClearTargetBedAssignmentAtCrosshair()
     {
-        if (!_bedService.TryGetBedAtCrosshair(out var bedData))
+        if (!_settlementsAuthoringApi.TryGetBedAtCrosshair(out var bedData))
         {
             _log.LogWarning("Cannot clear bed assignment: no designated bed is under the crosshair.");
             return;
@@ -322,25 +315,25 @@ public sealed class RegistryResidentService
 
     public void RespawnAssignedResidentAtCrosshair()
     {
-        if (_slotService.TryGetSlotAtCrosshair(out var slotData))
+        if (_settlementsAuthoringApi.TryGetSlotAtCrosshair(out var slotData))
         {
             _presenceService.TryRespawnResidentAssignedToSlot(slotData);
             return;
         }
 
-        if (_seatService.TryGetSeatAtCrosshair(out var seatData))
+        if (_settlementsAuthoringApi.TryGetSeatAtCrosshair(out var seatData))
         {
             _presenceService.TryRespawnResidentAssignedToSeat(seatData);
             return;
         }
 
-        if (_bedService.TryGetBedAtCrosshair(out var bedData))
+        if (_settlementsAuthoringApi.TryGetBedAtCrosshair(out var bedData))
         {
             _presenceService.TryRespawnResidentAssignedToBed(bedData);
             return;
         }
 
-        if (_craftStationService.TryGetCraftStationAtCrosshair(out var craftStationData))
+        if (_settlementsAuthoringApi.TryGetCraftStationAtCrosshair(out var craftStationData))
         {
             _presenceService.TryRespawnResidentAssignedToCraftStation(craftStationData);
             return;
@@ -352,7 +345,7 @@ public sealed class RegistryResidentService
 
     public void ProbeAssignedCraftStationOccupationAtCrosshair()
     {
-        if (!_craftStationService.TryGetCraftStationAtCrosshair(out var craftStationData))
+        if (!_settlementsAuthoringApi.TryGetCraftStationAtCrosshair(out var craftStationData))
         {
             _log.LogWarning("[CraftStation][Probe] Cannot probe occupation: no designated craft station is under the crosshair.");
             return;
@@ -364,16 +357,16 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (!_catalogService.TryGetResidentById(craftStationData.AssignedRegisteredNpcId.Value, out var resident))
+        if (!_soulsRuntimeApi.TryGetResidentById(craftStationData.AssignedRegisteredNpcId.Value, out var resident))
         {
             _log.LogWarning($"[CraftStation][Probe] Cannot probe occupation on station #{craftStationData.Id}: assigned resident #{craftStationData.AssignedRegisteredNpcId.Value} is missing.");
             return;
         }
 
-        if (!_runtimeService.TryGetBoundCharacter(resident.Id, out var character))
+        if (!_soulsRuntimeApi.TryGetBoundCharacter(resident.Id, out var character))
         {
             if (!_presenceService.TryRespawnResidentAssignedToCraftStation(craftStationData) ||
-                !_runtimeService.TryGetBoundCharacter(resident.Id, out character))
+                !_soulsRuntimeApi.TryGetBoundCharacter(resident.Id, out character))
             {
                 _log.LogWarning($"[CraftStation][Probe] Cannot probe occupation on station #{craftStationData.Id}: resident #{resident.Id} could not be spawned.");
                 return;
@@ -483,14 +476,14 @@ public sealed class RegistryResidentService
 
     private void NormalizeResidentAfterLoad(RegisteredNpcData resident)
     {
-        _scheduleService.EnsureDefaultAutonomySchedules(resident);
+        _routinesRuntimeApi.EnsureDefaultAutonomySchedules(resident);
 
         if (!resident.AssignedSeatId.HasValue)
         {
             return;
         }
 
-        if (!_seatService.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
+        if (!_settlementsRuntimeApi.TryGetSeatById(resident.AssignedSeatId.Value, out var seatData))
         {
             return;
         }
@@ -501,7 +494,7 @@ public sealed class RegistryResidentService
         }
 
         resident.ClearAssignedSeat();
-        _scheduleService.ClearAssignedSeatSchedule(resident);
+        _routinesRuntimeApi.ClearAssignedSeatSchedule(resident);
 
         if (resident.PresenceSnapshot.IsAssignedTargetAnchor(ResidentAssignmentPurpose.Meal))
         {
@@ -562,7 +555,7 @@ public sealed class RegistryResidentService
             return false;
         }
 
-        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) || !_catalogService.TryGetResidentById(residentId, out resident))
+        if (!_soulsRuntimeApi.TryGetResidentId(targetCharacter, out var residentId) || !_soulsRuntimeApi.TryGetResidentById(residentId, out resident))
         {
             resident = null!;
             return false;
@@ -580,7 +573,7 @@ public sealed class RegistryResidentService
             return false;
         }
 
-        if (!_runtimeService.TryGetResidentId(targetCharacter, out var residentId) || !_catalogService.TryGetResidentById(residentId, out resident))
+        if (!_soulsRuntimeApi.TryGetResidentId(targetCharacter, out var residentId) || !_soulsRuntimeApi.TryGetResidentById(residentId, out resident))
         {
             _log.LogWarning($"{actionLabel}: the targeted character is not registered.");
             resident = null!;
@@ -598,18 +591,7 @@ public sealed class RegistryResidentService
 
     private VikingIdentityData ResolveOrCreateIdentity(Character targetCharacter, NpcRole defaultRole, out bool createdIdentity)
     {
-        var existingIdentity = targetCharacter.GetComponent<WyrdrasilVikingIdentityComponent>()?.Identity;
-        if (existingIdentity != null)
-        {
-            createdIdentity = false;
-            return existingIdentity;
-        }
-
-        var identity = _identityGenerator.Generate(defaultRole);
-        try { _customizationApplier.Apply(targetCharacter.gameObject, identity); }
-        catch (Exception) { }
-        createdIdentity = true;
-        return identity;
+        return _soulsAuthoringApi.ResolveOrCreateIdentity(targetCharacter, defaultRole, out createdIdentity);
     }
 
 }

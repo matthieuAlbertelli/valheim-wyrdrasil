@@ -2,7 +2,7 @@ using UnityEngine;
 using Wyrdrasil.Construction.Runtime;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Routines.Occupations;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Runtime;
 using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Registry.Occupations;
@@ -10,16 +10,16 @@ namespace Wyrdrasil.Registry.Occupations;
 public sealed class ConstructionWorkPostOccupationTargetSource : IOccupationTargetSource
 {
     private readonly IConstructionRuntimeApi _constructionRuntimeApi;
-    private readonly CraftStationService _craftStationService;
+    private readonly ISettlementsRuntimeApi _settlementsRuntimeApi;
     private readonly AnchorOccupationPlanBuilder _planBuilder;
 
     public ConstructionWorkPostOccupationTargetSource(
         IConstructionRuntimeApi constructionRuntimeApi,
-        CraftStationService craftStationService,
+        ISettlementsRuntimeApi settlementsRuntimeApi,
         AnchorOccupationPlanBuilder planBuilder)
     {
         _constructionRuntimeApi = constructionRuntimeApi;
-        _craftStationService = craftStationService;
+        _settlementsRuntimeApi = settlementsRuntimeApi;
         _planBuilder = planBuilder;
     }
 
@@ -30,14 +30,14 @@ public sealed class ConstructionWorkPostOccupationTargetSource : IOccupationTarg
         if (targetRef.TargetKind != TargetKind ||
             !_constructionRuntimeApi.TryGetWorkPost(targetRef.TargetId, out var workPost) ||
             workPost.CraftStationId <= 0 ||
-            !_craftStationService.TryGetCraftStationById(workPost.CraftStationId, out var craftStation) ||
-            !craftStation.TryResolveWorldAnchor(out var anchorWorldPosition, out var anchorWorldForward))
+            !_settlementsRuntimeApi.TryGetCraftStationById(workPost.CraftStationId, out var craftStation) ||
+            !_settlementsRuntimeApi.TryResolveCraftStationAnchor(workPost.CraftStationId, out var anchorWorldPosition, out var anchorWorldForward))
         {
             target = null!;
             return false;
         }
 
-        var profile = _craftStationService.TryGetInteractionProfile(craftStation, out var interactionProfile)
+        var profile = _settlementsRuntimeApi.TryGetCraftStationInteractionProfile(workPost.CraftStationId, out var interactionProfile)
             ? interactionProfile
             : CraftStationInteractionProfileRegistry.GetDefaultProfile();
 

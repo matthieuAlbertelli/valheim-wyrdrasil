@@ -1,4 +1,3 @@
-using Wyrdrasil.Construction.Runtime;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -7,10 +6,6 @@ using System.Xml.Serialization;
 using BepInEx;
 using BepInEx.Logging;
 using Wyrdrasil.Core.Persistence;
-using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Registry.Tool;
-using Wyrdrasil.Settlements.Services;
-using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 
@@ -19,41 +14,23 @@ public sealed class RegistryPersistenceService
     private const string SaveDirectoryName = "Wyrdrasil.Registry";
 
     private readonly ManualLogSource _log;
-    private readonly ZoneSlotService _slotService;
-    private readonly SeatService _seatService;
-    private readonly BedService _bedService;
-    private readonly CraftStationService _craftStationService;
-    private readonly IConstructionRuntimeApi _constructionRuntimeApi;
-    private readonly RegistryResidentService _residentService;
-    private readonly ResidentRoutineService _residentRoutineService;
     private readonly WorldPersistenceCoordinator _coordinator;
     private readonly IReadOnlyList<IWorldPersistenceParticipant> _participants;
+    private readonly IReadOnlyList<IWorldPersistenceRestoreHook> _restoreHooks;
 
     private bool _hasLoadedCurrentWorld;
     private string _loadedWorldKey = string.Empty;
 
     public RegistryPersistenceService(
         ManualLogSource log,
-        ZoneSlotService slotService,
-        SeatService seatService,
-        BedService bedService,
-        CraftStationService craftStationService,
-        IConstructionRuntimeApi constructionRuntimeApi,
-        RegistryResidentService residentService,
-        ResidentRoutineService residentRoutineService,
         WorldPersistenceCoordinator coordinator,
-        IReadOnlyList<IWorldPersistenceParticipant> participants)
+        IReadOnlyList<IWorldPersistenceParticipant> participants,
+        IReadOnlyList<IWorldPersistenceRestoreHook> restoreHooks)
     {
         _log = log;
-        _slotService = slotService;
-        _seatService = seatService;
-        _bedService = bedService;
-        _craftStationService = craftStationService;
-        _constructionRuntimeApi = constructionRuntimeApi;
-        _residentService = residentService;
-        _residentRoutineService = residentRoutineService;
         _coordinator = coordinator;
         _participants = participants;
+        _restoreHooks = restoreHooks;
     }
 
     public void Update()
@@ -85,10 +62,10 @@ public sealed class RegistryPersistenceService
         var resolvedAny = _participants.Any(participant => participant.RetryDeferredResolutions());
         if (resolvedAny)
         {
-            RebuildAssignmentsFromResidents();
-            _residentService.RestoreResidentsAfterLoad();
-            _residentRoutineService.ForceRefreshAllResidents(true);
-            _residentRoutineService.ScheduleForcedRefresh(1f, true);
+            foreach (var restoreHook in _restoreHooks)
+            {
+                restoreHook.OnAfterDeferredResolutions();
+            }
         }
     }
 
@@ -183,10 +160,10 @@ public sealed class RegistryPersistenceService
             }
 
             _coordinator.Restore(saveData, _participants);
-            RebuildAssignmentsFromResidents();
-            _residentService.RestoreResidentsAfterLoad();
-            _residentRoutineService.ForceRefreshAllResidents(true);
-            _residentRoutineService.ScheduleForcedRefresh(1f, true);
+            foreach (var restoreHook in _restoreHooks)
+            {
+                restoreHook.OnAfterRestore();
+            }
             _hasLoadedCurrentWorld = true;
             _log.LogInfo($"Loaded modular registry world state from '{path}'. sections={saveData.Sections.Count}.");
         }
@@ -195,40 +172,6 @@ public sealed class RegistryPersistenceService
             _hasLoadedCurrentWorld = true;
             _log.LogWarning($"Failed to load registry world state: {exception.GetType().Name}: {exception.Message}");
         }
-    }
-
-    private void RebuildAssignmentsFromResidents()
-    {
-        foreach (var resident in _residentService.RegisteredNpcs)
-        {
-            foreach (var assignment in resident.Assignments.ToArray())
-            {
-                if (TryRestoreAssignment(resident, assignment))
-                {
-                    continue;
-                }
-
-                _log.LogWarning($"Resident #{resident.Id} references missing {assignment.Target.TargetKind.ToString().ToLowerInvariant()} #{assignment.Target.TargetId}. Clearing {assignment.Purpose} assignment.");
-                resident.ClearAssignment(assignment.Purpose);
-                if (assignment.Purpose == ResidentAssignmentPurpose.Work && resident.Role == NpcRole.Innkeeper)
-                {
-                    resident.SetRole(NpcRole.Villager);
-                }
-            }
-        }
-    }
-
-    private bool TryRestoreAssignment(RegisteredNpcData resident, ResidentAssignmentData assignment)
-    {
-        return assignment.Target.TargetKind switch
-        {
-            OccupationTargetKind.Slot => _slotService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
-            OccupationTargetKind.Seat => _seatService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
-            OccupationTargetKind.Bed => _bedService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
-            OccupationTargetKind.CraftStation => _craftStationService.TryRestoreAssignment(assignment.Target.TargetId, resident.Id),
-            OccupationTargetKind.ConstructionWorkPost => _constructionRuntimeApi.TryRestoreResidentAssignment(assignment.Target.TargetId, resident.Id),
-            _ => false
-        };
     }
 
     private static string GetCurrentWorldKeyOrEmpty()

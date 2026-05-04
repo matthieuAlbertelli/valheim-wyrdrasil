@@ -3,9 +3,8 @@ using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Registry.Tool;
-using Wyrdrasil.Routines.Services;
-using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Routines.Runtime;
+using Wyrdrasil.Souls.Runtime;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
@@ -15,10 +14,9 @@ public sealed class ResidentRoutineService
     private const float EvaluationIntervalSeconds = 0.5f;
 
     private readonly ManualLogSource _log;
-    private readonly WorldClockService _worldClockService;
+    private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
     private readonly RegistryResidentService _residentService;
-    private readonly ResidentRuntimeService _runtimeService;
-    private readonly ResidentOccupationService _occupationService;
+    private readonly ISoulsRuntimeApi _soulsRuntimeApi;
     private readonly Dictionary<int, ResidentRoutineActivityType> _appliedActivitiesByResidentId = new();
 
     private float _nextEvaluationTime;
@@ -28,16 +26,14 @@ public sealed class ResidentRoutineService
 
     public ResidentRoutineService(
         ManualLogSource log,
-        WorldClockService worldClockService,
+        IRoutinesRuntimeApi routinesRuntimeApi,
         RegistryResidentService residentService,
-        ResidentRuntimeService runtimeService,
-        ResidentOccupationService occupationService)
+        ISoulsRuntimeApi soulsRuntimeApi)
     {
         _log = log;
-        _worldClockService = worldClockService;
+        _routinesRuntimeApi = routinesRuntimeApi;
         _residentService = residentService;
-        _runtimeService = runtimeService;
-        _occupationService = occupationService;
+        _soulsRuntimeApi = soulsRuntimeApi;
     }
 
     public void Update()
@@ -55,7 +51,7 @@ public sealed class ResidentRoutineService
 
         _nextEvaluationTime = Time.time + EvaluationIntervalSeconds;
 
-        if (!_worldClockService.TryGetCurrentMinuteOfDay(out var minuteOfDay))
+        if (!_routinesRuntimeApi.TryGetCurrentMinuteOfDay(out var minuteOfDay))
         {
             return;
         }
@@ -80,7 +76,7 @@ public sealed class ResidentRoutineService
             _appliedActivitiesByResidentId.Clear();
         }
 
-        if (!_worldClockService.TryGetCurrentMinuteOfDay(out var minuteOfDay))
+        if (!_routinesRuntimeApi.TryGetCurrentMinuteOfDay(out var minuteOfDay))
         {
             return;
         }
@@ -95,7 +91,7 @@ public sealed class ResidentRoutineService
 
     private void EvaluateResident(RegisteredNpcData resident, int minuteOfDay)
     {
-        if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
+        if (_soulsRuntimeApi.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
         {
             return;
         }
@@ -113,7 +109,7 @@ public sealed class ResidentRoutineService
 
         if (currentActivity != ResidentRoutineActivityType.None)
         {
-            _occupationService.ReleaseOccupation(resident, true);
+            _routinesRuntimeApi.ReleaseOccupation(resident, true);
         }
 
         if (desiredActivity == ResidentRoutineActivityType.None)
@@ -122,7 +118,7 @@ public sealed class ResidentRoutineService
             return;
         }
 
-        var applied = _occupationService.TryStartOccupation(resident, desiredActivity);
+        var applied = _routinesRuntimeApi.TryStartOccupation(resident, desiredActivity);
         if (applied)
         {
             _appliedActivitiesByResidentId[resident.Id] = desiredActivity;
@@ -146,6 +142,6 @@ public sealed class ResidentRoutineService
 
     private void ContinueActivity(RegisteredNpcData resident, ResidentRoutineActivityType activityType)
     {
-        _occupationService.ContinueOccupation(resident, activityType);
+        _routinesRuntimeApi.ContinueOccupation(resident, activityType);
     }
 }

@@ -1,48 +1,48 @@
-using Wyrdrasil.Routines.Services;
+using Wyrdrasil.Routines.Runtime;
 
 namespace Wyrdrasil.Registry.Handlers;
 
 public sealed class SimulateNoonHandler : IRegistryActionHandler
 {
-    private readonly WorldClockService _worldClockService;
+    private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
 
-    public SimulateNoonHandler(WorldClockService worldClockService)
+    public SimulateNoonHandler(IRoutinesRuntimeApi routinesRuntimeApi)
     {
-        _worldClockService = worldClockService;
+        _routinesRuntimeApi = routinesRuntimeApi;
     }
 
     public void Execute()
     {
-        _worldClockService.SimulateNoon();
+        _routinesRuntimeApi.SimulateNoon();
     }
 }
 
 public sealed class SimulateNightHandler : IRegistryActionHandler
 {
-    private readonly WorldClockService _worldClockService;
+    private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
 
-    public SimulateNightHandler(WorldClockService worldClockService)
+    public SimulateNightHandler(IRoutinesRuntimeApi routinesRuntimeApi)
     {
-        _worldClockService = worldClockService;
+        _routinesRuntimeApi = routinesRuntimeApi;
     }
 
     public void Execute()
     {
-        _worldClockService.SimulateNight();
+        _routinesRuntimeApi.SimulateNight();
     }
 }
 
 public sealed class ClearTimeSimulationHandler : IRegistryActionHandler
 {
-    private readonly WorldClockService _worldClockService;
+    private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
 
-    public ClearTimeSimulationHandler(WorldClockService worldClockService)
+    public ClearTimeSimulationHandler(IRoutinesRuntimeApi routinesRuntimeApi)
     {
-        _worldClockService = worldClockService;
+        _routinesRuntimeApi = routinesRuntimeApi;
     }
 
     public void Execute()
     {
-        _worldClockService.ClearSimulation();
+        _routinesRuntimeApi.ClearTimeSimulation();
     }
 }

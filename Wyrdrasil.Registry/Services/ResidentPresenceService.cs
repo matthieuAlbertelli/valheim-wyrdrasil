@@ -1,57 +1,45 @@
-﻿using System.Linq;
+using System.Linq;
 using UnityEngine;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Routines.Occupations;
-using Wyrdrasil.Routines.Services;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Routines.Runtime;
+using Wyrdrasil.Settlements.Runtime;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Components;
-using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Runtime;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 
 public sealed class ResidentPresenceService
 {
-    private readonly ResidentCatalogService _catalogService;
-    private readonly ResidentRuntimeService _runtimeService;
-    private readonly NpcSpawnService _spawnService;
-    private readonly SeatService _seatService;
-    private readonly NavigationWaypointService _waypointService;
-    private readonly ResidentOccupationService _occupationService;
-    private readonly OccupationResolverRegistry _occupationResolverRegistry;
+    private readonly ISoulsRuntimeApi _soulsRuntimeApi;
+    private readonly ISettlementsRuntimeApi _settlementsRuntimeApi;
+    private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
     private readonly ResidentVisualService _visualService;
 
     public ResidentPresenceService(
-        ResidentCatalogService catalogService,
-        ResidentRuntimeService runtimeService,
-        NpcSpawnService spawnService,
-        SeatService seatService,
-        NavigationWaypointService waypointService,
-        ResidentOccupationService occupationService,
-        OccupationResolverRegistry occupationResolverRegistry,
+        ISoulsRuntimeApi soulsRuntimeApi,
+        ISettlementsRuntimeApi settlementsRuntimeApi,
+        IRoutinesRuntimeApi routinesRuntimeApi,
         ResidentVisualService visualService)
     {
-        _catalogService = catalogService;
-        _runtimeService = runtimeService;
-        _spawnService = spawnService;
-        _seatService = seatService;
-        _waypointService = waypointService;
-        _occupationService = occupationService;
-        _occupationResolverRegistry = occupationResolverRegistry;
+        _soulsRuntimeApi = soulsRuntimeApi;
+        _settlementsRuntimeApi = settlementsRuntimeApi;
+        _routinesRuntimeApi = routinesRuntimeApi;
         _visualService = visualService;
     }
 
     public void PrepareResidentPresenceSnapshotsForSave()
     {
-        foreach (var resident in _catalogService.RegisteredNpcs)
+        foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
         {
-            if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
+            if (_soulsRuntimeApi.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
             {
                 continue;
             }
 
-            if (!_runtimeService.TryCaptureBoundResidentTransform(
+            if (!_soulsRuntimeApi.TryCaptureBoundResidentTransform(
                     resident.Id,
                     out var worldPosition,
                     out var worldYawDegrees,
@@ -83,19 +71,19 @@ public sealed class ResidentPresenceService
 
     public void RestoreResidentsAfterLoad()
     {
-        foreach (var resident in _catalogService.RegisteredNpcs)
+        foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
         {
             if (!resident.PresenceSnapshot.ShouldRespawnOnLoad)
             {
                 continue;
             }
 
-            if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
+            if (_soulsRuntimeApi.TryGetBoundCharacter(resident.Id, out _))
             {
                 continue;
             }
 
-            if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
+            if (_soulsRuntimeApi.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
             {
                 continue;
             }
@@ -119,9 +107,9 @@ public sealed class ResidentPresenceService
 
     public bool TryDespawnResident(RegisteredNpcData resident)
     {
-        _occupationService.ReleaseOccupation(resident);
+        _routinesRuntimeApi.ReleaseOccupation(resident);
 
-        if (!_runtimeService.TryDespawnResident(resident.Id))
+        if (!_soulsRuntimeApi.TryDespawnResident(resident.Id))
         {
             return false;
         }
@@ -169,17 +157,17 @@ public sealed class ResidentPresenceService
 
     private bool TryRespawnResidentAssignedToTarget(int? residentId, ResidentAssignmentPurpose purpose)
     {
-        if (!residentId.HasValue || !_catalogService.TryGetResidentById(residentId.Value, out var resident))
+        if (!residentId.HasValue || !_soulsRuntimeApi.TryGetResidentById(residentId.Value, out var resident))
         {
             return false;
         }
 
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out _))
+        if (_soulsRuntimeApi.TryGetBoundCharacter(resident.Id, out _))
         {
             return false;
         }
 
-        if (_runtimeService.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
+        if (_soulsRuntimeApi.GetRuntimeState(resident.Id) == ResidentRuntimeState.Spawning)
         {
             return false;
         }
@@ -215,7 +203,7 @@ public sealed class ResidentPresenceService
 
     private bool TryGetBoundViking(RegisteredNpcData resident, out WyrdrasilVikingNpc viking)
     {
-        if (_runtimeService.TryGetBoundCharacter(resident.Id, out var character) && character is WyrdrasilVikingNpc typedViking)
+        if (_soulsRuntimeApi.TryGetBoundCharacter(resident.Id, out var character) && character is WyrdrasilVikingNpc typedViking)
         {
             viking = typedViking;
             return true;
@@ -230,7 +218,7 @@ public sealed class ResidentPresenceService
         worldPosition = Vector3.zero;
         worldYawDegrees = 0f;
 
-        if (!_seatService.TryGetOccupiedSeatForResident(resident.Id, out var seatData))
+        if (!_settlementsRuntimeApi.TryGetOccupiedSeatForResident(resident.Id, out var seatData))
         {
             return false;
         }
@@ -275,7 +263,7 @@ public sealed class ResidentPresenceService
             return false;
         }
 
-        _occupationService.TryStartOccupation(resident, activityType);
+        _routinesRuntimeApi.TryStartOccupation(resident, activityType);
         return true;
     }
 
@@ -286,8 +274,7 @@ public sealed class ResidentPresenceService
         out OccupationTarget target)
     {
         if (!TryGetAssignedActivityType(resident, purpose, out activityType) ||
-            !_occupationResolverRegistry.TryGetResolver(activityType, out var resolver) ||
-            !resolver.TryResolve(resident, out target))
+            !_routinesRuntimeApi.TryResolveActivityTarget(resident, activityType, out target))
         {
             activityType = default;
             target = null!;
@@ -354,7 +341,7 @@ public sealed class ResidentPresenceService
     {
         waypointPosition = Vector3.zero;
 
-        var nearestWaypoint = _waypointService.Waypoints
+        var nearestWaypoint = _settlementsRuntimeApi.Waypoints
             .OrderBy(candidate => HorizontalDistance(origin, candidate.Position))
             .FirstOrDefault();
 
@@ -415,23 +402,15 @@ public sealed class ResidentPresenceService
     private bool TrySpawnAndBindResident(RegisteredNpcData resident, Vector3 spawnPosition, Quaternion spawnRotation, out Character runtimeCharacter)
     {
         runtimeCharacter = null!;
-        _runtimeService.MarkResidentSpawning(resident.Id);
+        _soulsRuntimeApi.MarkResidentSpawning(resident.Id);
 
-        if (!_spawnService.TrySpawnResident(resident, spawnPosition, spawnRotation, out var instance) || instance == null)
+        if (!_soulsRuntimeApi.TrySpawnResident(resident, spawnPosition, spawnRotation, out var character))
         {
-            _runtimeService.MarkResidentMissing(resident.Id);
+            _soulsRuntimeApi.MarkResidentMissing(resident.Id);
             return false;
         }
 
-        var character = instance.GetComponent<Character>();
-        if (character == null)
-        {
-            Object.Destroy(instance);
-            _runtimeService.MarkResidentMissing(resident.Id);
-            return false;
-        }
-
-        _runtimeService.BindResident(resident.Id, character);
+        _soulsRuntimeApi.BindResident(resident.Id, character);
         resident.PresenceSnapshot.SetWorldPosition(spawnPosition, spawnRotation.eulerAngles.y);
         _visualService.EnsureMarker(resident);
         runtimeCharacter = character;

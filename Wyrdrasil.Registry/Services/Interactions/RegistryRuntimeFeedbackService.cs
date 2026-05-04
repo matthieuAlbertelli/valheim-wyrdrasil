@@ -1,21 +1,21 @@
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Services;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Authoring;
 
 namespace Wyrdrasil.Registry.Services.Interactions;
 
 public sealed class RegistryRuntimeFeedbackService
 {
-    private readonly FunctionalZoneService _zoneService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly ConstructionLinkVisualService _constructionLinkVisualService;
     private readonly RegistrySelectionFeedbackService _selectionFeedbackService;
 
     public RegistryRuntimeFeedbackService(
-        FunctionalZoneService zoneService,
+        ISettlementsAuthoringApi settlementsAuthoringApi,
         ConstructionLinkVisualService constructionLinkVisualService,
         RegistrySelectionFeedbackService selectionFeedbackService)
     {
-        _zoneService = zoneService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
         _constructionLinkVisualService = constructionLinkVisualService;
         _selectionFeedbackService = selectionFeedbackService;
     }
@@ -24,7 +24,7 @@ public sealed class RegistryRuntimeFeedbackService
     {
         _constructionLinkVisualService.SetVisible(state.SelectedCategory == RegistryCategory.Construction);
         _selectionFeedbackService.Update(state);
-        _zoneService.UpdateTargetedZoneHighlight();
+        _settlementsAuthoringApi.UpdateTargetedZoneHighlight();
     }
 
     public void ClearAll()

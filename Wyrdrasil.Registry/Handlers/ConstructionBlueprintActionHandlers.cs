@@ -5,32 +5,32 @@ using Wyrdrasil.Construction.Authoring;
 using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Registry.Services;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Authoring;
 
 namespace Wyrdrasil.Registry.Handlers;
 
 public sealed class CaptureBlueprintFromTargetZoneHandler : IRegistryActionHandler
 {
     private readonly ManualLogSource _log;
-    private readonly FunctionalZoneService _zoneService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly IConstructionAuthoringApi _constructionAuthoringApi;
     private readonly ConstructionDebugSessionService _constructionDebugSessionService;
 
     public CaptureBlueprintFromTargetZoneHandler(
         ManualLogSource log,
-        FunctionalZoneService zoneService,
+        ISettlementsAuthoringApi settlementsAuthoringApi,
         IConstructionAuthoringApi constructionAuthoringApi,
         ConstructionDebugSessionService constructionDebugSessionService)
     {
         _log = log;
-        _zoneService = zoneService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
         _constructionAuthoringApi = constructionAuthoringApi;
         _constructionDebugSessionService = constructionDebugSessionService;
     }
 
     public void Execute()
     {
-        if (!_zoneService.TryGetPlacementPoint(out var point) || !_zoneService.TryFindZoneAtPoint(point, out var zone))
+        if (!_settlementsAuthoringApi.TryGetPlacementPoint(out var point) || !_settlementsAuthoringApi.TryFindZoneAtPoint(point, out var zone))
         {
             _log.LogWarning("Cannot capture construction blueprint: no functional zone was found under the crosshair.");
             return;
@@ -125,18 +125,18 @@ public sealed class SpawnTestConstructionProjectHandler : IRegistryActionHandler
 public sealed class PlaceBlueprintInstantlyHandler : IRegistryActionHandler
 {
     private readonly ManualLogSource _log;
-    private readonly FunctionalZoneService _zoneService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly ConstructionPlacementPreviewService _constructionPlacementPreviewService;
     private readonly ConstructionDebugSessionService _constructionDebugSessionService;
 
     public PlaceBlueprintInstantlyHandler(
         ManualLogSource log,
-        FunctionalZoneService zoneService,
+        ISettlementsAuthoringApi settlementsAuthoringApi,
         ConstructionPlacementPreviewService constructionPlacementPreviewService,
         ConstructionDebugSessionService constructionDebugSessionService)
     {
         _log = log;
-        _zoneService = zoneService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
         _constructionPlacementPreviewService = constructionPlacementPreviewService;
         _constructionDebugSessionService = constructionDebugSessionService;
     }
@@ -157,7 +157,7 @@ public sealed class PlaceBlueprintInstantlyHandler : IRegistryActionHandler
         }
 
         Vector3 originPosition;
-        if (_zoneService.TryGetPlacementPoint(out var placementPoint))
+        if (_settlementsAuthoringApi.TryGetPlacementPoint(out var placementPoint))
         {
             originPosition = placementPoint;
         }

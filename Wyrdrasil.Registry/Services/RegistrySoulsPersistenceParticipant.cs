@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;

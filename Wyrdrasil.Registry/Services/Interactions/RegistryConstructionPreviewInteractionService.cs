@@ -2,25 +2,25 @@ using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Registry.Services;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Authoring;
 
 namespace Wyrdrasil.Registry.Services.Interactions;
 
 public sealed class RegistryConstructionPreviewInteractionService
 {
     private readonly ManualLogSource _log;
-    private readonly FunctionalZoneService _zoneService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly ConstructionPlacementPreviewService _constructionPlacementPreviewService;
     private readonly ConstructionDebugSessionService _constructionDebugSessionService;
 
     public RegistryConstructionPreviewInteractionService(
         ManualLogSource log,
-        FunctionalZoneService zoneService,
+        ISettlementsAuthoringApi settlementsAuthoringApi,
         ConstructionPlacementPreviewService constructionPlacementPreviewService,
         ConstructionDebugSessionService constructionDebugSessionService)
     {
         _log = log;
-        _zoneService = zoneService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
         _constructionPlacementPreviewService = constructionPlacementPreviewService;
         _constructionDebugSessionService = constructionDebugSessionService;
     }
@@ -42,7 +42,7 @@ public sealed class RegistryConstructionPreviewInteractionService
 
         var player = Player.m_localPlayer;
 
-        if (_zoneService.TryGetPlacementPoint(out var placementPoint))
+        if (_settlementsAuthoringApi.TryGetPlacementPoint(out var placementPoint))
         {
             _constructionPlacementPreviewService.UpdatePreviewPosition(placementPoint);
         }

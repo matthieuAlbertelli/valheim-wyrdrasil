@@ -4,8 +4,8 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Services;
-using Wyrdrasil.Settlements.Services;
-using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Settlements.Runtime;
+using Wyrdrasil.Souls.Runtime;
 
 namespace Wyrdrasil.Registry.Services;
 
@@ -67,8 +67,8 @@ public sealed class ConstructionLinkVisualService
 
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionProjectMarkerService _constructionProjectMarkerService;
-    private readonly CraftStationService _craftStationService;
-    private readonly ResidentRuntimeService _residentRuntimeService;
+    private readonly ISettlementsRuntimeApi _settlementsRuntimeApi;
+    private readonly ISoulsRuntimeApi _soulsRuntimeApi;
     private readonly Dictionary<string, LinkVisual> _persistentLinks = new();
     private readonly Material _lineMaterialTemplate;
 
@@ -81,13 +81,13 @@ public sealed class ConstructionLinkVisualService
     public ConstructionLinkVisualService(
         ConstructionProjectService constructionProjectService,
         ConstructionProjectMarkerService constructionProjectMarkerService,
-        CraftStationService craftStationService,
-        ResidentRuntimeService residentRuntimeService)
+        ISettlementsRuntimeApi settlementsRuntimeApi,
+        ISoulsRuntimeApi soulsRuntimeApi)
     {
         _constructionProjectService = constructionProjectService;
         _constructionProjectMarkerService = constructionProjectMarkerService;
-        _craftStationService = craftStationService;
-        _residentRuntimeService = residentRuntimeService;
+        _settlementsRuntimeApi = settlementsRuntimeApi;
+        _soulsRuntimeApi = soulsRuntimeApi;
 
         var shader = Shader.Find("Sprites/Default") ?? Shader.Find("Unlit/Color") ?? Shader.Find("Standard");
         _lineMaterialTemplate = new Material(shader)
@@ -231,14 +231,14 @@ public sealed class ConstructionLinkVisualService
 
     private bool TryGetCraftStationLinkPoint(int craftStationId, out Vector3 point)
     {
-        if (_craftStationService.TryGetCraftStationById(craftStationId, out var craftStation))
+        if (_settlementsRuntimeApi.TryResolveCraftStationAnchor(craftStationId, out var anchorWorldPosition, out _))
         {
-            if (craftStation.TryResolveWorldAnchor(out var anchorWorldPosition, out _))
-            {
-                point = anchorWorldPosition + new Vector3(0f, 0.12f, 0f);
-                return true;
-            }
+            point = anchorWorldPosition + new Vector3(0f, 0.12f, 0f);
+            return true;
+        }
 
+        if (_settlementsRuntimeApi.TryGetCraftStationById(craftStationId, out var craftStation))
+        {
             point = craftStation.ReferenceWorldPosition + new Vector3(0f, 0.9f, 0f);
             return true;
         }
@@ -249,7 +249,7 @@ public sealed class ConstructionLinkVisualService
 
     private bool TryGetResidentLinkPoint(int residentId, out Vector3 point)
     {
-        if (_residentRuntimeService.TryGetBoundCharacter(residentId, out var character) && character != null)
+        if (_soulsRuntimeApi.TryGetBoundCharacter(residentId, out var character) && character != null)
         {
             point = character.transform.position + new Vector3(0f, 1.4f, 0f);
             return true;

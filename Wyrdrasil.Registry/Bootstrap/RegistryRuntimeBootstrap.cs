@@ -7,7 +7,7 @@ using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Services.Interactions;
 using Wyrdrasil.Registry.Services.Interactions.Modes;
 using Wyrdrasil.Registry.UI;
-using Wyrdrasil.Routines.Services;
+using Wyrdrasil.Routines.Runtime;
 using Wyrdrasil.Settlements.Services;
 
 namespace Wyrdrasil.Registry.Bootstrap;
@@ -61,82 +61,71 @@ public sealed class RegistryRuntimeBootstrap
     public RegistryInteractionModeRouter InteractionModeRouter { get; }
     public RegistryToolController RegistryToolController { get; }
 
-    public static RegistryRuntimeBootstrap Create(
+    internal static RegistryRuntimeBootstrap Create(
         ManualLogSource log,
         Wyrdrasil.Core.Services.RegistryModeService modeService,
         RegistrySettlementsBootstrap settlements,
         RegistryResidentsBootstrap residents,
-        ConstructionModuleBootstrap constructionBootstrap,
-        WorldClockService worldClockService,
-        ResidentRoutineService residentRoutineService)
+        ConstructionModuleBootstrap constructionBootstrap)
     {
         var diagnosticsService = new TargetDiagnosticsService(log);
-        var craftStationAnchorEditorService = new CraftStationAnchorEditorService(log, settlements.CraftStationService);
+        var craftStationAnchorEditorService = new CraftStationAnchorEditorService(log, settlements.Services.CraftStationService);
         var deletionService = new RegistryDeletionService(
             log,
-            settlements.BuildingService,
-            settlements.ZoneService,
-            settlements.SlotService,
-            settlements.SeatService,
-            settlements.BedService,
-            settlements.CraftStationService,
-            settlements.WaypointService,
-            residents.ResidentService,
+            settlements.Services.BuildingService,
+            settlements.Services.ZoneService,
+            settlements.Services.SlotService,
+            settlements.Services.SeatService,
+            settlements.Services.BedService,
+            settlements.Services.CraftStationService,
+            settlements.Services.WaypointService,
+            residents.Services.ResidentService,
             constructionBootstrap.TestingApi);
 
         var persistenceCoordinator = new WorldPersistenceCoordinator();
         var persistenceParticipants = new List<IWorldPersistenceParticipant>
         {
-            new SettlementsPersistenceParticipant(
-                log,
-                settlements.BuildingService,
-                settlements.ZoneService,
-                settlements.WaypointService,
-                settlements.SlotService,
-                settlements.SeatService,
-                settlements.BedService,
-                settlements.CraftStationService),
-            new RegistrySoulsPersistenceParticipant(residents.ResidentService),
-            new RoutinesPersistenceParticipant(worldClockService),
+            settlements.PersistenceParticipant,
+            residents.SoulsPersistenceParticipant,
+            residents.RoutinesPersistenceParticipant,
             constructionBootstrap.PersistenceParticipant
+        };
+
+        var persistenceRestoreHooks = new List<IWorldPersistenceRestoreHook>
+        {
+            residents.CreatePersistenceRestoreHook(settlements.RuntimeApi, constructionBootstrap.RuntimeApi)
         };
 
         var persistenceService = new RegistryPersistenceService(
             log,
-            settlements.SlotService,
-            settlements.SeatService,
-            settlements.BedService,
-            settlements.CraftStationService,
-            constructionBootstrap.RuntimeApi,
-            residents.ResidentService,
-            residentRoutineService,
             persistenceCoordinator,
-            persistenceParticipants);
+            persistenceParticipants,
+            persistenceRestoreHooks);
 
         var flushService = new RegistryFlushService(
             log,
-            settlements.BuildingService,
-            settlements.ZoneService,
-            settlements.SlotService,
-            settlements.SeatService,
-            settlements.BedService,
-            settlements.CraftStationService,
-            settlements.WaypointService,
-            residents.ResidentService,
+            settlements.Services.BuildingService,
+            settlements.Services.ZoneService,
+            settlements.Services.SlotService,
+            settlements.Services.SeatService,
+            settlements.Services.BedService,
+            settlements.Services.CraftStationService,
+            settlements.Services.WaypointService,
+            residents.Services.ResidentService,
             persistenceService);
 
         var selectionService = new ToolSelectionService(modeService.State);
         var constructionDebugSessionService = new ConstructionDebugSessionService();
         var actionRegistry = RegistryActionRegistryFactory.CreateDefault(
             log,
-            settlements.ZoneService,
-            settlements.WaypointService,
-            settlements.SlotService,
-            settlements.SeatService,
-            settlements.BedService,
-            settlements.CraftStationService,
-            residents.SpawnService,
-            residents.ResidentService,
+            settlements.AuthoringApi,
+            settlements.Services.WaypointService,
+            settlements.Services.SlotService,
+            settlements.Services.SeatService,
+            settlements.Services.BedService,
+            settlements.AuthoringApi,
+            residents.AuthoringApi,
+            residents.Services.ResidentService,
             diagnosticsService,
             craftStationAnchorEditorService,
             deletionService,
@@ -147,36 +136,36 @@ public sealed class RegistryRuntimeBootstrap
             constructionBootstrap.ConstructionProjectMarkerService,
             constructionBootstrap.ConstructionPlacementPreviewService,
             constructionDebugSessionService,
-            worldClockService);
+            residents.RoutinesRuntimeApi);
 
         var constructionLinkVisualService = new ConstructionLinkVisualService(
             constructionBootstrap.ConstructionProjectService,
             constructionBootstrap.ConstructionProjectMarkerService,
-            settlements.CraftStationService,
-            residents.ResidentRuntimeService);
+            settlements.RuntimeApi,
+            residents.RuntimeApi);
 
         var selectionFeedbackService = new RegistrySelectionFeedbackService(
-            settlements.SlotService,
-            settlements.SeatService,
-            settlements.BedService,
-            settlements.CraftStationService,
-            residents.ResidentService,
+            settlements.Services.SlotService,
+            settlements.Services.SeatService,
+            settlements.Services.BedService,
+            settlements.Services.CraftStationService,
+            residents.Services.ResidentService,
             constructionBootstrap.ConstructionProjectMarkerService,
             constructionDebugSessionService,
             constructionLinkVisualService);
 
         var runtimeFeedbackService = new RegistryRuntimeFeedbackService(
-            settlements.ZoneService,
+            settlements.AuthoringApi,
             constructionLinkVisualService,
             selectionFeedbackService);
 
         var constructionPreviewInteractionService = new RegistryConstructionPreviewInteractionService(
             log,
-            settlements.ZoneService,
+            settlements.AuthoringApi,
             constructionBootstrap.ConstructionPlacementPreviewService,
             constructionDebugSessionService);
 
-        var zoneAuthoringInteractionService = new RegistryZoneAuthoringInteractionService(settlements.ZoneService);
+        var zoneAuthoringInteractionService = new RegistryZoneAuthoringInteractionService(settlements.AuthoringApi);
         var interactionSessionCoordinator = new RegistryInteractionSessionCoordinator(
             constructionPreviewInteractionService,
             zoneAuthoringInteractionService,
@@ -198,13 +187,9 @@ public sealed class RegistryRuntimeBootstrap
                 interactionSessionCoordinator));
 
         var hudStateProvider = new RegistryHudStateProvider(
-            settlements.ZoneService,
-            settlements.WaypointService,
-            settlements.SlotService,
-            settlements.SeatService,
-            settlements.BedService,
-            residents.ResidentService,
-            worldClockService,
+            settlements.RuntimeApi,
+            residents.Services.ResidentService,
+            residents.RoutinesRuntimeApi,
             craftStationAnchorEditorService,
             constructionPreviewInteractionService,
             zoneAuthoringInteractionService,

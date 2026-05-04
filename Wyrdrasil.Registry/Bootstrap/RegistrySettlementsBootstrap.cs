@@ -1,75 +1,43 @@
 using BepInEx.Logging;
 using Wyrdrasil.Core.Services;
+using Wyrdrasil.Settlements.Authoring;
+using Wyrdrasil.Settlements.Bootstrap;
+using Wyrdrasil.Settlements.Runtime;
 using Wyrdrasil.Settlements.Services;
 
 namespace Wyrdrasil.Registry.Bootstrap;
 
-public sealed class RegistrySettlementsBootstrap
+internal sealed class RegistrySettlementsBootstrap
 {
     public RegistrySettlementsBootstrap(
-        BuildingService buildingService,
-        ZoneDefinitionCatalog zoneDefinitionCatalog,
-        ZonePlacementPolicyService zonePlacementPolicyService,
-        FunctionalZoneService zoneService,
-        NavigationWaypointService waypointService,
-        ZoneSlotService slotService,
-        SeatService seatService,
-        BedService bedService,
-        CraftStationService craftStationService,
-        FunctionalZoneRuntimeService zoneRuntimeService)
+        SettlementsModuleBootstrap moduleBootstrap,
+        RegistrySettlementsCompositionServices services)
     {
-        BuildingService = buildingService;
-        ZoneDefinitionCatalog = zoneDefinitionCatalog;
-        ZonePlacementPolicyService = zonePlacementPolicyService;
-        ZoneService = zoneService;
-        WaypointService = waypointService;
-        SlotService = slotService;
-        SeatService = seatService;
-        BedService = bedService;
-        CraftStationService = craftStationService;
-        ZoneRuntimeService = zoneRuntimeService;
+        ModuleBootstrap = moduleBootstrap;
+        Services = services;
+        PersistenceParticipant = moduleBootstrap.PersistenceParticipant;
+        AuthoringApi = moduleBootstrap.AuthoringApi;
+        RuntimeApi = moduleBootstrap.RuntimeApi;
     }
 
-    public BuildingService BuildingService { get; }
-    public ZoneDefinitionCatalog ZoneDefinitionCatalog { get; }
-    public ZonePlacementPolicyService ZonePlacementPolicyService { get; }
-    public FunctionalZoneService ZoneService { get; }
-    public NavigationWaypointService WaypointService { get; }
-    public ZoneSlotService SlotService { get; }
-    public SeatService SeatService { get; }
-    public BedService BedService { get; }
-    public CraftStationService CraftStationService { get; }
-    public FunctionalZoneRuntimeService ZoneRuntimeService { get; }
+    internal SettlementsModuleBootstrap ModuleBootstrap { get; }
+    internal RegistrySettlementsCompositionServices Services { get; }
+    internal SettlementsPersistenceParticipant PersistenceParticipant { get; }
+    internal ISettlementsAuthoringApi AuthoringApi { get; }
+    internal ISettlementsRuntimeApi RuntimeApi { get; }
 
     public static RegistrySettlementsBootstrap Create(ManualLogSource log, RegistryModeService modeService)
     {
-        var buildingService = new BuildingService(log);
-        var zoneDefinitionCatalog = new ZoneDefinitionCatalog();
-        var zonePlacementPolicyService = new ZonePlacementPolicyService(zoneDefinitionCatalog);
-        var zoneService = new FunctionalZoneService(log, modeService, buildingService);
-        var waypointService = new NavigationWaypointService(log, modeService, zoneService);
-        var slotService = new ZoneSlotService(log, modeService, zoneService, zonePlacementPolicyService);
-        var seatService = new SeatService(log, modeService, buildingService, zoneService, zonePlacementPolicyService);
-        var bedService = new BedService(log, modeService, buildingService, zoneService, zonePlacementPolicyService);
-        var craftStationService = new CraftStationService(log, modeService, buildingService, zoneService, zonePlacementPolicyService);
-        var zoneRuntimeService = new FunctionalZoneRuntimeService(
-            zoneDefinitionCatalog,
-            zoneService,
-            slotService,
-            seatService,
-            bedService,
-            craftStationService);
+        var moduleBootstrap = SettlementsModuleBootstrap.Create(log, modeService);
+        var services = new RegistrySettlementsCompositionServices(
+            moduleBootstrap.BuildingService,
+            moduleBootstrap.ZoneService,
+            moduleBootstrap.WaypointService,
+            moduleBootstrap.SlotService,
+            moduleBootstrap.SeatService,
+            moduleBootstrap.BedService,
+            moduleBootstrap.CraftStationService);
 
-        return new RegistrySettlementsBootstrap(
-            buildingService,
-            zoneDefinitionCatalog,
-            zonePlacementPolicyService,
-            zoneService,
-            waypointService,
-            slotService,
-            seatService,
-            bedService,
-            craftStationService,
-            zoneRuntimeService);
+        return new RegistrySettlementsBootstrap(moduleBootstrap, services);
     }
 }

@@ -3,7 +3,7 @@ using Wyrdrasil.Construction.Runtime;
 using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Construction.Testing;
 using Wyrdrasil.Registry.Services;
-using Wyrdrasil.Settlements.Services;
+using Wyrdrasil.Settlements.Authoring;
 
 namespace Wyrdrasil.Registry.Handlers;
 
@@ -48,20 +48,20 @@ public sealed class DumpLatestConstructionProjectStateHandler : IRegistryActionH
 public sealed class AssignTargetCraftStationToConstructionProjectHandler : IRegistryActionHandler
 {
     private readonly ManualLogSource _log;
-    private readonly CraftStationService _craftStationService;
+    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly IConstructionRuntimeApi _constructionRuntimeApi;
     private readonly ConstructionProjectMarkerService _constructionProjectMarkerService;
     private readonly ConstructionDebugSessionService _constructionDebugSessionService;
 
     public AssignTargetCraftStationToConstructionProjectHandler(
         ManualLogSource log,
-        CraftStationService craftStationService,
+        ISettlementsAuthoringApi settlementsAuthoringApi,
         IConstructionRuntimeApi constructionRuntimeApi,
         ConstructionProjectMarkerService constructionProjectMarkerService,
         ConstructionDebugSessionService constructionDebugSessionService)
     {
         _log = log;
-        _craftStationService = craftStationService;
+        _settlementsAuthoringApi = settlementsAuthoringApi;
         _constructionRuntimeApi = constructionRuntimeApi;
         _constructionProjectMarkerService = constructionProjectMarkerService;
         _constructionDebugSessionService = constructionDebugSessionService;
@@ -89,7 +89,7 @@ public sealed class AssignTargetCraftStationToConstructionProjectHandler : IRegi
             return;
         }
 
-        if (!_craftStationService.TryGetOrDesignateCraftStationAtCrosshair(out var craftStation, out var failureReason))
+        if (!_settlementsAuthoringApi.TryGetOrDesignateCraftStationAtCrosshair(out var craftStation, out var failureReason))
         {
             _log.LogWarning(failureReason);
             return;

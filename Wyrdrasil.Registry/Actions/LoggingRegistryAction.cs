@@ -1,10 +1,9 @@
 using BepInEx.Logging;
 using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Registry.Tool;
 
 namespace Wyrdrasil.Registry.Actions;
 
-public sealed class LoggingRegistryAction : IRegistryExecutableAction, IRegistryAction
+public sealed class LoggingRegistryAction : IRegistryExecutableAction
 {
     private readonly ManualLogSource? _log;
 
@@ -21,9 +20,4 @@ public sealed class LoggingRegistryAction : IRegistryExecutableAction, IRegistry
         _log?.LogInfo($"Executed registry action stub: {ActionType}.");
     }
 
-    public void Execute(RegistryContext context)
-    {
-        var log = _log ?? context.Log;
-        log.LogInfo($"Executed registry action stub: {ActionType}.");
-    }
 }

@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using BepInEx.Logging;
 using Wyrdrasil.Registry.Actions;
 using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Registry.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 
@@ -21,10 +20,6 @@ public sealed class ActionRegistry
         _actions[action.ActionType] = action;
     }
 
-    public void RegisterLegacy(IRegistryAction action, RegistryContext context)
-    {
-        Register(new LegacyContextRegistryActionAdapter(action, context));
-    }
 
     public void Execute(RegistryActionType actionType)
     {

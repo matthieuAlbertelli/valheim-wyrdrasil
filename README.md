@@ -102,6 +102,17 @@ Even ambitious systems should still feel like they belong inside Valheim’s ton
 
 ---
 
+
+## Architecture and Validation
+
+For ongoing consolidation work, keep these documents close at hand:
+
+- `ARCHITECTURE.md` for current module boundaries and composition rules
+- `HARDENING_CHECKLIST.md` for build/runtime/save-load validation before keeping a refactor
+- `Validate-ModuleBoundaries.ps1` for quick boundary checks against obvious cross-module leakage
+
+---
+
 ## Repository Structure
 
 This repository is intended to host the full Wyrdrasil suite.

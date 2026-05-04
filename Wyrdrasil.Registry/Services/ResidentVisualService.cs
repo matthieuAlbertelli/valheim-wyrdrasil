@@ -1,32 +1,31 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Core.Tool;
-using Wyrdrasil.Registry.Tool;
 using Wyrdrasil.Core.Services;
-using Wyrdrasil.Souls.Services;
+using Wyrdrasil.Souls.Runtime;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.Services;
 
 public sealed class ResidentVisualService
 {
-    private readonly ResidentRuntimeService _runtimeService;
+    private readonly ISoulsRuntimeApi _soulsRuntimeApi;
     private readonly Dictionary<int, WyrdrasilRegisteredNpcMarker> _markers = new();
 
     private bool _visualsVisible;
 
     public IReadOnlyDictionary<int, WyrdrasilRegisteredNpcMarker> Markers => _markers;
 
-    public ResidentVisualService(RegistryModeService modeService, ResidentRuntimeService runtimeService)
+    public ResidentVisualService(RegistryModeService modeService, ISoulsRuntimeApi soulsRuntimeApi)
     {
-        _runtimeService = runtimeService;
+        _soulsRuntimeApi = soulsRuntimeApi;
         _visualsVisible = modeService.IsRegistryModeEnabled;
         modeService.RegistryModeChanged += OnRegistryModeChanged;
     }
 
     public void EnsureMarker(RegisteredNpcData data)
     {
-        if (!_runtimeService.TryGetBoundCharacter(data.Id, out var character))
+        if (!_soulsRuntimeApi.TryGetBoundCharacter(data.Id, out var character))
         {
             return;
         }
