@@ -275,6 +275,8 @@ public sealed class NpcNavigationService
 
     private static void ReleaseLegacyControllers(Character character, bool detachIfAttached)
     {
+        WorkbenchPoseRuntime.EnsureExited(character);
+
         if (character.TryGetComponent<WyrdrasilAssignedSlotController>(out var slotController))
         {
             slotController.ReleaseControl();

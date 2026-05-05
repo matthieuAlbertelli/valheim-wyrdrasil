@@ -6,7 +6,6 @@ public enum OccupationPhase
     Travel,
     Approach,
     AwaitNavigationStop,
-    Docking,
     Engage,
     EnterPose,
     Sustain

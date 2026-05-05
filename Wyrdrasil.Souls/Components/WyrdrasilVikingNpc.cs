@@ -197,18 +197,15 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         }
 
         _workbenchPoseRequested = false;
-        _ = TrySetAnimatorBool("Workbench", false);
-        _ = TrySetAnimatorBool("workbench", false);
-        _ = TrySetAnimatorBool("Crafting", false);
-        _ = TrySetAnimatorBool("crafting", false);
-        _ = TrySetAnimatorBool("Craft", false);
-        _ = TrySetAnimatorBool("craft", false);
+        ResetWorkbenchAnimatorParameters();
 
         var played = TryPlayAnimatorState("IdleTweaked") ||
                      TryPlayAnimatorState("idle") ||
                      TryPlayAnimatorState("Idle");
 
-        WyrdrasilSeatDebug.Log(this, $"TryExitWorkbenchPose played={played} animator={DescribeAnimatorState()}");
+        m_animator.Update(0f);
+
+        WyrdrasilSeatDebug.Log(this, $"TryExitWorkbenchPose reset=True played={played} animator={DescribeAnimatorState()}");
     }
 
     public bool IsInWorkbenchPose()
@@ -586,6 +583,52 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         }
 
         return false;
+    }
+
+    private void ResetWorkbenchAnimatorParameters()
+    {
+        ResetAnimatorParameter("Workbench");
+        ResetAnimatorParameter("workbench");
+        ResetAnimatorParameter("Crafting");
+        ResetAnimatorParameter("crafting");
+        ResetAnimatorParameter("Craft");
+        ResetAnimatorParameter("craft");
+        ResetAnimatorParameter("interact");
+    }
+
+    private void ResetAnimatorParameter(string parameterName)
+    {
+        if (m_animator == null)
+        {
+            return;
+        }
+
+        foreach (var parameter in m_animator.parameters)
+        {
+            if (parameter.name != parameterName)
+            {
+                continue;
+            }
+
+            switch (parameter.type)
+            {
+                case AnimatorControllerParameterType.Bool:
+                    m_animator.SetBool(parameterName, false);
+                    return;
+
+                case AnimatorControllerParameterType.Int:
+                    m_animator.SetInteger(parameterName, 0);
+                    return;
+
+                case AnimatorControllerParameterType.Float:
+                    m_animator.SetFloat(parameterName, 0f);
+                    return;
+
+                case AnimatorControllerParameterType.Trigger:
+                    m_animator.ResetTrigger(parameterName);
+                    return;
+            }
+        }
     }
 
     private bool TrySetAnimatorTrigger(string parameterName)

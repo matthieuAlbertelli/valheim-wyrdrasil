@@ -11,7 +11,6 @@ public sealed class WyrdrasilEngagedPoseController : MonoBehaviour
     private bool _isEngaged;
     private Vector3 _targetPosition;
     private Quaternion _targetRotation = Quaternion.identity;
-    private int _lastLoggedFrame = -1;
 
     public bool IsEngaged => _isEngaged;
 
@@ -92,11 +91,7 @@ public sealed class WyrdrasilEngagedPoseController : MonoBehaviour
         _npcAi?.ClearSteering();
         ZeroVelocity();
 
-        if (Time.frameCount != _lastLoggedFrame && Time.frameCount % 30 == 0)
-        {
-            _lastLoggedFrame = Time.frameCount;
-            LogState("Hold");
-        }
+        // Keep the runtime lock cheap and quiet. Engage/Disengage are logged; Hold is intentionally not logged.
     }
 
     private void ZeroVelocity()
