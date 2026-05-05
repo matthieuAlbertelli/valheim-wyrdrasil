@@ -90,6 +90,7 @@ public sealed class SettlementsModuleBootstrap
             craftStationService);
 
         var runtimeApi = new SettlementsRuntimeApi(
+            buildingService,
             zoneService,
             waypointService,
             slotService,

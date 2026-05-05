@@ -101,6 +101,7 @@ Watch specifically for:
 Run the architecture validation script:
 
 - `Validate-ModuleBoundaries.ps1`
+- `Validate-PersistenceContracts.ps1`
 
 Check that new violations are either:
 - intentional and documented
@@ -116,6 +117,7 @@ A consolidation iteration is considered safe to keep when:
 - no new startup exception appears
 - Registry mode still works
 - save/load smoke tests pass
+- persistence contract validation passes
 - no unexplained architecture-boundary violations are introduced
 
 ---

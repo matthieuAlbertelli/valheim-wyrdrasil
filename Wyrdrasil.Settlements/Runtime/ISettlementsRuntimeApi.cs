@@ -35,5 +35,12 @@ public interface ISettlementsRuntimeApi
     bool ForceAssignBed(int bedId, int residentId, out int? previousResidentId, out RegisteredBedData? bedData);
     bool ForceAssignSeat(int seatId, int residentId, out int? previousResidentId, out RegisteredSeatData? seatData);
     bool ForceAssignCraftStation(int craftStationId, int residentId, out int? previousResidentId, out RegisteredCraftStationData? craftStationData);
+    void ClearAllState();
+    bool TryDeleteZoneAtCrosshair(out SettlementsDeletionReport report);
+    bool TryDeleteSlotAtCrosshair(out SettlementsDeletionReport report);
+    bool TryDeleteSeatAtCrosshair(out SettlementsDeletionReport report);
+    bool TryDeleteBedAtCrosshair(out SettlementsDeletionReport report);
+    bool TryDeleteCraftStationAtCrosshair(out SettlementsDeletionReport report);
+    bool TryDeleteWaypointAtCrosshair();
     bool TryRestoreResidentAssignment(OccupationTargetKind targetKind, int targetId, int residentId);
 }

@@ -156,6 +156,8 @@ Restore hooks are the right place for:
 
 Restore hooks are **not** the right place for embedding module persistence logic that belongs inside the module itself.
 
+See also: `PERSISTENCE_RESTORE_FLOW.md` for the intended save/load and post-restore sequence.
+
 ---
 
 ## Current tolerated debt

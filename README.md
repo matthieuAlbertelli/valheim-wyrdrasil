@@ -108,8 +108,10 @@ Even ambitious systems should still feel like they belong inside Valheim’s ton
 For ongoing consolidation work, keep these documents close at hand:
 
 - `ARCHITECTURE.md` for current module boundaries and composition rules
+- `PERSISTENCE_RESTORE_FLOW.md` for save/load ownership and post-restore orchestration
 - `HARDENING_CHECKLIST.md` for build/runtime/save-load validation before keeping a refactor
 - `Validate-ModuleBoundaries.ps1` for quick boundary checks against obvious cross-module leakage
+- `Validate-PersistenceContracts.ps1` for persistence/restore contract checks across modules
 
 ---
 

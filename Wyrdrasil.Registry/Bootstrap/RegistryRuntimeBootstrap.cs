@@ -72,13 +72,11 @@ public sealed class RegistryRuntimeBootstrap
         var craftStationAnchorEditorService = new CraftStationAnchorEditorService(log, settlements.Services.CraftStationService);
         var deletionService = new RegistryDeletionService(
             log,
-            settlements.Services.BuildingService,
-            settlements.Services.ZoneService,
-            settlements.Services.SlotService,
+            settlements.AuthoringApi,
+            settlements.RuntimeApi,
             settlements.Services.SeatService,
             settlements.Services.BedService,
             settlements.Services.CraftStationService,
-            settlements.Services.WaypointService,
             residents.Services.ResidentService,
             constructionBootstrap.TestingApi);
 
@@ -104,13 +102,7 @@ public sealed class RegistryRuntimeBootstrap
 
         var flushService = new RegistryFlushService(
             log,
-            settlements.Services.BuildingService,
-            settlements.Services.ZoneService,
-            settlements.Services.SlotService,
-            settlements.Services.SeatService,
-            settlements.Services.BedService,
-            settlements.Services.CraftStationService,
-            settlements.Services.WaypointService,
+            settlements.RuntimeApi,
             residents.Services.ResidentService,
             persistenceService);
 
