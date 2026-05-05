@@ -27,6 +27,7 @@ public sealed class RegistryResidentService
     private readonly ResidentVisualService _visualService;
     private readonly ResidentPresenceService _presenceService;
     private readonly ResidentAssignmentService _assignmentService;
+    private readonly ResidentRoutineService _residentRoutineService;
     private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
 
     public IReadOnlyList<RegisteredNpcData> RegisteredNpcs => _soulsRuntimeApi.RegisteredNpcs;
@@ -42,7 +43,8 @@ public sealed class RegistryResidentService
         IRoutinesRuntimeApi routinesRuntimeApi,
         ResidentVisualService visualService,
         ResidentPresenceService presenceService,
-        ResidentAssignmentService assignmentService)
+        ResidentAssignmentService assignmentService,
+        ResidentRoutineService residentRoutineService)
     {
         _log = log;
         _toolState = toolState;
@@ -54,6 +56,7 @@ public sealed class RegistryResidentService
         _visualService = visualService;
         _presenceService = presenceService;
         _assignmentService = assignmentService;
+        _residentRoutineService = residentRoutineService;
     }
 
     public IReadOnlyDictionary<int, WyrdrasilRegisteredNpcMarker> Markers => _visualService.Markers;
@@ -153,8 +156,43 @@ public sealed class RegistryResidentService
         _soulsRuntimeApi.BindResident(data.Id, targetCharacter);
         data.PresenceSnapshot.SetWorldPosition(targetCharacter.transform.position, targetCharacter.transform.eulerAngles.y);
         _visualService.EnsureMarker(data);
+        _residentRoutineService.ForceRefreshResident(data);
 
         _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}' with {(createdIdentity ? "new" : "existing")} identity seed={identity.GenerationSeed}, generatedRole={identity.Role}, female={identity.Appearance.IsFemale}.");
+    }
+
+    public void AssignCraftStationAtCrosshair()
+    {
+        if (TryGetTargetRegisteredResident(out var targetedResident))
+        {
+            _toolState.SetPendingResidentForceAssign(targetedResident.Id, targetedResident.DisplayName);
+            _log.LogInfo($"Selected resident #{targetedResident.Id} ('{targetedResident.DisplayName}') for craft station assignment. Target a workbench or compatible craft station to complete the operation.");
+            return;
+        }
+
+        if (!_toolState.PendingResidentForceAssignId.HasValue || !_soulsRuntimeApi.TryGetResidentById(_toolState.PendingResidentForceAssignId.Value, out var pendingResident))
+        {
+            _toolState.ClearPendingResidentForceAssign();
+            _log.LogWarning("Cannot assign craft station: target a registered resident first, then target a workbench or compatible craft station.");
+            return;
+        }
+
+        var crosshairDescription = DescribeCrosshairTarget();
+        if (!_settlementsAuthoringApi.TryGetOrDesignateCraftStationAtCrosshair(out var craftStationData, out var craftStationFailureReason))
+        {
+            _log.LogWarning($"Cannot assign craft station to resident #{pendingResident.Id}: target a workbench or compatible craft station. Crosshair={crosshairDescription}. CraftStation={craftStationFailureReason}");
+            return;
+        }
+
+        _log.LogInfo($"Craft station assignment matched station #{craftStationData.Id} ('{craftStationData.DisplayName}') for resident #{pendingResident.Id}.");
+        if (_assignmentService.TryAssignToCraftStation(pendingResident, craftStationData))
+        {
+            _toolState.ClearPendingResidentForceAssign();
+            _log.LogInfo($"Craft station assignment completed: resident #{pendingResident.Id} -> craft station #{craftStationData.Id}.");
+            return;
+        }
+
+        _log.LogWarning($"Craft station assignment rejected for resident #{pendingResident.Id} on craft station #{craftStationData.Id}. The station may already be reserved by a construction project.");
     }
 
     public void ForceAssignAtCrosshair()
@@ -216,7 +254,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        if (_settlementsAuthoringApi.TryGetCraftStationAtCrosshair(out var craftStationData))
+        if (_settlementsAuthoringApi.TryGetOrDesignateCraftStationAtCrosshair(out var craftStationData, out var craftStationFailureReason))
         {
             _log.LogInfo($"Force assign matched craft station #{craftStationData.Id} ('{craftStationData.DisplayName}').");
             if (_assignmentService.TryForceAssignToCraftStation(pendingResident, craftStationData))
@@ -232,7 +270,7 @@ public sealed class RegistryResidentService
             return;
         }
 
-        _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: target an innkeeper slot, a designated seat, a designated bed, a designated craft station, or another registered resident. Crosshair={crosshairDescription}.");
+        _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: target an innkeeper slot, a designated seat, a designated bed, a craft station, or another registered resident. Crosshair={crosshairDescription}. CraftStation={craftStationFailureReason}");
     }
 
 
@@ -300,6 +338,23 @@ public sealed class RegistryResidentService
         {
             _log.LogWarning($"Cannot clear bed assignment: bed #{bedData.Id} has no assigned resident.");
         }
+    }
+
+    public void ClearTargetCraftStationAssignmentAtCrosshair()
+    {
+        if (!_settlementsAuthoringApi.TryGetCraftStationAtCrosshair(out var craftStationData))
+        {
+            _log.LogWarning("Cannot clear craft station assignment: no designated craft station is under the crosshair.");
+            return;
+        }
+
+        if (!_assignmentService.TryClearCraftStationAssignment(craftStationData, out _))
+        {
+            _log.LogWarning($"Cannot clear craft station assignment: craft station #{craftStationData.Id} has no assigned resident.");
+            return;
+        }
+
+        _log.LogInfo($"Cleared craft station assignment on station #{craftStationData.Id} ('{craftStationData.DisplayName}').");
     }
 
     public void DespawnTargetResidentAtCrosshair()

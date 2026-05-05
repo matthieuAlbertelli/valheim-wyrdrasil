@@ -114,7 +114,7 @@ public sealed class RegistryResidentInteractionService
             return;
         }
 
-        if (_craftStationService.TryGetCraftStationAtCrosshair(out var craftStationData))
+        if (_craftStationService.TryGetOrDesignateCraftStationAtCrosshair(out var craftStationData, out var craftStationFailureReason))
         {
             _log.LogInfo($"Force assign matched craft station #{craftStationData.Id} ('{craftStationData.DisplayName}').");
             if (_assignmentService.TryForceAssignToCraftStation(pendingResident, craftStationData))
@@ -130,7 +130,7 @@ public sealed class RegistryResidentInteractionService
             return;
         }
 
-        _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: target an innkeeper slot, a designated seat, a designated bed, a designated craft station, or another registered resident. Crosshair={crosshairDescription}.");
+        _log.LogWarning($"Cannot force assign resident #{pendingResident.Id}: target an innkeeper slot, a designated seat, a designated bed, a craft station, or another registered resident. Crosshair={crosshairDescription}. CraftStation={craftStationFailureReason}");
     }
 
     public void ClearTargetInnkeeperSlotAssignmentAtCrosshair()

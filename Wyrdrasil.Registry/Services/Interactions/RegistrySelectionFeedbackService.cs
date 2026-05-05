@@ -57,12 +57,22 @@ public sealed class RegistrySelectionFeedbackService
 
     private void UpdateForceAssignFeedback(RegistryToolState state)
     {
-        var hasPendingResident = state.SelectedAction == RegistryActionType.ForceAssignResident &&
+        var isResidentAnchorAssignmentAction = state.SelectedAction == RegistryActionType.ForceAssignResident ||
+                                               state.SelectedAction == RegistryActionType.AssignCraftStation;
+        var hasPendingResident = isResidentAnchorAssignmentAction &&
                                  state.PendingResidentForceAssignId.HasValue;
 
         _residentService.SetPendingForceAssignResidentVisual(hasPendingResident ? state.PendingResidentForceAssignId : null);
 
         if (!hasPendingResident)
+        {
+            _slotService.SetPendingForceAssignTarget(null);
+            _seatService.SetPendingForceAssignTarget(null);
+            _bedService.SetPendingForceAssignTarget(null);
+            return;
+        }
+
+        if (state.SelectedAction == RegistryActionType.AssignCraftStation)
         {
             _slotService.SetPendingForceAssignTarget(null);
             _seatService.SetPendingForceAssignTarget(null);

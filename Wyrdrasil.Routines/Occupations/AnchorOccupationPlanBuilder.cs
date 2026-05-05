@@ -1,10 +1,32 @@
-using Wyrdrasil.Core.Tool;
 using UnityEngine;
+using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;
 
 public sealed class AnchorOccupationPlanBuilder
 {
+    public OccupationPosePlan BuildPlan(OccupationAnchorDefinition anchorDefinition)
+    {
+        if (anchorDefinition.UsesExplicitApproachPosition)
+        {
+            var facingDirection = NormalizeFacingDirection(anchorDefinition.Pose.FacingDirection);
+            return new OccupationPosePlan(
+                anchorDefinition.ApproachPosition,
+                anchorDefinition.Pose.EngagePosition,
+                facingDirection,
+                anchorDefinition.NavigationStopDistance,
+                anchorDefinition.EngageRadius,
+                anchorDefinition.SustainRadius);
+        }
+
+        return BuildPlan(
+            anchorDefinition.Pose,
+            anchorDefinition.ApproachDistance,
+            anchorDefinition.NavigationStopDistance,
+            anchorDefinition.EngageRadius,
+            anchorDefinition.SustainRadius);
+    }
+
     public OccupationPosePlan BuildPlan(
         OccupationAnchorPose anchorPose,
         float approachDistance,
@@ -12,14 +34,7 @@ public sealed class AnchorOccupationPlanBuilder
         float engageRadius,
         float sustainRadius)
     {
-        var facingDirection = anchorPose.FacingDirection;
-        facingDirection.y = 0f;
-        if (facingDirection.sqrMagnitude <= 0.0001f)
-        {
-            facingDirection = Vector3.forward;
-        }
-
-        facingDirection.Normalize();
+        var facingDirection = NormalizeFacingDirection(anchorPose.FacingDirection);
         var approachPosition = anchorPose.EngagePosition - facingDirection * approachDistance;
         return new OccupationPosePlan(
             approachPosition,
@@ -28,5 +43,16 @@ public sealed class AnchorOccupationPlanBuilder
             navigationStopDistance,
             engageRadius,
             sustainRadius);
+    }
+
+    private static Vector3 NormalizeFacingDirection(Vector3 facingDirection)
+    {
+        facingDirection.y = 0f;
+        if (facingDirection.sqrMagnitude <= 0.0001f)
+        {
+            return Vector3.forward;
+        }
+
+        return facingDirection.normalized;
     }
 }

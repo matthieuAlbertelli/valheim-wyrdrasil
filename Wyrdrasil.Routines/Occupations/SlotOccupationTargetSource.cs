@@ -6,10 +6,12 @@ namespace Wyrdrasil.Routines.Occupations;
 public sealed class SlotOccupationTargetSource : IOccupationTargetSource
 {
     private readonly ZoneSlotService _slotService;
+    private readonly OccupationTargetFactory _targetFactory;
 
-    public SlotOccupationTargetSource(ZoneSlotService slotService)
+    public SlotOccupationTargetSource(ZoneSlotService slotService, OccupationTargetFactory targetFactory)
     {
         _slotService = slotService;
+        _targetFactory = targetFactory;
     }
 
     public OccupationTargetKind TargetKind => OccupationTargetKind.Slot;
@@ -23,21 +25,23 @@ public sealed class SlotOccupationTargetSource : IOccupationTargetSource
             return false;
         }
 
-        var plan = new OccupationPosePlan(
+        var anchorDefinition = OccupationAnchorDefinition.FromExplicitPositions(
+            OccupationAnchorAttachmentKind.StandingPoint,
             slotData.Position,
             slotData.Position,
             slotData.FacingDirection,
-            0.30f,
-            0.40f,
-            0.75f);
+            navigationStopDistance: 0.30f,
+            engageRadius: 0.40f,
+            sustainRadius: 0.75f,
+            approachProfile: OccupationAnchorApproachProfile.StandingPointDefault);
 
-        target = new OccupationTarget(
+        target = _targetFactory.CreateAnchoredTarget(
             new OccupationTargetRef(TargetKind, slotData.Id),
             $"Slot #{slotData.Id}",
             slotData.BuildingId,
             slotData.ZoneId,
-            plan,
-            OccupationExecutionProfile.Stand());
+            anchorDefinition,
+            OccupationExecutionProfile.Stand(anchorDefinition));
 
         return true;
     }

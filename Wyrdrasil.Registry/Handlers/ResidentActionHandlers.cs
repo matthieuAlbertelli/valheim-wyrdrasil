@@ -62,6 +62,21 @@ public sealed class AssignBedHandler : IRegistryActionHandler
     }
 }
 
+public sealed class AssignCraftStationHandler : IRegistryActionHandler
+{
+    private readonly RegistryResidentService _residentService;
+
+    public AssignCraftStationHandler(RegistryResidentService residentService)
+    {
+        _residentService = residentService;
+    }
+
+    public void Execute()
+    {
+        _residentService.AssignCraftStationAtCrosshair();
+    }
+}
+
 public sealed class ClearTargetInnkeeperSlotAssignmentHandler : IRegistryActionHandler
 {
     private readonly RegistryResidentService _residentService;
@@ -104,6 +119,21 @@ public sealed class ClearTargetBedAssignmentHandler : IRegistryActionHandler
     public void Execute()
     {
         _residentService.ClearTargetBedAssignmentAtCrosshair();
+    }
+}
+
+public sealed class ClearTargetCraftStationAssignmentHandler : IRegistryActionHandler
+{
+    private readonly RegistryResidentService _residentService;
+
+    public ClearTargetCraftStationAssignmentHandler(RegistryResidentService residentService)
+    {
+        _residentService = residentService;
+    }
+
+    public void Execute()
+    {
+        _residentService.ClearTargetCraftStationAssignmentAtCrosshair();
     }
 }
 

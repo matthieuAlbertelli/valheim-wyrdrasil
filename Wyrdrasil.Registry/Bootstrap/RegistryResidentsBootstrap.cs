@@ -54,7 +54,7 @@ internal sealed class RegistryResidentsBootstrap
         routinesModuleBootstrap.OccupationTargetCatalog.Register(new ConstructionWorkPostOccupationTargetSource(
             constructionBootstrap.RuntimeApi,
             settlements.RuntimeApi,
-            routinesModuleBootstrap.AnchorOccupationPlanBuilder));
+            routinesModuleBootstrap.OccupationTargetFactory));
 
         var residentVisualService = new ResidentVisualService(modeService, moduleBootstrap.RuntimeApi);
 
@@ -64,12 +64,18 @@ internal sealed class RegistryResidentsBootstrap
             routinesModuleBootstrap.RuntimeApi,
             residentVisualService);
 
+        var residentRoutineService = new ResidentRoutineService(
+            log,
+            routinesModuleBootstrap.RuntimeApi,
+            moduleBootstrap.RuntimeApi);
+
         var residentAssignmentService = new ResidentAssignmentService(
             settlements.RuntimeApi,
             constructionBootstrap.RuntimeApi,
             moduleBootstrap.RuntimeApi,
             routinesModuleBootstrap.RuntimeApi,
-            residentVisualService);
+            residentVisualService,
+            residentRoutineService);
 
         var residentService = new RegistryResidentService(
             log,
@@ -81,13 +87,8 @@ internal sealed class RegistryResidentsBootstrap
             routinesModuleBootstrap.RuntimeApi,
             residentVisualService,
             residentPresenceService,
-            residentAssignmentService);
-
-        var residentRoutineService = new ResidentRoutineService(
-            log,
-            routinesModuleBootstrap.RuntimeApi,
-            residentService,
-            moduleBootstrap.RuntimeApi);
+            residentAssignmentService,
+            residentRoutineService);
 
         var services = new RegistryResidentsCompositionServices(
             residentVisualService,

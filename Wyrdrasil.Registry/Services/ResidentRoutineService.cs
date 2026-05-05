@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
-using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Routines.Runtime;
 using Wyrdrasil.Souls.Runtime;
 using Wyrdrasil.Souls.Tool;
@@ -15,7 +14,6 @@ public sealed class ResidentRoutineService
 
     private readonly ManualLogSource _log;
     private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
-    private readonly RegistryResidentService _residentService;
     private readonly ISoulsRuntimeApi _soulsRuntimeApi;
     private readonly Dictionary<int, ResidentRoutineActivityType> _appliedActivitiesByResidentId = new();
 
@@ -27,12 +25,10 @@ public sealed class ResidentRoutineService
     public ResidentRoutineService(
         ManualLogSource log,
         IRoutinesRuntimeApi routinesRuntimeApi,
-        RegistryResidentService residentService,
         ISoulsRuntimeApi soulsRuntimeApi)
     {
         _log = log;
         _routinesRuntimeApi = routinesRuntimeApi;
-        _residentService = residentService;
         _soulsRuntimeApi = soulsRuntimeApi;
     }
 
@@ -56,7 +52,7 @@ public sealed class ResidentRoutineService
             return;
         }
 
-        foreach (var resident in _residentService.RegisteredNpcs)
+        foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
         {
             EvaluateResident(resident, minuteOfDay);
         }
@@ -73,7 +69,7 @@ public sealed class ResidentRoutineService
     {
         if (clearAppliedActivities)
         {
-            _appliedActivitiesByResidentId.Clear();
+            ReleaseAppliedActivities();
         }
 
         if (!_routinesRuntimeApi.TryGetCurrentMinuteOfDay(out var minuteOfDay))
@@ -81,12 +77,39 @@ public sealed class ResidentRoutineService
             return;
         }
 
-        foreach (var resident in _residentService.RegisteredNpcs)
+        foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
         {
             EvaluateResident(resident, minuteOfDay);
         }
 
         _nextEvaluationTime = Time.time + EvaluationIntervalSeconds;
+    }
+
+    public void ForceRefreshResident(RegisteredNpcData resident, bool clearAppliedActivity = false)
+    {
+        if (clearAppliedActivity)
+        {
+            ReleaseAppliedActivity(resident);
+        }
+
+        if (!_routinesRuntimeApi.TryGetCurrentMinuteOfDay(out var minuteOfDay))
+        {
+            return;
+        }
+
+        EvaluateResident(resident, minuteOfDay);
+        _nextEvaluationTime = Time.time + EvaluationIntervalSeconds;
+    }
+
+    public void ClearResidentActivityState(RegisteredNpcData resident, bool releaseOccupation = true)
+    {
+        if (releaseOccupation)
+        {
+            ReleaseAppliedActivity(resident);
+            return;
+        }
+
+        _appliedActivitiesByResidentId.Remove(resident.Id);
     }
 
     private void EvaluateResident(RegisteredNpcData resident, int minuteOfDay)
@@ -103,7 +126,11 @@ public sealed class ResidentRoutineService
 
         if (desiredActivity == currentActivity)
         {
-            ContinueActivity(resident, desiredActivity);
+            if (desiredActivity != ResidentRoutineActivityType.None)
+            {
+                ContinueActivity(resident, desiredActivity);
+            }
+
             return;
         }
 
@@ -127,6 +154,29 @@ public sealed class ResidentRoutineService
         }
 
         _appliedActivitiesByResidentId.Remove(resident.Id);
+    }
+
+    private void ReleaseAppliedActivities()
+    {
+        foreach (var residentId in _appliedActivitiesByResidentId.Keys.ToArray())
+        {
+            if (_soulsRuntimeApi.TryGetResidentById(residentId, out var resident))
+            {
+                _routinesRuntimeApi.ReleaseOccupation(resident, true);
+            }
+        }
+
+        _appliedActivitiesByResidentId.Clear();
+    }
+
+    private void ReleaseAppliedActivity(RegisteredNpcData resident)
+    {
+        if (!_appliedActivitiesByResidentId.Remove(resident.Id))
+        {
+            return;
+        }
+
+        _routinesRuntimeApi.ReleaseOccupation(resident, true);
     }
 
     private static ResidentRoutineActivityType DetermineDesiredActivity(RegisteredNpcData resident, int minuteOfDay)

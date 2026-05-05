@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Routines.Services;
@@ -11,9 +9,21 @@ public sealed class ResidentScheduleService
     private const int MealPriority = 150;
     private const int WanderPriority = 10;
 
+    private const int NoonMealStartMinute = 12 * 60;
+    private const int NoonMealEndMinute = 13 * 60;
+    private const int EveningMealStartMinute = 18 * 60;
+    private const int EveningMealEndMinute = 20 * 60;
+
     public void EnsureDefaultAutonomySchedules(RegisteredNpcData resident)
     {
         ApplyDefaultWanderSchedule(resident);
+
+        if (resident.Role == NpcRole.Innkeeper)
+        {
+            ClearPublicMealSchedule(resident);
+            return;
+        }
+
         ApplyDefaultPublicMealSchedule(resident);
     }
 
@@ -41,6 +51,8 @@ public sealed class ResidentScheduleService
 
     public void ApplyDefaultInnkeeperSchedule(RegisteredNpcData resident)
     {
+        ClearAssignedSeatSchedule(resident);
+        ClearPublicMealSchedule(resident);
         ApplyDefaultAssignedWorkSchedule(resident);
     }
 
@@ -56,11 +68,18 @@ public sealed class ResidentScheduleService
 
     public void ApplyDefaultPublicMealSchedule(RegisteredNpcData resident)
     {
+        if (resident.Role == NpcRole.Innkeeper)
+        {
+            ClearPublicMealSchedule(resident);
+            return;
+        }
+
         resident.ReplaceScheduleEntries(
             ResidentRoutineActivityType.SitAtAvailablePublicSeat,
             new[]
             {
-                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAvailablePublicSeat, 12 * 60, 13 * 60, MealPriority)
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAvailablePublicSeat, NoonMealStartMinute, NoonMealEndMinute, MealPriority),
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAvailablePublicSeat, EveningMealStartMinute, EveningMealEndMinute, MealPriority)
             });
     }
 
@@ -70,7 +89,8 @@ public sealed class ResidentScheduleService
             ResidentRoutineActivityType.SitAtAssignedSeat,
             new[]
             {
-                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAssignedSeat, 12 * 60, 13 * 60, MealPriority + 5)
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAssignedSeat, NoonMealStartMinute, NoonMealEndMinute, MealPriority + 5),
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.SitAtAssignedSeat, EveningMealStartMinute, EveningMealEndMinute, MealPriority + 5)
             });
     }
 

@@ -1,18 +1,11 @@
 using System.Reflection;
 using UnityEngine;
+using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Souls.Components
 {
     public sealed class WyrdrasilVikingNpcAI : MonsterAI
     {
-        private const float SeatApproachRadius = 0.95f;
-        private const float BedApproachRadius = 0.95f;
-        private const float AttemptRetryInterval = 0.25f;
-        private const float ApproachProgressEpsilon = 0.10f;
-        private const float ApproachTimeoutDirect = 1.35f;
-        private const float ApproachTimeoutFromRoute = 0.75f;
-        private const float ApproachStuckTimeoutDirect = 0.90f;
-        private const float ApproachStuckTimeoutFromRoute = 0.50f;
         private const float CivilianWalkNativeSpeed = 1.90f;
         private const float CivilianWalkNativeWalkSpeed = 1.60f;
         private const float CivilianWalkNativeRunSpeed = 2.05f;
@@ -57,6 +50,7 @@ namespace Wyrdrasil.Souls.Components
         private bool _travelLocked;
 
         private Vector3 _approachPoint;
+        private OccupationAnchorApproachProfile _activeAnchorApproachProfile = OccupationAnchorApproachProfile.SeatDefault;
         private float _approachElapsed;
         private float _approachTimeout;
         private float _approachStuckTimer;
@@ -73,6 +67,12 @@ namespace Wyrdrasil.Souls.Components
         private bool _defaultNativeRunning;
         private bool _defaultNativeWalking;
         private NavigationMode _mode = NavigationMode.Idle;
+
+        public bool IsRegistryNavigationActive => _mode is NavigationMode.Steering
+            or NavigationMode.SeatApproach
+            or NavigationMode.SeatAttempt
+            or NavigationMode.BedApproach
+            or NavigationMode.BedAttempt;
 
         protected override void Awake()
         {
@@ -140,16 +140,19 @@ namespace Wyrdrasil.Souls.Components
             Vector3 seatUsePosition,
             Vector3 seatFacingDirection,
             Chair? chairComponent,
-            bool arrivedFromWaypointRoute = false)
+            bool arrivedFromWaypointRoute = false,
+            OccupationAnchorApproachProfile? approachProfile = null)
         {
-            StartOccupiedAnchorApproach(approachPosition, arrivedFromWaypointRoute);
-            _seatChairComponent = chairComponent;
-            _seatUsePosition = seatUsePosition;
-            _seatFacingDirection = seatFacingDirection.sqrMagnitude > 0.0001f
-                ? seatFacingDirection.normalized
-                : transform.forward;
-            ClearBedTarget();
-            _mode = NavigationMode.SeatApproach;
+            StartAttachmentAnchorApproach(
+                OccupationAnchorAttachmentKind.Seat,
+                approachPosition,
+                seatUsePosition,
+                seatFacingDirection,
+                chairComponent: chairComponent,
+                bedComponent: null,
+                bedAttachPoint: null,
+                arrivedFromWaypointRoute: arrivedFromWaypointRoute,
+                approachProfile: approachProfile ?? OccupationAnchorApproachProfile.SeatDefault);
         }
 
         public void StartBedApproach(
@@ -158,17 +161,63 @@ namespace Wyrdrasil.Souls.Components
             Vector3 bedFacingDirection,
             Bed? bedComponent,
             Transform? bedAttachPoint,
-            bool arrivedFromWaypointRoute = false)
+            bool arrivedFromWaypointRoute = false,
+            OccupationAnchorApproachProfile? approachProfile = null)
         {
-            StartOccupiedAnchorApproach(approachPosition, arrivedFromWaypointRoute);
-            ClearSeatTarget();
-            _bedComponent = bedComponent;
-            _bedAttachPoint = bedAttachPoint;
-            _bedUsePosition = bedUsePosition;
-            _bedFacingDirection = bedFacingDirection.sqrMagnitude > 0.0001f
-                ? bedFacingDirection.normalized
-                : transform.forward;
-            _mode = NavigationMode.BedApproach;
+            StartAttachmentAnchorApproach(
+                OccupationAnchorAttachmentKind.Bed,
+                approachPosition,
+                bedUsePosition,
+                bedFacingDirection,
+                chairComponent: null,
+                bedComponent: bedComponent,
+                bedAttachPoint: bedAttachPoint,
+                arrivedFromWaypointRoute: arrivedFromWaypointRoute,
+                approachProfile: approachProfile ?? OccupationAnchorApproachProfile.BedDefault);
+        }
+
+        public void StartAttachmentAnchorApproach(
+            OccupationAnchorAttachmentKind anchorKind,
+            Vector3 approachPosition,
+            Vector3 usePosition,
+            Vector3 facingDirection,
+            Chair? chairComponent,
+            Bed? bedComponent,
+            Transform? bedAttachPoint,
+            bool arrivedFromWaypointRoute = false,
+            OccupationAnchorApproachProfile? approachProfile = null)
+        {
+            switch (anchorKind)
+            {
+                case OccupationAnchorAttachmentKind.Seat:
+                    StartOccupiedAnchorApproach(
+                        approachPosition,
+                        arrivedFromWaypointRoute,
+                        approachProfile ?? OccupationAnchorApproachProfile.SeatDefault);
+                    ClearBedTarget();
+                    _seatChairComponent = chairComponent;
+                    _seatUsePosition = usePosition;
+                    _seatFacingDirection = NormalizeFacingDirection(facingDirection);
+                    _mode = NavigationMode.SeatApproach;
+                    return;
+
+                case OccupationAnchorAttachmentKind.Bed:
+                    StartOccupiedAnchorApproach(
+                        approachPosition,
+                        arrivedFromWaypointRoute,
+                        approachProfile ?? OccupationAnchorApproachProfile.BedDefault);
+                    ClearSeatTarget();
+                    _bedComponent = bedComponent;
+                    _bedAttachPoint = bedAttachPoint;
+                    _bedUsePosition = usePosition;
+                    _bedFacingDirection = NormalizeFacingDirection(facingDirection);
+                    _mode = NavigationMode.BedApproach;
+                    return;
+
+                default:
+                    ClearSteering();
+                    return;
+            }
         }
 
         public override bool UpdateAI(float dt)
@@ -231,13 +280,17 @@ namespace Wyrdrasil.Souls.Components
             return true;
         }
 
-        private void StartOccupiedAnchorApproach(Vector3 approachPoint, bool arrivedFromWaypointRoute)
+        private void StartOccupiedAnchorApproach(
+            Vector3 approachPoint,
+            bool arrivedFromWaypointRoute,
+            OccupationAnchorApproachProfile profile)
         {
             _travelLocked = false;
             _approachPoint = approachPoint;
+            _activeAnchorApproachProfile = profile;
             _approachElapsed = 0f;
-            _approachTimeout = arrivedFromWaypointRoute ? ApproachTimeoutFromRoute : ApproachTimeoutDirect;
-            _approachStuckTimeout = arrivedFromWaypointRoute ? ApproachStuckTimeoutFromRoute : ApproachStuckTimeoutDirect;
+            _approachTimeout = profile.GetApproachTimeout(arrivedFromWaypointRoute);
+            _approachStuckTimeout = profile.GetStuckTimeout(arrivedFromWaypointRoute);
             _approachStuckTimer = 0f;
             _bestApproachDistance = float.MaxValue;
             _nextAttemptTime = 0f;
@@ -275,7 +328,7 @@ namespace Wyrdrasil.Souls.Components
                 return;
             }
 
-            if (HasReachedHorizontally(_approachPoint, SeatApproachRadius))
+            if (CanStartAnchorAttempt(_seatUsePosition))
             {
                 EnterSeatAttemptMode();
                 return;
@@ -283,8 +336,8 @@ namespace Wyrdrasil.Souls.Components
 
             RotateBodyTowards(_approachPoint, dt);
             ApplyNativeCivilianWalkMode();
-            MoveTo(dt, _approachPoint, SeatApproachRadius, false);
-            UpdateApproachProgress(dt, NavigationMode.SeatAttempt, SeatApproachRadius);
+            MoveTo(dt, _approachPoint, _activeAnchorApproachProfile.ApproachRadius, false);
+            UpdateApproachProgress(dt, NavigationMode.SeatAttempt, _seatUsePosition);
         }
 
         private void UpdateSeatAttempt(float dt)
@@ -292,6 +345,12 @@ namespace Wyrdrasil.Souls.Components
             if (_seatChairComponent == null || _viking == null)
             {
                 _mode = NavigationMode.Idle;
+                return;
+            }
+
+            if (!CanAttemptSeatAttachment())
+            {
+                _mode = NavigationMode.SeatApproach;
                 return;
             }
 
@@ -304,10 +363,10 @@ namespace Wyrdrasil.Souls.Components
                 return;
             }
 
-            _nextAttemptTime = Time.time + AttemptRetryInterval;
-            _seatChairComponent.Interact(_viking, false, false);
+            _nextAttemptTime = Time.time + _activeAnchorApproachProfile.AttemptRetryInterval;
+            _viking.AttachToChair(_seatChairComponent);
 
-            if (_viking.IsAttached())
+            if (_viking.IsAttachedToChair(_seatChairComponent))
             {
                 _mode = NavigationMode.Seated;
             }
@@ -321,7 +380,7 @@ namespace Wyrdrasil.Souls.Components
                 return;
             }
 
-            if (HasReachedHorizontally(_approachPoint, BedApproachRadius))
+            if (CanStartAnchorAttempt(_bedUsePosition))
             {
                 EnterBedAttemptMode();
                 return;
@@ -329,8 +388,8 @@ namespace Wyrdrasil.Souls.Components
 
             RotateBodyTowards(_approachPoint, dt);
             ApplyNativeCivilianWalkMode();
-            MoveTo(dt, _approachPoint, BedApproachRadius, false);
-            UpdateApproachProgress(dt, NavigationMode.BedAttempt, BedApproachRadius);
+            MoveTo(dt, _approachPoint, _activeAnchorApproachProfile.ApproachRadius, false);
+            UpdateApproachProgress(dt, NavigationMode.BedAttempt, _bedUsePosition);
         }
 
         private void UpdateBedAttempt(float dt)
@@ -338,6 +397,12 @@ namespace Wyrdrasil.Souls.Components
             if (_bedComponent == null || _bedAttachPoint == null || _viking == null)
             {
                 _mode = NavigationMode.Idle;
+                return;
+            }
+
+            if (!CanAttemptBedAttachment())
+            {
+                _mode = NavigationMode.BedApproach;
                 return;
             }
 
@@ -350,19 +415,19 @@ namespace Wyrdrasil.Souls.Components
                 return;
             }
 
-            _nextAttemptTime = Time.time + AttemptRetryInterval;
-            _bedComponent.Interact(_viking, false, false);
+            _nextAttemptTime = Time.time + _activeAnchorApproachProfile.AttemptRetryInterval;
+            _viking.AttachToBed(_bedComponent, _bedAttachPoint);
 
-            if (_viking.IsAttached())
+            if (_viking.IsAttachedToBed(_bedComponent))
             {
                 _mode = NavigationMode.Sleeping;
             }
         }
 
-        private void UpdateApproachProgress(float dt, NavigationMode nextMode, float relaxedRadius)
+        private void UpdateApproachProgress(float dt, NavigationMode nextMode, Vector3 engagePosition)
         {
             var currentDistance = HorizontalDistanceTo(_approachPoint);
-            if (currentDistance < _bestApproachDistance - ApproachProgressEpsilon)
+            if (currentDistance < _bestApproachDistance - _activeAnchorApproachProfile.ProgressEpsilon)
             {
                 _bestApproachDistance = currentDistance;
                 _approachStuckTimer = 0f;
@@ -374,30 +439,45 @@ namespace Wyrdrasil.Souls.Components
 
             _approachElapsed += dt;
 
-            if (_approachElapsed >= _approachTimeout ||
-                (_approachStuckTimer >= _approachStuckTimeout && HasReachedHorizontally(_approachPoint, relaxedRadius)))
+            var hasReachedRelaxedApproach = HasReachedHorizontally(_approachPoint, _activeAnchorApproachProfile.UseRadius);
+            var canForceCurrentAnchor = CanForceAnchorAttempt(engagePosition);
+
+            if (_approachStuckTimer >= _approachStuckTimeout && (hasReachedRelaxedApproach || canForceCurrentAnchor))
             {
-                _nextAttemptTime = 0f;
-                _mode = nextMode;
-                StopMoving();
-                ZeroVelocity();
+                EnterAnchorAttemptMode(nextMode);
+                return;
+            }
+
+            if (_approachElapsed >= _approachTimeout)
+            {
+                if (canForceCurrentAnchor)
+                {
+                    EnterAnchorAttemptMode(nextMode);
+                    return;
+                }
+
+                _approachElapsed = 0f;
+                _approachStuckTimer = 0f;
+                _bestApproachDistance = currentDistance;
             }
         }
 
         private void EnterSeatAttemptMode()
         {
-            StopMoving();
-            ZeroVelocity();
-            _nextAttemptTime = 0f;
-            _mode = NavigationMode.SeatAttempt;
+            EnterAnchorAttemptMode(NavigationMode.SeatAttempt);
         }
 
         private void EnterBedAttemptMode()
         {
+            EnterAnchorAttemptMode(NavigationMode.BedAttempt);
+        }
+
+        private void EnterAnchorAttemptMode(NavigationMode nextMode)
+        {
             StopMoving();
             ZeroVelocity();
             _nextAttemptTime = 0f;
-            _mode = NavigationMode.BedAttempt;
+            _mode = nextMode;
         }
 
         private void RotateBodyTowards(Vector3 targetPoint, float dt)
@@ -412,6 +492,14 @@ namespace Wyrdrasil.Souls.Components
 
             var targetRotation = Quaternion.LookRotation(direction.normalized, Vector3.up);
             transform.rotation = Quaternion.RotateTowards(transform.rotation, targetRotation, 360f * dt);
+        }
+
+        private static Vector3 NormalizeFacingDirection(Vector3 facingDirection)
+        {
+            facingDirection.y = 0f;
+            return facingDirection.sqrMagnitude > 0.0001f
+                ? facingDirection.normalized
+                : Vector3.forward;
         }
 
         private void RotateTowards(Vector3 facingDirection, float dt)
@@ -431,6 +519,27 @@ namespace Wyrdrasil.Souls.Components
         private bool HasReachedHorizontally(Vector3 targetPoint, float radius)
         {
             return HorizontalDistanceTo(targetPoint) <= radius;
+        }
+
+        private bool CanStartAnchorAttempt(Vector3 engagePosition)
+        {
+            return HasReachedHorizontally(_approachPoint, _activeAnchorApproachProfile.ApproachRadius) ||
+                   CanForceAnchorAttempt(engagePosition);
+        }
+
+        private bool CanForceAnchorAttempt(Vector3 engagePosition)
+        {
+            return _activeAnchorApproachProfile.CanForceAttempt(transform.position, _approachPoint, engagePosition);
+        }
+
+        private bool CanAttemptSeatAttachment()
+        {
+            return _activeAnchorApproachProfile.CanAttempt(transform.position, _approachPoint, _seatUsePosition);
+        }
+
+        private bool CanAttemptBedAttachment()
+        {
+            return _activeAnchorApproachProfile.CanAttempt(transform.position, _approachPoint, _bedUsePosition);
         }
 
         private float HorizontalDistanceTo(Vector3 targetPoint)

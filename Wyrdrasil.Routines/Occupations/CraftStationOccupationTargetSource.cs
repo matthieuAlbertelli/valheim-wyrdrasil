@@ -7,19 +7,20 @@ namespace Wyrdrasil.Routines.Occupations;
 public sealed class CraftStationOccupationTargetSource : IOccupationTargetSource
 {
     private readonly CraftStationService _craftStationService;
-    private readonly AnchorOccupationPlanBuilder _planBuilder;
+    private readonly OccupationTargetFactory _targetFactory;
 
-    public CraftStationOccupationTargetSource(CraftStationService craftStationService, AnchorOccupationPlanBuilder planBuilder)
+    public CraftStationOccupationTargetSource(CraftStationService craftStationService, OccupationTargetFactory targetFactory)
     {
         _craftStationService = craftStationService;
-        _planBuilder = planBuilder;
+        _targetFactory = targetFactory;
     }
 
     public OccupationTargetKind TargetKind => OccupationTargetKind.CraftStation;
 
     public bool TryResolve(OccupationTargetRef targetRef, out OccupationTarget target)
     {
-        if (!_craftStationService.TryGetCraftStationById(targetRef.TargetId, out var craftStationData) ||
+        if (targetRef.TargetKind != TargetKind ||
+            !_craftStationService.TryGetCraftStationById(targetRef.TargetId, out var craftStationData) ||
             !craftStationData.TryResolveWorldAnchor(out var engagePosition, out var facingDirection))
         {
             target = null!;
@@ -31,20 +32,23 @@ public sealed class CraftStationOccupationTargetSource : IOccupationTargetSource
             profile = CraftStationInteractionProfileRegistry.GetDefaultProfile();
         }
 
-        var plan = _planBuilder.BuildPlan(
-            new OccupationAnchorPose(engagePosition, facingDirection),
+        var anchorDefinition = OccupationAnchorDefinition.FromPose(
+            OccupationAnchorAttachmentKind.WorkPoint,
+            engagePosition,
+            facingDirection,
             profile.ApproachDistance,
             profile.NavigationStopDistance,
             profile.EngageRadius,
-            profile.SustainRadius);
+            profile.SustainRadius,
+            approachProfile: OccupationAnchorApproachProfile.WorkPointDefault);
 
-        target = new OccupationTarget(
+        target = _targetFactory.CreateAnchoredTarget(
             targetRef,
             craftStationData.DisplayName,
             craftStationData.BuildingId,
             craftStationData.ZoneId,
-            plan,
-            OccupationExecutionProfile.CraftStation(craftStationData.Interactable));
+            anchorDefinition,
+            OccupationExecutionProfile.CraftStation(craftStationData.Interactable, anchorDefinition));
         return true;
     }
 }

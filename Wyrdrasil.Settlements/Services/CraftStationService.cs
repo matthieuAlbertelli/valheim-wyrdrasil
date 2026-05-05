@@ -187,6 +187,10 @@ public sealed class CraftStationService
         var existingStation = FindCraftStationByFurniture(furnitureRoot);
         if (existingStation != null)
         {
+            EnsureMarker(existingStation);
+            EnsureAnchorIndicator(existingStation);
+            UpdateMarker(existingStation);
+            UpdateAnchorIndicator(existingStation);
             craftStationData = existingStation;
             failureReason = string.Empty;
             return true;

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Routines.Components;
 
@@ -38,10 +39,11 @@ public sealed class WyrdrasilVikingRouteFollower : MonoBehaviour
         Vector3 approachPosition,
         Vector3 seatUsePosition,
         Vector3 seatFacingDirection,
-        Chair? chairComponent)
+        Chair? chairComponent,
+        OccupationAnchorApproachProfile? approachProfile = null)
     {
         EnsureController();
-        _controller!.ConfigureRouteToSeat(routePoints, approachPosition, seatUsePosition, seatFacingDirection, chairComponent);
+        _controller!.ConfigureRouteToSeat(routePoints, approachPosition, seatUsePosition, seatFacingDirection, chairComponent, approachProfile);
         enabled = false;
     }
 
@@ -51,10 +53,11 @@ public sealed class WyrdrasilVikingRouteFollower : MonoBehaviour
         Vector3 bedUsePosition,
         Vector3 bedFacingDirection,
         Bed? bedComponent,
-        Transform? bedAttachPoint)
+        Transform? bedAttachPoint,
+        OccupationAnchorApproachProfile? approachProfile = null)
     {
         EnsureController();
-        _controller!.ConfigureRouteToBed(routePoints, approachPosition, bedUsePosition, bedFacingDirection, bedComponent, bedAttachPoint);
+        _controller!.ConfigureRouteToBed(routePoints, approachPosition, bedUsePosition, bedFacingDirection, bedComponent, bedAttachPoint, approachProfile);
         enabled = false;
     }
 

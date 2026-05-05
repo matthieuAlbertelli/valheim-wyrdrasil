@@ -17,19 +17,22 @@ public sealed class ResidentAssignmentService
     private readonly IRoutinesRuntimeApi _routinesRuntimeApi;
 
     private readonly ResidentVisualService _visualService;
+    private readonly ResidentRoutineService _residentRoutineService;
 
     public ResidentAssignmentService(
         ISettlementsRuntimeApi settlementsRuntimeApi,
         IConstructionRuntimeApi constructionRuntimeApi,
         ISoulsRuntimeApi soulsRuntimeApi,
         IRoutinesRuntimeApi routinesRuntimeApi,
-        ResidentVisualService visualService)
+        ResidentVisualService visualService,
+        ResidentRoutineService residentRoutineService)
     {
         _settlementsRuntimeApi = settlementsRuntimeApi;
         _constructionRuntimeApi = constructionRuntimeApi;
         _soulsRuntimeApi = soulsRuntimeApi;
         _routinesRuntimeApi = routinesRuntimeApi;
         _visualService = visualService;
+        _residentRoutineService = residentRoutineService;
     }
 
     public bool TryClearSlotAssignment(ZoneSlotData slotData, out RegisteredNpcData? resident)
@@ -44,7 +47,7 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(resident, false);
             ClearWorkAssignment(resident, clearRole: true);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
 
         return true;
@@ -62,7 +65,7 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(resident);
             ClearMealAssignment(resident);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
 
         return true;
@@ -80,7 +83,25 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(resident);
             ClearSleepAssignment(resident);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
+        }
+
+        return true;
+    }
+
+    public bool TryClearCraftStationAssignment(RegisteredCraftStationData craftStationData, out RegisteredNpcData? resident)
+    {
+        resident = null;
+        if (!_settlementsRuntimeApi.TryClearCraftStationAssignment(craftStationData.Id, out var previousResidentId) || !previousResidentId.HasValue)
+        {
+            return false;
+        }
+
+        if (_soulsRuntimeApi.TryGetResidentById(previousResidentId.Value, out resident))
+        {
+            _routinesRuntimeApi.ReleaseOccupation(resident);
+            ClearWorkAssignment(resident, clearRole: false);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
 
         return true;
@@ -104,7 +125,7 @@ public sealed class ResidentAssignmentService
         resident.SetRole(NpcRole.Innkeeper);
         resident.SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.Slot, slotData.Id));
         _routinesRuntimeApi.ApplyDefaultInnkeeperSchedule(resident);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         return true;
     }
 
@@ -127,7 +148,7 @@ public sealed class ResidentAssignmentService
 
         resident.SetAssignment(ResidentAssignmentPurpose.Sleep, new OccupationTargetRef(OccupationTargetKind.Bed, bedData.Id));
         _routinesRuntimeApi.ApplyDefaultBedSleepSchedule(resident);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         return true;
     }
 
@@ -154,13 +175,13 @@ public sealed class ResidentAssignmentService
         if (previousResidentId.HasValue && previousResidentId.Value != resident.Id && _soulsRuntimeApi.TryGetResidentById(previousResidentId.Value, out var displacedResident))
         {
             ClearWorkAssignment(displacedResident, clearRole: true);
-            _visualService.UpdateMarker(displacedResident);
+            UpdateMarkerAndRefreshRoutine(displacedResident);
         }
 
         resident.SetRole(NpcRole.Innkeeper);
         resident.SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.Slot, resolvedSlot.Id));
         _routinesRuntimeApi.ApplyDefaultInnkeeperSchedule(resident);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         return true;
     }
 
@@ -190,12 +211,12 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(displacedResident);
             ClearMealAssignment(displacedResident);
-            _visualService.UpdateMarker(displacedResident);
+            UpdateMarkerAndRefreshRoutine(displacedResident);
         }
 
         resident.SetAssignment(ResidentAssignmentPurpose.Meal, new OccupationTargetRef(OccupationTargetKind.Seat, resolvedSeat.Id));
         _routinesRuntimeApi.ApplyDefaultSeatMealSchedule(resident);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         return true;
     }
 
@@ -220,16 +241,16 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(displacedResident);
             ClearSleepAssignment(displacedResident);
-            _visualService.UpdateMarker(displacedResident);
+            UpdateMarkerAndRefreshRoutine(displacedResident);
         }
 
         resident.SetAssignment(ResidentAssignmentPurpose.Sleep, new OccupationTargetRef(OccupationTargetKind.Bed, resolvedBed.Id));
         _routinesRuntimeApi.ApplyDefaultBedSleepSchedule(resident);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         return true;
     }
 
-    public bool TryForceAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData)
+    public bool TryAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData)
     {
         if (_constructionRuntimeApi.TryGetProjectIdByCraftStation(craftStationData.Id, out var reservedProjectId))
         {
@@ -256,13 +277,18 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(displacedResident);
             ClearWorkAssignment(displacedResident, clearRole: false);
-            _visualService.UpdateMarker(displacedResident);
+            UpdateMarkerAndRefreshRoutine(displacedResident);
         }
 
         resident.SetAssignment(ResidentAssignmentPurpose.Work, new OccupationTargetRef(OccupationTargetKind.CraftStation, resolvedCraftStation.Id));
         _routinesRuntimeApi.ApplyDefaultCraftStationWorkSchedule(resident);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         return true;
+    }
+
+    public bool TryForceAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData)
+    {
+        return TryAssignToCraftStation(resident, craftStationData);
     }
 
     public bool TryAssignToConstructionProject(RegisteredNpcData resident, int projectId, out int workPostId, out string failureReason)
@@ -282,7 +308,7 @@ public sealed class ResidentAssignmentService
 
         resident.AssignConstructionWorkPost(workPost.Id);
         _routinesRuntimeApi.ApplyDefaultConstructionWorkSchedule(resident);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         workPostId = workPost.Id;
         return true;
     }
@@ -298,7 +324,7 @@ public sealed class ResidentAssignmentService
         }
 
         ClearWorkAssignment(resident, clearRole: false);
-        _visualService.UpdateMarker(resident);
+        UpdateMarkerAndRefreshRoutine(resident);
         failureReason = string.Empty;
         return true;
     }
@@ -309,7 +335,7 @@ public sealed class ResidentAssignmentService
                      HasAssignmentTarget(candidate, ResidentAssignmentPurpose.Work, OccupationTargetKind.Slot, slotId)))
         {
             ClearWorkAssignment(resident, clearRole: true);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
     }
 
@@ -320,7 +346,7 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(resident);
             ClearMealAssignment(resident);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
     }
 
@@ -331,7 +357,7 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(resident);
             ClearSleepAssignment(resident);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
     }
 
@@ -348,7 +374,7 @@ public sealed class ResidentAssignmentService
 
             _routinesRuntimeApi.ReleaseOccupation(resident, detachIfAttached: false);
             ClearWorkAssignment(resident, clearRole: false, clearConstructionRuntime: false);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
             clearedCount++;
         }
 
@@ -362,7 +388,7 @@ public sealed class ResidentAssignmentService
         {
             _routinesRuntimeApi.ReleaseOccupation(resident);
             ClearWorkAssignment(resident, clearRole: false);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
 
         foreach (var resident in _soulsRuntimeApi.RegisteredNpcs.Where(candidate =>
@@ -377,8 +403,19 @@ public sealed class ResidentAssignmentService
 
             _routinesRuntimeApi.ReleaseOccupation(resident, detachIfAttached: false);
             ClearWorkAssignment(resident, clearRole: false);
-            _visualService.UpdateMarker(resident);
+            UpdateMarkerAndRefreshRoutine(resident);
         }
+    }
+
+    private void UpdateMarkerAndRefreshRoutine(RegisteredNpcData resident)
+    {
+        _visualService.UpdateMarker(resident);
+        RefreshResidentRoutine(resident);
+    }
+
+    private void RefreshResidentRoutine(RegisteredNpcData resident)
+    {
+        _residentRoutineService.ForceRefreshResident(resident);
     }
 
     private static bool HasAssignmentTarget(
@@ -404,6 +441,7 @@ public sealed class ResidentAssignmentService
         if (clearRole && resident.Role == NpcRole.Innkeeper)
         {
             resident.SetRole(NpcRole.Villager);
+            _routinesRuntimeApi.EnsureDefaultAutonomySchedules(resident);
         }
     }
 

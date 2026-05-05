@@ -1,4 +1,5 @@
 using UnityEngine;
+using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Routines.Occupations;
 
@@ -26,39 +27,61 @@ public sealed class OccupationExecutionProfile
     public string LifecycleStrategyId { get; }
     public string SustainStrategyId { get; }
     public OccupationExecutionKind Kind { get; }
+    public OccupationAnchorAttachmentKind AnchorKind { get; }
     public Chair? ChairComponent { get; }
     public Bed? BedComponent { get; }
     public Transform? AttachPoint { get; }
     public Interactable? Interactable { get; }
+    public OccupationAnchorDefinition? AnchorDefinition { get; }
+    public OccupationAnchorApproachProfile AnchorApproachProfile { get; }
 
     private OccupationExecutionProfile(
         string navigationStrategyId,
         string lifecycleStrategyId,
         string sustainStrategyId,
         OccupationExecutionKind kind,
+        OccupationAnchorAttachmentKind anchorKind = OccupationAnchorAttachmentKind.None,
         Chair? chairComponent = null,
         Bed? bedComponent = null,
         Transform? attachPoint = null,
-        Interactable? interactable = null)
+        Interactable? interactable = null,
+        OccupationAnchorDefinition? anchorDefinition = null,
+        OccupationAnchorApproachProfile? anchorApproachProfile = null)
     {
         NavigationStrategyId = navigationStrategyId;
         LifecycleStrategyId = lifecycleStrategyId;
         SustainStrategyId = sustainStrategyId;
         Kind = kind;
+        AnchorKind = anchorKind;
         ChairComponent = chairComponent;
         BedComponent = bedComponent;
         AttachPoint = attachPoint;
         Interactable = interactable;
+        AnchorDefinition = anchorDefinition;
+        AnchorApproachProfile = anchorApproachProfile ?? anchorDefinition?.ApproachProfile ?? ResolveDefaultAnchorApproachProfile(kind);
     }
 
     public bool IsStand => Kind == OccupationExecutionKind.Stand;
     public bool IsSeat => Kind == OccupationExecutionKind.Seat;
     public bool IsBed => Kind == OccupationExecutionKind.Bed;
     public bool IsCraftStation => Kind == OccupationExecutionKind.CraftStation;
+    public bool HasAttachmentAnchor => AnchorKind is OccupationAnchorAttachmentKind.Seat or OccupationAnchorAttachmentKind.Bed;
+    public bool HasAnchorDefinition => AnchorDefinition.HasValue;
 
     public static OccupationExecutionProfile Stand()
     {
         return new OccupationExecutionProfile(StandStrategyId, StandStrategyId, StandStrategyId, OccupationExecutionKind.Stand);
+    }
+
+    public static OccupationExecutionProfile Stand(OccupationAnchorDefinition anchorDefinition)
+    {
+        return new OccupationExecutionProfile(
+            StandStrategyId,
+            StandStrategyId,
+            StandStrategyId,
+            OccupationExecutionKind.Stand,
+            anchorDefinition: anchorDefinition,
+            anchorApproachProfile: anchorDefinition.ApproachProfile);
     }
 
     public static OccupationExecutionProfile AnchoredStand(string sustainStrategyId)
@@ -66,14 +89,67 @@ public sealed class OccupationExecutionProfile
         return new OccupationExecutionProfile(ApproachNavigationStrategyId, AnchoredStandLifecycleStrategyId, sustainStrategyId, OccupationExecutionKind.Stand);
     }
 
+    public static OccupationExecutionProfile AnchoredStand(string sustainStrategyId, OccupationAnchorDefinition anchorDefinition)
+    {
+        return new OccupationExecutionProfile(
+            ApproachNavigationStrategyId,
+            AnchoredStandLifecycleStrategyId,
+            sustainStrategyId,
+            OccupationExecutionKind.Stand,
+            anchorDefinition: anchorDefinition,
+            anchorApproachProfile: anchorDefinition.ApproachProfile);
+    }
+
     public static OccupationExecutionProfile Seat(Chair? chairComponent)
     {
-        return new OccupationExecutionProfile(SeatStrategyId, SeatStrategyId, SeatStrategyId, OccupationExecutionKind.Seat, chairComponent: chairComponent);
+        return new OccupationExecutionProfile(
+            SeatStrategyId,
+            SeatStrategyId,
+            SeatStrategyId,
+            OccupationExecutionKind.Seat,
+            OccupationAnchorAttachmentKind.Seat,
+            chairComponent: chairComponent,
+            anchorApproachProfile: OccupationAnchorApproachProfile.SeatDefault);
+    }
+
+    public static OccupationExecutionProfile Seat(Chair? chairComponent, OccupationAnchorDefinition anchorDefinition)
+    {
+        return new OccupationExecutionProfile(
+            SeatStrategyId,
+            SeatStrategyId,
+            SeatStrategyId,
+            OccupationExecutionKind.Seat,
+            OccupationAnchorAttachmentKind.Seat,
+            chairComponent: chairComponent,
+            anchorDefinition: anchorDefinition,
+            anchorApproachProfile: anchorDefinition.ApproachProfile);
     }
 
     public static OccupationExecutionProfile Bed(Bed? bedComponent, Transform? attachPoint)
     {
-        return new OccupationExecutionProfile(BedStrategyId, BedStrategyId, BedStrategyId, OccupationExecutionKind.Bed, bedComponent: bedComponent, attachPoint: attachPoint);
+        return new OccupationExecutionProfile(
+            BedStrategyId,
+            BedStrategyId,
+            BedStrategyId,
+            OccupationExecutionKind.Bed,
+            OccupationAnchorAttachmentKind.Bed,
+            bedComponent: bedComponent,
+            attachPoint: attachPoint,
+            anchorApproachProfile: OccupationAnchorApproachProfile.BedDefault);
+    }
+
+    public static OccupationExecutionProfile Bed(Bed? bedComponent, Transform? attachPoint, OccupationAnchorDefinition anchorDefinition)
+    {
+        return new OccupationExecutionProfile(
+            BedStrategyId,
+            BedStrategyId,
+            BedStrategyId,
+            OccupationExecutionKind.Bed,
+            OccupationAnchorAttachmentKind.Bed,
+            bedComponent: bedComponent,
+            attachPoint: attachPoint,
+            anchorDefinition: anchorDefinition,
+            anchorApproachProfile: anchorDefinition.ApproachProfile);
     }
 
     public static OccupationExecutionProfile Workbench(string sustainStrategyId, Interactable? interactable)
@@ -83,7 +159,23 @@ public sealed class OccupationExecutionProfile
             WorkbenchLifecycleStrategyId,
             sustainStrategyId,
             OccupationExecutionKind.CraftStation,
-            interactable: interactable);
+            interactable: interactable,
+            anchorApproachProfile: OccupationAnchorApproachProfile.WorkPointDefault);
+    }
+
+    public static OccupationExecutionProfile Workbench(
+        string sustainStrategyId,
+        Interactable? interactable,
+        OccupationAnchorDefinition anchorDefinition)
+    {
+        return new OccupationExecutionProfile(
+            ApproachNavigationStrategyId,
+            WorkbenchLifecycleStrategyId,
+            sustainStrategyId,
+            OccupationExecutionKind.CraftStation,
+            interactable: interactable,
+            anchorDefinition: anchorDefinition,
+            anchorApproachProfile: anchorDefinition.ApproachProfile);
     }
 
     public static OccupationExecutionProfile CraftStation(Interactable? interactable)
@@ -91,8 +183,30 @@ public sealed class OccupationExecutionProfile
         return Workbench(CraftStationSustainStrategyId, interactable);
     }
 
+    public static OccupationExecutionProfile CraftStation(Interactable? interactable, OccupationAnchorDefinition anchorDefinition)
+    {
+        return Workbench(CraftStationSustainStrategyId, interactable, anchorDefinition);
+    }
+
     public static OccupationExecutionProfile ConstructionWork(Interactable? interactable)
     {
         return Workbench(ConstructionWorkSustainStrategyId, interactable);
+    }
+
+    public static OccupationExecutionProfile ConstructionWork(Interactable? interactable, OccupationAnchorDefinition anchorDefinition)
+    {
+        return Workbench(ConstructionWorkSustainStrategyId, interactable, anchorDefinition);
+    }
+
+    private static OccupationAnchorApproachProfile ResolveDefaultAnchorApproachProfile(OccupationExecutionKind kind)
+    {
+        return kind switch
+        {
+            OccupationExecutionKind.Seat => OccupationAnchorApproachProfile.SeatDefault,
+            OccupationExecutionKind.Bed => OccupationAnchorApproachProfile.BedDefault,
+            OccupationExecutionKind.CraftStation => OccupationAnchorApproachProfile.WorkPointDefault,
+            OccupationExecutionKind.Stand => OccupationAnchorApproachProfile.StandingPointDefault,
+            _ => OccupationAnchorApproachProfile.StandingPointDefault
+        };
     }
 }

@@ -41,7 +41,7 @@ public sealed class RegistryHudRenderer
         GUI.Label(new Rect(35f, 458f, 420f, 20f), $"Sièges désignés : {hudState.SeatCount}", _textStyle!);
         GUI.Label(new Rect(35f, 482f, 420f, 20f), $"Lits désignés : {hudState.BedCount}", _textStyle!);
         GUI.Label(new Rect(35f, 506f, 420f, 20f), $"PNJ enregistrés : {hudState.ResidentCount}", _textStyle!);
-        GUI.Label(new Rect(35f, 530f, 760f, 20f), $"Résident sélectionné pour force assign : {FormatPendingResidentForceAssign(hudState.ToolState)}", _textStyle!);
+        GUI.Label(new Rect(35f, 530f, 760f, 20f), $"Résident sélectionné pour assignation : {FormatPendingResidentForceAssign(hudState.ToolState)}", _textStyle!);
 
         var nextLineY = 554f;
         if (hudState.PendingZoneAuthoring != null)
@@ -94,7 +94,7 @@ public sealed class RegistryHudRenderer
 
         GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Astuce Construction : vise d'abord un marqueur de chantier, puis choisis soit un workbench, soit un PNJ. Les deux associations peuvent être faites dans n'importe quel ordre, et le workbench sera désigné automatiquement si besoin.", _hintStyle!);
         nextLineY += 24f;
-        GUI.Label(new Rect(35f, nextLineY, 760f, 20f), "Astuce : avec 'Force assign', vise d'abord un PNJ enregistré, puis vise un slot, un siège, un lit ou un poste d'artisanat.", _hintStyle!);
+        GUI.Label(new Rect(35f, nextLineY, 820f, 20f), "Astuce poste : action 'Assigner poste d'artisanat' -> vise un PNJ, puis vise un workbench. Le workbench est désigné automatiquement si nécessaire.", _hintStyle!);
         nextLineY += 24f;
         GUI.Label(new Rect(35f, nextLineY, 820f, 20f), $"{hudState.ToggleKey} : mode | {hudState.NextCategoryKey} : catégorie | {hudState.NextActionKey} : action | Clic gauche : créer/éditer | Clic droit : supprimer/annuler auteur", _hintStyle!);
     }
@@ -138,10 +138,12 @@ public sealed class RegistryHudRenderer
         RegistryActionType.AssignInnkeeperRole => "Assigner rôle : Aubergiste",
         RegistryActionType.AssignSeat => "Assigner un siège désigné au PNJ visé",
         RegistryActionType.AssignBed => "Assigner un lit désigné au PNJ visé",
+        RegistryActionType.AssignCraftStation => "Assigner un poste d'artisanat au PNJ",
         RegistryActionType.ClearTargetInnkeeperSlotAssignment => "Effacer l'assignation du slot aubergiste visé",
         RegistryActionType.ClearTargetSeatAssignment => "Effacer l'assignation du siège visé",
         RegistryActionType.ClearTargetBedAssignment => "Effacer l'assignation du lit visé",
-        RegistryActionType.ForceAssignResident => "Force assign : PNJ visé -> anchor visé",
+        RegistryActionType.ClearTargetCraftStationAssignment => "Effacer l'assignation du poste d'artisanat visé",
+        RegistryActionType.ForceAssignResident => "Diagnostic : force assign générique PNJ -> anchor",
         RegistryActionType.DespawnTargetResident => "Despawn PNJ visé",
         RegistryActionType.RespawnAssignedResident => "Respawn résident assigné à l'anchor visé",
         RegistryActionType.SpawnTestViking => "Faire apparaître PNJ test",

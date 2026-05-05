@@ -6,10 +6,12 @@ namespace Wyrdrasil.Routines.Occupations;
 public sealed class SeatOccupationTargetSource : IOccupationTargetSource
 {
     private readonly SeatService _seatService;
+    private readonly OccupationTargetFactory _targetFactory;
 
-    public SeatOccupationTargetSource(SeatService seatService)
+    public SeatOccupationTargetSource(SeatService seatService, OccupationTargetFactory targetFactory)
     {
         _seatService = seatService;
+        _targetFactory = targetFactory;
     }
 
     public OccupationTargetKind TargetKind => OccupationTargetKind.Seat;
@@ -23,21 +25,23 @@ public sealed class SeatOccupationTargetSource : IOccupationTargetSource
             return false;
         }
 
-        var plan = new OccupationPosePlan(
+        var anchorDefinition = OccupationAnchorDefinition.FromExplicitPositions(
+            OccupationAnchorAttachmentKind.Seat,
             seatData.ApproachPosition,
             seatData.SeatPosition,
             seatData.SeatForward,
-            0.25f,
-            0.25f,
-            0.75f);
+            navigationStopDistance: 0.25f,
+            engageRadius: 0.25f,
+            sustainRadius: 0.75f,
+            approachProfile: OccupationAnchorApproachProfile.SeatDefault);
 
-        target = new OccupationTarget(
+        target = _targetFactory.CreateAnchoredTarget(
             new OccupationTargetRef(TargetKind, seatData.Id),
             seatData.DisplayName,
             seatData.BuildingId,
             seatData.ZoneId,
-            plan,
-            OccupationExecutionProfile.Seat(seatData.ChairComponent));
+            anchorDefinition,
+            OccupationExecutionProfile.Seat(seatData.ChairComponent, anchorDefinition));
 
         return true;
     }

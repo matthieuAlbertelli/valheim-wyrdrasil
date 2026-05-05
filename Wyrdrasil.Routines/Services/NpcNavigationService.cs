@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using BepInEx.Logging;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Routines.Components;
 using Wyrdrasil.Routines.Occupations;
@@ -104,7 +105,13 @@ public sealed class NpcNavigationService
         }
 
         var slotController = character.GetComponent<WyrdrasilAssignedSlotController>();
-        return slotController != null && slotController.IsControlActive;
+        if (slotController != null && slotController.IsControlActive)
+        {
+            return true;
+        }
+
+        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
+        return vikingAi != null && vikingAi.IsRegistryNavigationActive;
     }
 
     public void ReleaseOccupation(Character character, bool detachIfAttached = true)
@@ -112,9 +119,10 @@ public sealed class NpcNavigationService
         ReleaseLegacyControllers(character, detachIfAttached);
     }
 
-    public void NavigateAlongRouteToSeat(Character character, IReadOnlyList<UnityEngine.Vector3> routePoints, OccupationTarget target)
+    public void NavigateAlongRouteToAnchor(Character character, IReadOnlyList<UnityEngine.Vector3> routePoints, OccupationTarget target)
     {
-        WyrdrasilSeatDebug.Log(character, $"NavigateAlongRouteToSeat target={target.Reference} routeCount={routePoints.Count}");
+        var anchorPlan = OccupationAnchorNavigationPlan.FromTarget(target);
+        WyrdrasilSeatDebug.Log(character, $"NavigateAlongRouteToAnchor target={target.Reference} anchor={anchorPlan.AnchorKind} routeCount={routePoints.Count}");
 
         var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
         if (vikingAi != null)
@@ -122,100 +130,127 @@ public sealed class NpcNavigationService
             ReleaseLegacyControllers(character, true);
             vikingAi.SetCivilianWalkLocomotion(true);
             var routeController = EnsureRouteController(character);
-            routeController.ConfigureRouteToSeat(routePoints, target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.ChairComponent);
-            _log.LogInfo($"Assigned registry viking configured for designated seat navigation with {routePoints.Count} waypoint(s).");
+            routeController.ConfigureRouteToAnchor(routePoints, anchorPlan);
+            _log.LogInfo($"Assigned registry viking configured for anchored {anchorPlan.AnchorKind} navigation with {routePoints.Count} waypoint(s).");
             return;
         }
 
-        var controller = EnsureAssignedSlotController(character);
-        controller.ConfigureForSeatRoute(
-            routePoints,
-            target.Plan.ApproachPosition,
-            target.Plan.EngagePosition,
-            target.Plan.FacingDirection,
-            target.Execution.ChairComponent,
-            1.15f,
-            0.25f);
-        _log.LogInfo($"Assigned resident configured for designated seat navigation with {routePoints.Count} waypoint(s).");
+        ConfigureLegacyAnchorMovement(character, routePoints, anchorPlan, useRoute: true);
+    }
+
+    public void NavigateDirectlyToAnchor(Character character, OccupationTarget target)
+    {
+        var anchorPlan = OccupationAnchorNavigationPlan.FromTarget(target);
+        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToAnchor target={target.Reference} anchor={anchorPlan.AnchorKind} approach={anchorPlan.ApproachPosition} engage={anchorPlan.EngagePosition}");
+
+        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
+        if (vikingAi != null)
+        {
+            ReleaseLegacyControllers(character, true);
+            vikingAi.SetCivilianWalkLocomotion(true);
+            var routeController = EnsureRouteController(character);
+            routeController.ConfigureRouteToAnchor(System.Array.Empty<UnityEngine.Vector3>(), anchorPlan);
+            _log.LogInfo($"Assigned registry viking configured for direct anchored {anchorPlan.AnchorKind} approach.");
+            return;
+        }
+
+        ConfigureLegacyAnchorMovement(character, System.Array.Empty<UnityEngine.Vector3>(), anchorPlan, useRoute: false);
+    }
+
+    public void NavigateAlongRouteToSeat(Character character, IReadOnlyList<UnityEngine.Vector3> routePoints, OccupationTarget target)
+    {
+        NavigateAlongRouteToAnchor(character, routePoints, target);
     }
 
     public void NavigateDirectlyToSeat(Character character, OccupationTarget target)
     {
-        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToSeat target={target.Reference} approach={target.Plan.ApproachPosition} seat={target.Plan.EngagePosition}");
-
-        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
-        if (vikingAi != null)
-        {
-            ReleaseLegacyControllers(character, true);
-            vikingAi.SetCivilianWalkLocomotion(true);
-            vikingAi.StartSeatApproach(target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.ChairComponent, false);
-            _log.LogInfo("Assigned registry viking configured for direct designated seat fallback.");
-            return;
-        }
-
-        var controller = EnsureAssignedSlotController(character);
-        controller.ConfigureForDirectSeatMovement(
-            target.Plan.ApproachPosition,
-            target.Plan.EngagePosition,
-            target.Plan.FacingDirection,
-            target.Execution.ChairComponent,
-            1.15f,
-            0.25f);
-        _log.LogInfo("Assigned resident configured for direct designated seat fallback.");
+        NavigateDirectlyToAnchor(character, target);
     }
 
     public void NavigateAlongRouteToBed(Character character, IReadOnlyList<UnityEngine.Vector3> routePoints, OccupationTarget target)
     {
-        WyrdrasilSeatDebug.Log(character, $"NavigateAlongRouteToBed target={target.Reference} routeCount={routePoints.Count}");
-
-        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
-        if (vikingAi != null)
-        {
-            ReleaseLegacyControllers(character, true);
-            vikingAi.SetCivilianWalkLocomotion(true);
-            var routeController = EnsureRouteController(character);
-            routeController.ConfigureRouteToBed(routePoints, target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.BedComponent, target.Execution.AttachPoint);
-            _log.LogInfo($"Assigned registry viking configured for bed navigation with {routePoints.Count} waypoint(s).");
-            return;
-        }
-
-        var controller = EnsureAssignedSlotController(character);
-        controller.ConfigureForBedRoute(
-            routePoints,
-            target.Plan.ApproachPosition,
-            target.Plan.EngagePosition,
-            target.Plan.FacingDirection,
-            target.Execution.BedComponent,
-            target.Execution.AttachPoint,
-            1.15f,
-            0.25f);
-        _log.LogInfo($"Assigned resident configured for bed navigation with {routePoints.Count} waypoint(s).");
+        NavigateAlongRouteToAnchor(character, routePoints, target);
     }
 
     public void NavigateDirectlyToBed(Character character, OccupationTarget target)
     {
-        WyrdrasilSeatDebug.Log(character, $"NavigateDirectlyToBed target={target.Reference} approach={target.Plan.ApproachPosition} sleep={target.Plan.EngagePosition}");
+        NavigateDirectlyToAnchor(character, target);
+    }
 
-        var vikingAi = character.GetComponent<WyrdrasilVikingNpcAI>();
-        if (vikingAi != null)
-        {
-            ReleaseLegacyControllers(character, true);
-            vikingAi.SetCivilianWalkLocomotion(true);
-            vikingAi.StartBedApproach(target.Plan.ApproachPosition, target.Plan.EngagePosition, target.Plan.FacingDirection, target.Execution.BedComponent, target.Execution.AttachPoint, false);
-            _log.LogInfo("Assigned registry viking configured for direct bed fallback.");
-            return;
-        }
-
+    private void ConfigureLegacyAnchorMovement(
+        Character character,
+        IReadOnlyList<UnityEngine.Vector3> routePoints,
+        OccupationAnchorNavigationPlan anchorPlan,
+        bool useRoute)
+    {
         var controller = EnsureAssignedSlotController(character);
-        controller.ConfigureForDirectBedMovement(
-            target.Plan.ApproachPosition,
-            target.Plan.EngagePosition,
-            target.Plan.FacingDirection,
-            target.Execution.BedComponent,
-            target.Execution.AttachPoint,
-            1.15f,
-            0.25f);
-        _log.LogInfo("Assigned resident configured for direct bed fallback.");
+
+        switch (anchorPlan.AnchorKind)
+        {
+            case OccupationAnchorAttachmentKind.Seat:
+                if (useRoute)
+                {
+                    controller.ConfigureForSeatRoute(
+                        routePoints,
+                        anchorPlan.ApproachPosition,
+                        anchorPlan.EngagePosition,
+                        anchorPlan.FacingDirection,
+                        anchorPlan.ChairComponent,
+                        1.15f,
+                        0.25f);
+                    _log.LogInfo($"Assigned resident configured for anchored seat navigation with {routePoints.Count} waypoint(s).");
+                    return;
+                }
+
+                controller.ConfigureForDirectSeatMovement(
+                    anchorPlan.ApproachPosition,
+                    anchorPlan.EngagePosition,
+                    anchorPlan.FacingDirection,
+                    anchorPlan.ChairComponent,
+                    1.15f,
+                    0.25f);
+                _log.LogInfo("Assigned resident configured for direct anchored seat fallback.");
+                return;
+
+            case OccupationAnchorAttachmentKind.Bed:
+                if (useRoute)
+                {
+                    controller.ConfigureForBedRoute(
+                        routePoints,
+                        anchorPlan.ApproachPosition,
+                        anchorPlan.EngagePosition,
+                        anchorPlan.FacingDirection,
+                        anchorPlan.BedComponent,
+                        anchorPlan.AttachPoint,
+                        1.15f,
+                        0.25f);
+                    _log.LogInfo($"Assigned resident configured for anchored bed navigation with {routePoints.Count} waypoint(s).");
+                    return;
+                }
+
+                controller.ConfigureForDirectBedMovement(
+                    anchorPlan.ApproachPosition,
+                    anchorPlan.EngagePosition,
+                    anchorPlan.FacingDirection,
+                    anchorPlan.BedComponent,
+                    anchorPlan.AttachPoint,
+                    1.15f,
+                    0.25f);
+                _log.LogInfo("Assigned resident configured for direct anchored bed fallback.");
+                return;
+
+            default:
+                if (useRoute)
+                {
+                    controller.ConfigureForRoute(routePoints, anchorPlan.ApproachPosition, 1.15f, anchorPlan.ApproachProfile.ApproachRadius);
+                    _log.LogInfo($"Assigned resident configured for generic anchored route fallback with {routePoints.Count} waypoint(s).");
+                    return;
+                }
+
+                controller.ConfigureForDirectMovement(anchorPlan.ApproachPosition, 1.15f, anchorPlan.ApproachProfile.ApproachRadius);
+                _log.LogInfo("Assigned resident configured for generic direct anchored fallback.");
+                return;
+        }
     }
 
     private static WyrdrasilRouteTraversalController EnsureRouteController(Character character)
@@ -248,6 +283,25 @@ public sealed class NpcNavigationService
         if (character.TryGetComponent<WyrdrasilRouteTraversalController>(out var routeController))
         {
             routeController.ReleaseControl();
+        }
+
+        if (detachIfAttached)
+        {
+            DetachCharacterFromOccupationAnchor(character);
+        }
+    }
+
+    private static void DetachCharacterFromOccupationAnchor(Character character)
+    {
+        if (character is WyrdrasilVikingNpc viking && viking.IsAttached())
+        {
+            viking.ForceDetachFromCurrentAnchor();
+            return;
+        }
+
+        if (character is Humanoid humanoid && humanoid.IsAttached())
+        {
+            humanoid.AttachStop();
         }
     }
 }

@@ -6,10 +6,12 @@ namespace Wyrdrasil.Routines.Occupations;
 public sealed class BedOccupationTargetSource : IOccupationTargetSource
 {
     private readonly BedService _bedService;
+    private readonly OccupationTargetFactory _targetFactory;
 
-    public BedOccupationTargetSource(BedService bedService)
+    public BedOccupationTargetSource(BedService bedService, OccupationTargetFactory targetFactory)
     {
         _bedService = bedService;
+        _targetFactory = targetFactory;
     }
 
     public OccupationTargetKind TargetKind => OccupationTargetKind.Bed;
@@ -23,21 +25,23 @@ public sealed class BedOccupationTargetSource : IOccupationTargetSource
             return false;
         }
 
-        var plan = new OccupationPosePlan(
+        var anchorDefinition = OccupationAnchorDefinition.FromExplicitPositions(
+            OccupationAnchorAttachmentKind.Bed,
             bedData.ApproachPosition,
             bedData.SleepPosition,
             bedData.SleepForward,
-            0.25f,
-            0.25f,
-            0.90f);
+            navigationStopDistance: 0.25f,
+            engageRadius: 0.25f,
+            sustainRadius: 0.90f,
+            approachProfile: OccupationAnchorApproachProfile.BedDefault);
 
-        target = new OccupationTarget(
+        target = _targetFactory.CreateAnchoredTarget(
             new OccupationTargetRef(TargetKind, bedData.Id),
             bedData.DisplayName,
             bedData.BuildingId,
             bedData.ZoneId,
-            plan,
-            OccupationExecutionProfile.Bed(bedData.BedComponent, bedData.SleepAttachPoint));
+            anchorDefinition,
+            OccupationExecutionProfile.Bed(bedData.BedComponent, bedData.SleepAttachPoint, anchorDefinition));
 
         return true;
     }

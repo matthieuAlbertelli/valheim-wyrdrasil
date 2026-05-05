@@ -76,6 +76,7 @@ public sealed class SettlementsRuntimeApi : ISettlementsRuntimeApi
     public bool TryClearSlotAssignment(int slotId, out int? previousResidentId) => _slotService.ClearSlotAssignment(slotId, out previousResidentId);
     public bool TryClearSeatAssignment(int seatId, out int? previousResidentId) => _seatService.ClearSeatAssignment(seatId, out previousResidentId);
     public bool TryClearBedAssignment(int bedId, out int? previousResidentId) => _bedService.ClearBedAssignment(bedId, out previousResidentId);
+    public bool TryClearCraftStationAssignment(int craftStationId, out int? previousResidentId) => _craftStationService.ClearCraftStationAssignment(craftStationId, out previousResidentId);
     public void ClearSlotAssignmentForResident(int residentId) => _slotService.ClearAssignmentForResident(residentId);
     public void ClearSeatAssignmentForResident(int residentId) => _seatService.ClearAssignmentForResident(residentId);
     public void ClearBedAssignmentForResident(int residentId) => _bedService.ClearAssignmentForResident(residentId);

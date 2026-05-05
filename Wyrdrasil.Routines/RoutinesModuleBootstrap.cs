@@ -18,6 +18,7 @@ public sealed class RoutinesModuleBootstrap
         NpcNavigationService navigationService,
         ResidentScheduleService scheduleService,
         AnchorOccupationPlanBuilder anchorOccupationPlanBuilder,
+        OccupationTargetFactory occupationTargetFactory,
         OccupationTargetCatalog occupationTargetCatalog,
         OccupationClaimRegistry occupationClaimRegistry,
         OccupationResolverRegistry occupationResolverRegistry,
@@ -33,6 +34,7 @@ public sealed class RoutinesModuleBootstrap
         NavigationService = navigationService;
         ScheduleService = scheduleService;
         AnchorOccupationPlanBuilder = anchorOccupationPlanBuilder;
+        OccupationTargetFactory = occupationTargetFactory;
         OccupationTargetCatalog = occupationTargetCatalog;
         OccupationClaimRegistry = occupationClaimRegistry;
         OccupationResolverRegistry = occupationResolverRegistry;
@@ -49,6 +51,7 @@ public sealed class RoutinesModuleBootstrap
     public NpcNavigationService NavigationService { get; }
     public ResidentScheduleService ScheduleService { get; }
     public AnchorOccupationPlanBuilder AnchorOccupationPlanBuilder { get; }
+    public OccupationTargetFactory OccupationTargetFactory { get; }
     public OccupationTargetCatalog OccupationTargetCatalog { get; }
     public OccupationClaimRegistry OccupationClaimRegistry { get; }
     public OccupationResolverRegistry OccupationResolverRegistry { get; }
@@ -71,8 +74,8 @@ public sealed class RoutinesModuleBootstrap
 
         var occupationNavigationStrategyRegistry = new OccupationNavigationStrategyRegistry();
         occupationNavigationStrategyRegistry.Register(new StandOccupationNavigationStrategy());
-        occupationNavigationStrategyRegistry.Register(new SeatOccupationNavigationStrategy());
-        occupationNavigationStrategyRegistry.Register(new BedOccupationNavigationStrategy());
+        occupationNavigationStrategyRegistry.Register(new AnchoredAttachmentOccupationNavigationStrategy(OccupationExecutionProfile.SeatStrategyId));
+        occupationNavigationStrategyRegistry.Register(new AnchoredAttachmentOccupationNavigationStrategy(OccupationExecutionProfile.BedStrategyId));
         occupationNavigationStrategyRegistry.Register(new ApproachOccupationNavigationStrategy());
 
         var occupationLifecycleStrategyRegistry = new OccupationLifecycleStrategyRegistry();
@@ -91,12 +94,13 @@ public sealed class RoutinesModuleBootstrap
         var navigationService = new NpcNavigationService(log, occupationNavigationStrategyRegistry);
         var scheduleService = new ResidentScheduleService();
         var anchorOccupationPlanBuilder = new AnchorOccupationPlanBuilder();
+        var occupationTargetFactory = new OccupationTargetFactory(anchorOccupationPlanBuilder);
 
         var occupationTargetCatalog = new OccupationTargetCatalog();
-        occupationTargetCatalog.Register(new SlotOccupationTargetSource(settlementsModule.SlotService));
-        occupationTargetCatalog.Register(new SeatOccupationTargetSource(settlementsModule.SeatService));
-        occupationTargetCatalog.Register(new BedOccupationTargetSource(settlementsModule.BedService));
-        occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(settlementsModule.CraftStationService, anchorOccupationPlanBuilder));
+        occupationTargetCatalog.Register(new SlotOccupationTargetSource(settlementsModule.SlotService, occupationTargetFactory));
+        occupationTargetCatalog.Register(new SeatOccupationTargetSource(settlementsModule.SeatService, occupationTargetFactory));
+        occupationTargetCatalog.Register(new BedOccupationTargetSource(settlementsModule.BedService, occupationTargetFactory));
+        occupationTargetCatalog.Register(new CraftStationOccupationTargetSource(settlementsModule.CraftStationService, occupationTargetFactory));
 
         var occupationClaimRegistry = new OccupationClaimRegistry();
         occupationClaimRegistry.Register(new PublicSeatOccupationClaimSource(
@@ -158,6 +162,7 @@ public sealed class RoutinesModuleBootstrap
             navigationService,
             scheduleService,
             anchorOccupationPlanBuilder,
+            occupationTargetFactory,
             occupationTargetCatalog,
             occupationClaimRegistry,
             occupationResolverRegistry,

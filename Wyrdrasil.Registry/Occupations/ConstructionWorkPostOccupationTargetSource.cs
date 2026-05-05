@@ -1,4 +1,3 @@
-using UnityEngine;
 using Wyrdrasil.Construction.Runtime;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Routines.Occupations;
@@ -11,16 +10,16 @@ public sealed class ConstructionWorkPostOccupationTargetSource : IOccupationTarg
 {
     private readonly IConstructionRuntimeApi _constructionRuntimeApi;
     private readonly ISettlementsRuntimeApi _settlementsRuntimeApi;
-    private readonly AnchorOccupationPlanBuilder _planBuilder;
+    private readonly OccupationTargetFactory _targetFactory;
 
     public ConstructionWorkPostOccupationTargetSource(
         IConstructionRuntimeApi constructionRuntimeApi,
         ISettlementsRuntimeApi settlementsRuntimeApi,
-        AnchorOccupationPlanBuilder planBuilder)
+        OccupationTargetFactory targetFactory)
     {
         _constructionRuntimeApi = constructionRuntimeApi;
         _settlementsRuntimeApi = settlementsRuntimeApi;
-        _planBuilder = planBuilder;
+        _targetFactory = targetFactory;
     }
 
     public OccupationTargetKind TargetKind => OccupationTargetKind.ConstructionWorkPost;
@@ -41,20 +40,23 @@ public sealed class ConstructionWorkPostOccupationTargetSource : IOccupationTarg
             ? interactionProfile
             : CraftStationInteractionProfileRegistry.GetDefaultProfile();
 
-        var plan = _planBuilder.BuildPlan(
-            new OccupationAnchorPose(anchorWorldPosition, anchorWorldForward),
+        var anchorDefinition = OccupationAnchorDefinition.FromPose(
+            OccupationAnchorAttachmentKind.WorkPoint,
+            anchorWorldPosition,
+            anchorWorldForward,
             profile.ApproachDistance,
             profile.NavigationStopDistance,
             profile.EngageRadius,
-            profile.SustainRadius);
+            profile.SustainRadius,
+            approachProfile: OccupationAnchorApproachProfile.WorkPointDefault);
 
-        target = new OccupationTarget(
+        target = _targetFactory.CreateAnchoredTarget(
             new OccupationTargetRef(TargetKind, workPost.Id),
             $"Construction workbench slot #{workPost.Id}",
             0,
             null,
-            plan,
-            OccupationExecutionProfile.ConstructionWork(craftStation.Interactable));
+            anchorDefinition,
+            OccupationExecutionProfile.ConstructionWork(craftStation.Interactable, anchorDefinition));
 
         return true;
     }

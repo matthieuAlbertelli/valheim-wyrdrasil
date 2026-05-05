@@ -21,6 +21,12 @@ public sealed class PublicSeatOccupationClaimSource : IOccupationClaimSource
 
     public bool TryClaim(RegisteredNpcData resident, out OccupationTarget target)
     {
+        if (resident.Role == NpcRole.Innkeeper)
+        {
+            target = null!;
+            return false;
+        }
+
         if (!_seatService.TryReservePublicSeat(resident.Id, _zoneRuntimeService.IsSeatEligibleForPublicSocialUse, out var seatData) || seatData == null)
         {
             target = null!;

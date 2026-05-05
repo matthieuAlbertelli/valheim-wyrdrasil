@@ -59,6 +59,7 @@ public sealed class ToolSelectionService
     private static readonly RegistryActionType[] DiagnosticActions =
     {
         RegistryActionType.InspectTargetNpcAi,
+        RegistryActionType.ForceAssignResident,
         RegistryActionType.EditTargetCraftStationAnchor,
         RegistryActionType.ProbeAssignedCraftStationOccupation,
         RegistryActionType.SimulateNoon,

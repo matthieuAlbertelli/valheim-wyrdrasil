@@ -58,9 +58,11 @@ public static class RegistryActionRegistryFactory
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.AssignInnkeeperRole, new AssignInnkeeperRoleHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.AssignSeat, new AssignSeatHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.AssignBed, new AssignBedHandler(residentService)));
+        registry.Register(new HandlerBackedRegistryAction(RegistryActionType.AssignCraftStation, new AssignCraftStationHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.ClearTargetInnkeeperSlotAssignment, new ClearTargetInnkeeperSlotAssignmentHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.ClearTargetSeatAssignment, new ClearTargetSeatAssignmentHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.ClearTargetBedAssignment, new ClearTargetBedAssignmentHandler(residentService)));
+        registry.Register(new HandlerBackedRegistryAction(RegistryActionType.ClearTargetCraftStationAssignment, new ClearTargetCraftStationAssignmentHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.ForceAssignResident, new ForceAssignResidentHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.DespawnTargetResident, new DespawnTargetResidentHandler(residentService)));
         registry.Register(new HandlerBackedRegistryAction(RegistryActionType.RespawnAssignedResident, new RespawnAssignedResidentHandler(residentService)));

@@ -25,6 +25,7 @@ public interface ISettlementsRuntimeApi
     bool TryClearSlotAssignment(int slotId, out int? previousResidentId);
     bool TryClearSeatAssignment(int seatId, out int? previousResidentId);
     bool TryClearBedAssignment(int bedId, out int? previousResidentId);
+    bool TryClearCraftStationAssignment(int craftStationId, out int? previousResidentId);
     void ClearSlotAssignmentForResident(int residentId);
     void ClearSeatAssignmentForResident(int residentId);
     void ClearBedAssignmentForResident(int residentId);
