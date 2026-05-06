@@ -54,16 +54,20 @@ public sealed class ConstructionProjectProgressService
 
             while (_constructionProjectService.TryConsumeOnePieceWork(project.Id, out var remainingAccumulatedWork))
             {
-                if (!_constructionPieceBuildService.TryBuildNextPiece(project.Id, out var pieceId, out var failureReason))
+                if (!_constructionPieceBuildService.TryBuildNextPiece(
+                        project.Id,
+                        out var pieceId,
+                        out var builtPieceCount,
+                        out var isCompleted,
+                        out var failureReason))
                 {
                     _constructionProjectService.TrySetState(project.Id, ConstructionProjectState.Blocked);
                     _debugLogService.Warning(
                         "Progress",
-                        $"Blocked construction project {project.Id} while building the next piece: {failureReason}");
+                        $"Blocked construction project {project.Id} while building the next safe piece: {failureReason}");
                     break;
                 }
 
-                _constructionProjectService.TryMarkNextPieceBuilt(project.Id, out var builtPieceCount, out var isCompleted);
                 _debugLogService.Info(
                     "Progress",
                     $"Construction project {project.Id} built piece {pieceId}. Progress: {builtPieceCount}/{project.Progress.TotalPieceCount}. Remaining accumulated work: {remainingAccumulatedWork:0.##}.");

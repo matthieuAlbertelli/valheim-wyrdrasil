@@ -10,23 +10,33 @@ public sealed class ConstructionPieceBuildService
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
     private readonly ConstructionProjectService _constructionProjectService;
+    private readonly ConstructionPieceBuildOrderService _constructionPieceBuildOrderService;
     private readonly ConstructionDebugLogService _debugLogService;
 
     public ConstructionPieceBuildService(
         BlueprintCatalogService blueprintCatalogService,
         ConstructionPlacementService constructionPlacementService,
         ConstructionProjectService constructionProjectService,
+        ConstructionPieceBuildOrderService constructionPieceBuildOrderService,
         ConstructionDebugLogService debugLogService)
     {
         _blueprintCatalogService = blueprintCatalogService;
         _constructionPlacementService = constructionPlacementService;
         _constructionProjectService = constructionProjectService;
+        _constructionPieceBuildOrderService = constructionPieceBuildOrderService;
         _debugLogService = debugLogService;
     }
 
-    public bool TryBuildNextPiece(int projectId, out int pieceId, out string failureReason)
+    public bool TryBuildNextPiece(
+        int projectId,
+        out int pieceId,
+        out int builtPieceCount,
+        out bool isCompleted,
+        out string failureReason)
     {
         pieceId = 0;
+        builtPieceCount = 0;
+        isCompleted = false;
 
         if (!_constructionProjectService.TryGetProject(projectId, out var project))
         {
@@ -40,6 +50,7 @@ public sealed class ConstructionPieceBuildService
             return false;
         }
 
+        _constructionProjectService.EnsurePieceProgress(project, blueprint);
         if (project.Progress.BuiltPieceCount >= project.Progress.TotalPieceCount)
         {
             failureReason = $"Construction project {projectId} is already complete.";
@@ -56,22 +67,43 @@ public sealed class ConstructionPieceBuildService
             return false;
         }
 
-        var pieceIndex = project.Progress.BuiltPieceCount;
-        if (pieceIndex < 0 || pieceIndex >= placements.Count)
+        if (!_constructionPieceBuildOrderService.TrySelectNextBuildablePiece(
+                project,
+                blueprint,
+                placements,
+                out var placement,
+                out var probeResult,
+                out failureReason))
         {
-            failureReason = $"Construction project {projectId} could not resolve piece index {pieceIndex}.";
             return false;
         }
 
-        var placement = placements[pieceIndex];
         var instance = Object.Instantiate(placement.Prefab, placement.WorldPosition, placement.WorldRotation);
-        instance.name = $"{placement.Prefab.name}_ConstructionProject_{projectId}_Piece_{placement.PieceId}";
+        var worldObjectName = _constructionProjectService.GetExpectedBuiltPieceObjectName(projectId, placement.PieceId, placement.PrefabName);
+        instance.name = worldObjectName;
 
         pieceId = placement.PieceId;
+        if (!_constructionProjectService.TryMarkPieceBuilt(
+                projectId,
+                pieceId,
+                worldObjectName,
+                probeResult.Level,
+                out builtPieceCount,
+                out isCompleted))
+        {
+            failureReason = $"Could not mark piece {pieceId} as built for construction project {projectId}.";
+            return false;
+        }
+
         failureReason = string.Empty;
         _debugLogService.Verbose(
             "Build",
-            $"Built piece {pieceId} for construction project {projectId} at {placement.WorldPosition}.");
+            $"Built piece {pieceId} for construction project {projectId} at {placement.WorldPosition}. Stability={probeResult.Level}. Reason={probeResult.Reason}");
         return true;
+    }
+
+    public bool TryBuildNextPiece(int projectId, out int pieceId, out string failureReason)
+    {
+        return TryBuildNextPiece(projectId, out pieceId, out _, out _, out failureReason);
     }
 }

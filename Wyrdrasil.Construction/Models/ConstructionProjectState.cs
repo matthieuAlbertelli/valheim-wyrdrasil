@@ -8,5 +8,6 @@ public enum ConstructionProjectState
     InProgress,
     Paused,
     Completed,
+    Damaged,
     Blocked
 }

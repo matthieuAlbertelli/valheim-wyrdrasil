@@ -9,8 +9,10 @@ public sealed class RegistryModuleRuntime
 {
     private readonly RegistryPersistenceService _persistenceService;
     private readonly ResidentRoutineService _residentRoutineService;
+    private readonly ConstructionProjectIntegrityService _constructionProjectIntegrityService;
     private readonly ConstructionProjectProgressService _constructionProjectProgressService;
     private readonly ConstructionProjectMarkerService _constructionProjectMarkerService;
+    private readonly ConstructionProjectGhostService _constructionProjectGhostService;
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionLinkVisualService _constructionLinkVisualService;
     private readonly RegistryToolController _registryToolController;
@@ -18,16 +20,20 @@ public sealed class RegistryModuleRuntime
     public RegistryModuleRuntime(
         RegistryPersistenceService persistenceService,
         ResidentRoutineService residentRoutineService,
+        ConstructionProjectIntegrityService constructionProjectIntegrityService,
         ConstructionProjectProgressService constructionProjectProgressService,
         ConstructionProjectMarkerService constructionProjectMarkerService,
+        ConstructionProjectGhostService constructionProjectGhostService,
         ConstructionProjectService constructionProjectService,
         ConstructionLinkVisualService constructionLinkVisualService,
         RegistryToolController registryToolController)
     {
         _persistenceService = persistenceService;
         _residentRoutineService = residentRoutineService;
+        _constructionProjectIntegrityService = constructionProjectIntegrityService;
         _constructionProjectProgressService = constructionProjectProgressService;
         _constructionProjectMarkerService = constructionProjectMarkerService;
+        _constructionProjectGhostService = constructionProjectGhostService;
         _constructionProjectService = constructionProjectService;
         _constructionLinkVisualService = constructionLinkVisualService;
         _registryToolController = registryToolController;
@@ -38,10 +44,12 @@ public sealed class RegistryModuleRuntime
         WyrdrasilPlayerCraftDebugMonitor.EnsureAttached(Player.m_localPlayer);
         _persistenceService.Update();
         _residentRoutineService.Update();
+        _constructionProjectIntegrityService.Update();
         _constructionProjectProgressService.Update();
         _constructionProjectMarkerService.Update();
         _constructionProjectService.PruneCompletedProjects();
         _registryToolController.Update();
+        _constructionProjectGhostService.Update();
         _constructionLinkVisualService.Update();
     }
 
@@ -53,6 +61,7 @@ public sealed class RegistryModuleRuntime
     public void Shutdown()
     {
         _constructionProjectMarkerService.Reset();
+        _constructionProjectGhostService.Reset();
         _constructionLinkVisualService.Reset();
         _persistenceService.SaveWorldState();
     }

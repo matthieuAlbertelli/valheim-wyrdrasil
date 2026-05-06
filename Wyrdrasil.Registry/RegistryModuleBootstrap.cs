@@ -19,7 +19,7 @@ public static class RegistryModuleBootstrap
         RoutinesModuleBootstrap.ApplyHarmony(harmony);
 
         var modeService = new Wyrdrasil.Core.Services.RegistryModeService(log);
-        var constructionBootstrap = ConstructionModuleBootstrap.Create(log);
+        var constructionBootstrap = ConstructionModuleBootstrap.Create(log, modeService);
         var settlementsBootstrap = RegistrySettlementsBootstrap.Create(log, modeService);
         var residentsBootstrap = RegistryResidentsBootstrap.Create(log, settlementsBootstrap, constructionBootstrap, modeService);
 
@@ -33,8 +33,10 @@ public static class RegistryModuleBootstrap
         return new RegistryModuleRuntime(
             runtimeBootstrap.PersistenceService,
             residentsBootstrap.Services.ResidentRoutineService,
+            constructionBootstrap.ConstructionProjectIntegrityService,
             constructionBootstrap.ConstructionProjectProgressService,
             constructionBootstrap.ConstructionProjectMarkerService,
+            constructionBootstrap.ConstructionProjectGhostService,
             constructionBootstrap.ConstructionProjectService,
             runtimeBootstrap.ConstructionLinkVisualService,
             runtimeBootstrap.RegistryToolController);

@@ -25,11 +25,18 @@ public sealed class ConstructionPlacementPreviewService
 
     private static readonly Color ValidColor = new Color(0.2f, 1f, 0.35f, 0.30f);
     private static readonly Color InvalidColor = new Color(1f, 0.25f, 0.25f, 0.30f);
+    private static readonly Color GroundedColor = new Color(0.15f, 0.55f, 1f, 0.32f);
+    private static readonly Color StrongColor = new Color(0.2f, 1f, 0.35f, 0.30f);
+    private static readonly Color AcceptableColor = new Color(0.65f, 1f, 0.25f, 0.28f);
+    private static readonly Color WeakColor = new Color(1f, 0.8f, 0.15f, 0.28f);
+    private static readonly Color BlockedColor = new Color(1f, 0.15f, 0.1f, 0.32f);
+    private static readonly Color PendingColor = new Color(0.75f, 0.75f, 0.75f, 0.18f);
     private const float RotationStepDegrees = 45f;
 
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
     private readonly ConstructionProjectService _constructionProjectService;
+    private readonly ConstructionPreviewBuildPlanService _constructionPreviewBuildPlanService;
     private readonly ConstructionDebugLogService _debugLogService;
     private readonly List<PreviewPiece> _previewPieces = new();
 
@@ -39,18 +46,19 @@ public sealed class ConstructionPlacementPreviewService
     private int _rotationStepIndex;
     private bool _isPlacementValid;
     private string _validationMessage = "No active construction preview.";
-    private Material? _validGhostMaterial;
-    private Material? _invalidGhostMaterial;
+    private readonly Dictionary<string, Material> _ghostMaterialsByKey = new();
 
     public ConstructionPlacementPreviewService(
         BlueprintCatalogService blueprintCatalogService,
         ConstructionPlacementService constructionPlacementService,
         ConstructionProjectService constructionProjectService,
+        ConstructionPreviewBuildPlanService constructionPreviewBuildPlanService,
         ConstructionDebugLogService debugLogService)
     {
         _blueprintCatalogService = blueprintCatalogService;
         _constructionPlacementService = constructionPlacementService;
         _constructionProjectService = constructionProjectService;
+        _constructionPreviewBuildPlanService = constructionPreviewBuildPlanService;
         _debugLogService = debugLogService;
     }
 
@@ -186,7 +194,16 @@ public sealed class ConstructionPlacementPreviewService
         UpdatePreviewTransforms(placements);
 
         _isPlacementValid = EvaluateBlockingOverlaps(out _validationMessage);
-        ApplyPreviewColor(_isPlacementValid);
+        if (_isPlacementValid)
+        {
+            var previewEvaluations = _constructionPreviewBuildPlanService.EvaluatePreview(_activeBlueprint, placements);
+            ApplyPerPiecePreviewColors(previewEvaluations);
+        }
+        else
+        {
+            ApplyPreviewColor(isValid: false);
+        }
+
         return true;
     }
 
@@ -395,71 +412,95 @@ public sealed class ConstructionPlacementPreviewService
     private void ApplyPreviewColor(bool isValid)
     {
         var color = isValid ? ValidColor : InvalidColor;
-        var material = GetGhostMaterial(isValid, color);
-
         foreach (var previewPiece in _previewPieces)
         {
-            foreach (var renderer in previewPiece.Renderers)
-            {
-                if (renderer == null)
-                {
-                    continue;
-                }
-
-                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-                renderer.receiveShadows = false;
-
-                if (renderer is LineRenderer lineRenderer)
-                {
-                    lineRenderer.startColor = color;
-                    lineRenderer.endColor = color;
-                    continue;
-                }
-
-                var materialCount = renderer.sharedMaterials.Length;
-                if (materialCount <= 0)
-                {
-                    renderer.sharedMaterial = material;
-                    continue;
-                }
-
-                var replacements = new Material[materialCount];
-                for (var index = 0; index < materialCount; index++)
-                {
-                    replacements[index] = material;
-                }
-
-                renderer.sharedMaterials = replacements;
-            }
+            ApplyPreviewPieceColor(previewPiece, color);
         }
     }
 
-    private Material GetGhostMaterial(bool isValid, Color color)
+    private void ApplyPerPiecePreviewColors(IReadOnlyDictionary<int, ConstructionPreviewPieceEvaluation> evaluationsByPieceId)
     {
-        if (isValid)
+        foreach (var previewPiece in _previewPieces)
         {
-            if (_validGhostMaterial == null)
+            var color = evaluationsByPieceId.TryGetValue(previewPiece.PieceId, out var evaluation)
+                ? ResolvePreviewPieceColor(evaluation)
+                : PendingColor;
+            ApplyPreviewPieceColor(previewPiece, color);
+        }
+    }
+
+    private static Color ResolvePreviewPieceColor(ConstructionPreviewPieceEvaluation evaluation)
+    {
+        if (evaluation.State == ConstructionPieceBuildState.Blocked)
+        {
+            return BlockedColor;
+        }
+
+        if (evaluation.State == ConstructionPieceBuildState.Pending)
+        {
+            return PendingColor;
+        }
+
+        return evaluation.StabilityLevel switch
+        {
+            ConstructionPieceStabilityLevel.Grounded => GroundedColor,
+            ConstructionPieceStabilityLevel.Strong => StrongColor,
+            ConstructionPieceStabilityLevel.Acceptable => AcceptableColor,
+            ConstructionPieceStabilityLevel.Weak => WeakColor,
+            ConstructionPieceStabilityLevel.Unsupported => BlockedColor,
+            _ => PendingColor
+        };
+    }
+
+    private void ApplyPreviewPieceColor(PreviewPiece previewPiece, Color color)
+    {
+        var material = GetGhostMaterial(color);
+        foreach (var renderer in previewPiece.Renderers)
+        {
+            if (renderer == null)
             {
-                _validGhostMaterial = CreateGhostMaterial(color);
+                continue;
             }
-            else
+
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            renderer.receiveShadows = false;
+
+            if (renderer is LineRenderer lineRenderer)
             {
-                ConfigureGhostMaterial(_validGhostMaterial, color);
+                lineRenderer.startColor = color;
+                lineRenderer.endColor = color;
+                continue;
             }
 
-            return _validGhostMaterial;
+            var materialCount = renderer.sharedMaterials.Length;
+            if (materialCount <= 0)
+            {
+                renderer.sharedMaterial = material;
+                continue;
+            }
+
+            var replacements = new Material[materialCount];
+            for (var index = 0; index < materialCount; index++)
+            {
+                replacements[index] = material;
+            }
+
+            renderer.sharedMaterials = replacements;
+        }
+    }
+
+    private Material GetGhostMaterial(Color color)
+    {
+        var key = $"{color.r:0.00}_{color.g:0.00}_{color.b:0.00}_{color.a:0.00}";
+        if (_ghostMaterialsByKey.TryGetValue(key, out var existing) && existing != null)
+        {
+            return existing;
         }
 
-        if (_invalidGhostMaterial == null)
-        {
-            _invalidGhostMaterial = CreateGhostMaterial(color);
-        }
-        else
-        {
-            ConfigureGhostMaterial(_invalidGhostMaterial, color);
-        }
-
-        return _invalidGhostMaterial;
+        var material = CreateGhostMaterial(color);
+        material.name = $"WyrdrasilConstructionPreviewGhost_{key}";
+        _ghostMaterialsByKey[key] = material;
+        return material;
     }
 
     private static Material CreateGhostMaterial(Color color)
@@ -528,17 +569,15 @@ public sealed class ConstructionPlacementPreviewService
 
     private void DestroyGhostMaterials()
     {
-        if (_validGhostMaterial != null)
+        foreach (var material in _ghostMaterialsByKey.Values)
         {
-            Object.Destroy(_validGhostMaterial);
-            _validGhostMaterial = null;
+            if (material != null)
+            {
+                Object.Destroy(material);
+            }
         }
 
-        if (_invalidGhostMaterial != null)
-        {
-            Object.Destroy(_invalidGhostMaterial);
-            _invalidGhostMaterial = null;
-        }
+        _ghostMaterialsByKey.Clear();
     }
 
     private Vector3 GetCurrentOriginPosition()

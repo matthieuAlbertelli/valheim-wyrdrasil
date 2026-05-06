@@ -57,13 +57,7 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
 
     public bool TryForceCompleteNextPiece(int projectId, out int pieceId, out string failureReason)
     {
-        if (!_constructionPieceBuildService.TryBuildNextPiece(projectId, out pieceId, out failureReason))
-        {
-            return false;
-        }
-
-        _constructionProjectService.TryForceAdvanceBuiltPieceCount(projectId, out _, out _);
-        return true;
+        return _constructionPieceBuildService.TryBuildNextPiece(projectId, out pieceId, out _, out _, out failureReason);
     }
 
     public bool TryForceCompleteProject(int projectId, out int builtPieceCount, out string failureReason)
@@ -78,12 +72,11 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
 
         while (project.Progress.BuiltPieceCount < project.Progress.TotalPieceCount)
         {
-            if (!_constructionPieceBuildService.TryBuildNextPiece(projectId, out _, out failureReason))
+            if (!_constructionPieceBuildService.TryBuildNextPiece(projectId, out _, out _, out _, out failureReason))
             {
                 return false;
             }
 
-            _constructionProjectService.TryForceAdvanceBuiltPieceCount(projectId, out _, out _);
             builtPieceCount++;
         }
 
@@ -137,6 +130,11 @@ public sealed class ConstructionTestingApi : IConstructionTestingApi
         builder.AppendLine($"TotalPieceCount: {project.Progress.TotalPieceCount}");
         builder.AppendLine($"BuiltPieceCount: {project.Progress.BuiltPieceCount}");
         builder.AppendLine($"AccumulatedPieceWork: {project.Progress.AccumulatedPieceWork:0.##}");
+        builder.AppendLine("Pieces:");
+        foreach (var pieceProgress in project.Progress.Pieces)
+        {
+            builder.AppendLine($"  Piece {pieceProgress.PieceId}: State={pieceProgress.State}, Stability={pieceProgress.LastStabilityLevel}, World='{pieceProgress.LinkedWorldObjectName}'");
+        }
         builder.AppendLine($"AssignedWorkerCount: {_constructionProjectService.GetAssignedWorkerCount(project)}");
         builder.AppendLine("WorkbenchBindings:");
         foreach (var workPost in project.WorkPosts)

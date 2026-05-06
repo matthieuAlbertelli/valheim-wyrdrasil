@@ -49,7 +49,19 @@ public sealed class ConstructionProjectService
             {
                 TotalPieceCount = totalPieceCount,
                 BuiltPieceCount = 0,
-                AccumulatedPieceWork = 0f
+                AccumulatedPieceWork = 0f,
+                Pieces = blueprint.Pieces
+                    .OrderBy(piece => piece.PieceId)
+                    .Select(piece => new ConstructionPieceProgressData
+                    {
+                        PieceId = piece.PieceId,
+                        RequiredWork = 1f,
+                        CurrentWork = 0f,
+                        State = ConstructionPieceBuildState.Pending,
+                        LastStabilityLevel = ConstructionPieceStabilityLevel.Unknown,
+                        BuildWave = -1
+                    })
+                    .ToList()
             },
             WorkPosts = workPosts
         };
@@ -70,7 +82,9 @@ public sealed class ConstructionProjectService
         foreach (var project in projects)
         {
             project.Progress ??= new ConstructionProjectProgressData();
+            project.Progress.Pieces ??= new List<ConstructionPieceProgressData>();
             project.WorkPosts ??= new List<ConstructionWorkPostData>();
+            RecalculateProgress(project);
             _projectsById[project.Id] = project;
 
             foreach (var workPost in project.WorkPosts)
@@ -87,6 +101,58 @@ public sealed class ConstructionProjectService
     }
 
     public bool TryGetProject(int projectId, out ConstructionProjectData project) => _projectsById.TryGetValue(projectId, out project!);
+
+    public void EnsurePieceProgress(ConstructionProjectData project, StructureBlueprintData blueprint)
+    {
+        project.Progress ??= new ConstructionProjectProgressData();
+        project.Progress.Pieces ??= new List<ConstructionPieceProgressData>();
+        project.Progress.TotalPieceCount = blueprint.Pieces.Count;
+
+        var knownPieceIds = new HashSet<int>(project.Progress.Pieces.Select(progress => progress.PieceId));
+        foreach (var piece in blueprint.Pieces)
+        {
+            if (knownPieceIds.Contains(piece.PieceId))
+            {
+                continue;
+            }
+
+            project.Progress.Pieces.Add(new ConstructionPieceProgressData
+            {
+                PieceId = piece.PieceId,
+                RequiredWork = 1f,
+                State = ConstructionPieceBuildState.Pending,
+                LastStabilityLevel = ConstructionPieceStabilityLevel.Unknown,
+                BuildWave = -1
+            });
+        }
+
+        var validPieceIds = new HashSet<int>(blueprint.Pieces.Select(piece => piece.PieceId));
+        project.Progress.Pieces.RemoveAll(progress => !validPieceIds.Contains(progress.PieceId));
+        RecalculateProgress(project);
+    }
+
+    public ConstructionPieceProgressData GetOrCreatePieceProgress(ConstructionProjectData project, int pieceId)
+    {
+        project.Progress ??= new ConstructionProjectProgressData();
+        project.Progress.Pieces ??= new List<ConstructionPieceProgressData>();
+
+        var progress = project.Progress.Pieces.FirstOrDefault(candidate => candidate.PieceId == pieceId);
+        if (progress != null)
+        {
+            return progress;
+        }
+
+        progress = new ConstructionPieceProgressData
+        {
+            PieceId = pieceId,
+            RequiredWork = 1f,
+            State = ConstructionPieceBuildState.Pending,
+            LastStabilityLevel = ConstructionPieceStabilityLevel.Unknown,
+            BuildWave = -1
+        };
+        project.Progress.Pieces.Add(progress);
+        return progress;
+    }
 
     public IReadOnlyList<int> GetProjectIdsIntersectingZone(FunctionalZoneData zone)
     {
@@ -119,18 +185,9 @@ public sealed class ConstructionProjectService
 
     public void PruneCompletedProjects()
     {
-        var completedIds = _projectsById.Values
-            .Where(project => project.State == ConstructionProjectState.Completed)
-            .Select(project => project.Id)
-            .ToList();
-
-        foreach (var completedId in completedIds)
-        {
-            _projectsById.Remove(completedId);
-            _debugLogService.Info("Project", $"Dissolved completed construction project {completedId}. Its built pieces are now treated as regular world construction.");
-        }
+        // Completed construction projects remain tracked so Wyrdrasil can detect later damage and re-open
+        // missing pieces as repair tasks. A completed project is now dissolved only by explicit deletion.
     }
-
 
     public bool TryGetWorkPost(int workPostId, out ConstructionWorkPostData workPost)
     {
@@ -176,7 +233,6 @@ public sealed class ConstructionProjectService
         return project.WorkPosts.Count(workPost => workPost.AssignedResidentId.HasValue);
     }
 
-
     public bool TryAssignCraftStationToProject(int craftStationId, int projectId, out ConstructionWorkPostData workPost, out string failureReason)
     {
         if (!_projectsById.TryGetValue(projectId, out var project))
@@ -186,7 +242,7 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        if (project.State == ConstructionProjectState.Completed || project.State == ConstructionProjectState.Blocked)
+        if (project.State == ConstructionProjectState.Blocked)
         {
             workPost = new ConstructionWorkPostData();
             failureReason = $"Construction project {projectId} is not accepting a workbench because it is in state {project.State}.";
@@ -253,7 +309,7 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        if (project.State == ConstructionProjectState.Completed || project.State == ConstructionProjectState.Blocked)
+        if (project.State == ConstructionProjectState.Blocked)
         {
             workPost = new ConstructionWorkPostData();
             failureReason = $"Construction project {projectId} is not accepting workers because it is in state {project.State}.";
@@ -399,6 +455,85 @@ public sealed class ConstructionProjectService
         return true;
     }
 
+    public bool TrySetPieceBuildState(
+        int projectId,
+        int pieceId,
+        ConstructionPieceBuildState state,
+        ConstructionPieceStabilityLevel stabilityLevel)
+    {
+        if (!_projectsById.TryGetValue(projectId, out var project))
+        {
+            return false;
+        }
+
+        var progress = GetOrCreatePieceProgress(project, pieceId);
+        if (progress.State == ConstructionPieceBuildState.Built && state != ConstructionPieceBuildState.Missing)
+        {
+            return false;
+        }
+
+        progress.State = state;
+        progress.LastStabilityLevel = stabilityLevel;
+        RecalculateProgress(project);
+        return true;
+    }
+
+    public bool TryMarkPieceBuilt(
+        int projectId,
+        int pieceId,
+        string linkedWorldObjectName,
+        ConstructionPieceStabilityLevel stabilityLevel,
+        out int builtPieceCount,
+        out bool isCompleted)
+    {
+        builtPieceCount = 0;
+        isCompleted = false;
+
+        if (!_projectsById.TryGetValue(projectId, out var project))
+        {
+            return false;
+        }
+
+        var progress = GetOrCreatePieceProgress(project, pieceId);
+        progress.State = ConstructionPieceBuildState.Built;
+        progress.LastStabilityLevel = stabilityLevel;
+        progress.LinkedWorldObjectName = linkedWorldObjectName;
+        progress.CurrentWork = progress.RequiredWork;
+        progress.BuildWave = project.Progress.Pieces.Count(candidate => candidate.State == ConstructionPieceBuildState.Built);
+
+        RecalculateProgress(project);
+        builtPieceCount = project.Progress.BuiltPieceCount;
+        isCompleted = builtPieceCount >= project.Progress.TotalPieceCount && project.Progress.TotalPieceCount > 0;
+        project.State = isCompleted ? ConstructionProjectState.Completed : ConstructionProjectState.InProgress;
+        return true;
+    }
+
+    public bool TryMarkPieceMissing(int projectId, int pieceId, out bool changed)
+    {
+        changed = false;
+        if (!_projectsById.TryGetValue(projectId, out var project))
+        {
+            return false;
+        }
+
+        var progress = GetOrCreatePieceProgress(project, pieceId);
+        if (progress.State != ConstructionPieceBuildState.Built)
+        {
+            return true;
+        }
+
+        progress.State = ConstructionPieceBuildState.Missing;
+        progress.LastStabilityLevel = ConstructionPieceStabilityLevel.Unknown;
+        progress.LinkedWorldObjectName = string.Empty;
+        progress.CurrentWork = 0f;
+        changed = true;
+
+        RecalculateProgress(project);
+        project.State = ConstructionProjectState.Damaged;
+        _debugLogService.Info("Integrity", $"Construction project {projectId} detected missing piece {pieceId}. It is now queued for reconstruction.");
+        return true;
+    }
+
     public bool TryMarkNextPieceBuilt(int projectId, out int builtPieceCount, out bool isCompleted)
     {
         builtPieceCount = 0;
@@ -409,18 +544,24 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        if (project.Progress.BuiltPieceCount >= project.Progress.TotalPieceCount)
+        var nextPiece = project.Progress.Pieces
+            .Where(progress => progress.State != ConstructionPieceBuildState.Built)
+            .OrderBy(progress => progress.PieceId)
+            .FirstOrDefault();
+        if (nextPiece == null)
         {
             builtPieceCount = project.Progress.BuiltPieceCount;
             isCompleted = project.State == ConstructionProjectState.Completed;
             return false;
         }
 
-        project.Progress.BuiltPieceCount++;
-        builtPieceCount = project.Progress.BuiltPieceCount;
-        isCompleted = builtPieceCount >= project.Progress.TotalPieceCount;
-        project.State = isCompleted ? ConstructionProjectState.Completed : ConstructionProjectState.InProgress;
-        return true;
+        return TryMarkPieceBuilt(
+            projectId,
+            nextPiece.PieceId,
+            string.Empty,
+            ConstructionPieceStabilityLevel.Unknown,
+            out builtPieceCount,
+            out isCompleted);
     }
 
     public bool TrySetState(int projectId, ConstructionProjectState state)
@@ -446,7 +587,16 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        project.Progress.BuiltPieceCount = 0;
+        foreach (var pieceProgress in project.Progress.Pieces)
+        {
+            pieceProgress.State = ConstructionPieceBuildState.Pending;
+            pieceProgress.CurrentWork = 0f;
+            pieceProgress.LinkedWorldObjectName = string.Empty;
+            pieceProgress.LastStabilityLevel = ConstructionPieceStabilityLevel.Unknown;
+            pieceProgress.BuildWave = -1;
+        }
+
+        RecalculateProgress(project);
         project.Progress.AccumulatedPieceWork = 0f;
         project.State = project.Progress.TotalPieceCount == 0 ? ConstructionProjectState.Blocked : ConstructionProjectState.ReadyForWork;
         _activeWorkPostIdsByResidentId.Clear();
@@ -496,12 +646,36 @@ public sealed class ConstructionProjectService
             report.Messages.Add("BuiltPieceCount exceeds TotalPieceCount.");
         }
 
+        if (project.Progress.Pieces.Count != project.Progress.TotalPieceCount)
+        {
+            report.IsValid = false;
+            report.Messages.Add($"Piece progress count mismatch. Expected {project.Progress.TotalPieceCount}, found {project.Progress.Pieces.Count}.");
+        }
+
         if (report.Messages.Count == 0)
         {
             report.Messages.Add("Validation passed.");
         }
 
         return report;
+    }
+
+    public string GetExpectedBuiltPieceObjectName(int projectId, int pieceId, string prefabName)
+    {
+        var safePrefabName = string.IsNullOrWhiteSpace(prefabName) ? "Piece" : prefabName.Replace(" ", "_");
+        return $"Wyrdrasil_ConstructionProject_{projectId}_Piece_{pieceId}_{safePrefabName}";
+    }
+
+    private void RecalculateProgress(ConstructionProjectData project)
+    {
+        project.Progress ??= new ConstructionProjectProgressData();
+        project.Progress.Pieces ??= new List<ConstructionPieceProgressData>();
+        if (project.Progress.TotalPieceCount <= 0 && project.Progress.Pieces.Count > 0)
+        {
+            project.Progress.TotalPieceCount = project.Progress.Pieces.Count;
+        }
+
+        project.Progress.BuiltPieceCount = project.Progress.Pieces.Count(progress => progress.State == ConstructionPieceBuildState.Built);
     }
 
     private int AllocateWorkPostId() => _nextWorkPostId++;
