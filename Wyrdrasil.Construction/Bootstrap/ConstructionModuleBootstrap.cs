@@ -22,6 +22,7 @@ public sealed class ConstructionModuleBootstrap
         ConstructionWorkPostGenerationService constructionWorkPostGenerationService,
         ConstructionPieceStabilityProbeService constructionPieceStabilityProbeService,
         ConstructionPreviewBuildPlanService constructionPreviewBuildPlanService,
+        ConstructionPreviewStabilitySchedulerService constructionPreviewStabilitySchedulerService,
         ConstructionPieceBuildOrderService constructionPieceBuildOrderService,
         ConstructionProjectService constructionProjectService,
         ConstructionProjectMarkerService constructionProjectMarkerService,
@@ -46,6 +47,7 @@ public sealed class ConstructionModuleBootstrap
         ConstructionWorkPostGenerationService = constructionWorkPostGenerationService;
         ConstructionPieceStabilityProbeService = constructionPieceStabilityProbeService;
         ConstructionPreviewBuildPlanService = constructionPreviewBuildPlanService;
+        ConstructionPreviewStabilitySchedulerService = constructionPreviewStabilitySchedulerService;
         ConstructionPieceBuildOrderService = constructionPieceBuildOrderService;
         ConstructionProjectService = constructionProjectService;
         ConstructionProjectMarkerService = constructionProjectMarkerService;
@@ -71,6 +73,7 @@ public sealed class ConstructionModuleBootstrap
     public ConstructionWorkPostGenerationService ConstructionWorkPostGenerationService { get; }
     public ConstructionPieceStabilityProbeService ConstructionPieceStabilityProbeService { get; }
     public ConstructionPreviewBuildPlanService ConstructionPreviewBuildPlanService { get; }
+    public ConstructionPreviewStabilitySchedulerService ConstructionPreviewStabilitySchedulerService { get; }
     public ConstructionPieceBuildOrderService ConstructionPieceBuildOrderService { get; }
     public ConstructionProjectService ConstructionProjectService { get; }
     public ConstructionProjectMarkerService ConstructionProjectMarkerService { get; }
@@ -97,6 +100,7 @@ public sealed class ConstructionModuleBootstrap
         var constructionProjectService = new ConstructionProjectService(debugLogService, constructionWorkPostGenerationService);
         var constructionPieceStabilityProbeService = new ConstructionPieceStabilityProbeService();
         var constructionPreviewBuildPlanService = new ConstructionPreviewBuildPlanService(constructionPieceStabilityProbeService);
+        var constructionPreviewStabilitySchedulerService = new ConstructionPreviewStabilitySchedulerService(constructionPreviewBuildPlanService);
         var constructionPieceBuildOrderService = new ConstructionPieceBuildOrderService(
             constructionPieceStabilityProbeService,
             constructionProjectService);
@@ -130,7 +134,7 @@ public sealed class ConstructionModuleBootstrap
             blueprintCatalogService,
             constructionPlacementService,
             constructionProjectService,
-            constructionPreviewBuildPlanService,
+            constructionPreviewStabilitySchedulerService,
             debugLogService);
         var persistenceParticipant = new ConstructionPersistenceParticipant(blueprintCatalogService, constructionProjectService, debugLogService);
         var authoringApi = new ConstructionAuthoringApi(blueprintCatalogService, constructionProjectService, constructionBlueprintCaptureService, constructionOrderService, debugLogService);
@@ -155,6 +159,7 @@ public sealed class ConstructionModuleBootstrap
             constructionWorkPostGenerationService,
             constructionPieceStabilityProbeService,
             constructionPreviewBuildPlanService,
+            constructionPreviewStabilitySchedulerService,
             constructionPieceBuildOrderService,
             constructionProjectService,
             constructionProjectMarkerService,

@@ -60,11 +60,15 @@ public sealed class ConstructionPieceBuildOrderService
 
             if (!IsOnConstructionFrontier(piece, placement, blueprint, placementsByPieceId, builtPieceIds))
             {
+                // Not being on the active frontier is not a structural failure.
+                // It simply means the piece belongs to a future construction wave.
+                // Keeping it Blocked would make existing project ghosts appear almost entirely red
+                // even though the pieces are only waiting for their supports to be built.
                 _constructionProjectService.TrySetPieceBuildState(
                     project.Id,
                     piece.PieceId,
-                    ConstructionPieceBuildState.Blocked,
-                    ConstructionPieceStabilityLevel.Unsupported);
+                    ConstructionPieceBuildState.Pending,
+                    ConstructionPieceStabilityLevel.Unknown);
                 continue;
             }
 

@@ -36,7 +36,7 @@ public sealed class ConstructionPlacementPreviewService
     private readonly BlueprintCatalogService _blueprintCatalogService;
     private readonly ConstructionPlacementService _constructionPlacementService;
     private readonly ConstructionProjectService _constructionProjectService;
-    private readonly ConstructionPreviewBuildPlanService _constructionPreviewBuildPlanService;
+    private readonly ConstructionPreviewStabilitySchedulerService _constructionPreviewStabilitySchedulerService;
     private readonly ConstructionDebugLogService _debugLogService;
     private readonly List<PreviewPiece> _previewPieces = new();
 
@@ -52,13 +52,13 @@ public sealed class ConstructionPlacementPreviewService
         BlueprintCatalogService blueprintCatalogService,
         ConstructionPlacementService constructionPlacementService,
         ConstructionProjectService constructionProjectService,
-        ConstructionPreviewBuildPlanService constructionPreviewBuildPlanService,
+        ConstructionPreviewStabilitySchedulerService constructionPreviewStabilitySchedulerService,
         ConstructionDebugLogService debugLogService)
     {
         _blueprintCatalogService = blueprintCatalogService;
         _constructionPlacementService = constructionPlacementService;
         _constructionProjectService = constructionProjectService;
-        _constructionPreviewBuildPlanService = constructionPreviewBuildPlanService;
+        _constructionPreviewStabilitySchedulerService = constructionPreviewStabilitySchedulerService;
         _debugLogService = debugLogService;
     }
 
@@ -66,7 +66,7 @@ public sealed class ConstructionPlacementPreviewService
     public string ActiveBlueprintId => _activeBlueprint?.Id ?? string.Empty;
     public string StatusLabel => !IsPreviewActive
         ? "Construction preview inactive."
-        : $"Construction preview: {ActiveBlueprintId} | Valid: {(_isPlacementValid ? "Yes" : "No")} | Y Offset: {_verticalOffset:0.0} | {_validationMessage}";
+        : $"Construction preview: {ActiveBlueprintId} | Valid: {(_isPlacementValid ? "Yes" : "No")} | Y Offset: {_verticalOffset:0.0} | {_validationMessage} | {_constructionPreviewStabilitySchedulerService.StatusLabel}";
     public string ControlsLabel => "Construction preview: Molette = pivoter | Shift + molette = hauteur | Clic gauche = lancer le chantier | Clic droit = annuler";
 
     public bool TryBeginPreview(string blueprintId, Vector3 originPosition, Quaternion initialRotation, out string failureReason)
@@ -165,6 +165,7 @@ public sealed class ConstructionPlacementPreviewService
         _rotationStepIndex = 0;
         _isPlacementValid = false;
         _validationMessage = "No active construction preview.";
+        _constructionPreviewStabilitySchedulerService.Reset();
     }
 
     private bool RefreshPreview(out string failureReason)
@@ -186,6 +187,7 @@ public sealed class ConstructionPlacementPreviewService
         {
             _isPlacementValid = false;
             _validationMessage = failureReason;
+            _constructionPreviewStabilitySchedulerService.Reset();
             ApplyPreviewColor(isValid: false);
             return false;
         }
@@ -196,11 +198,27 @@ public sealed class ConstructionPlacementPreviewService
         _isPlacementValid = EvaluateBlockingOverlaps(out _validationMessage);
         if (_isPlacementValid)
         {
-            var previewEvaluations = _constructionPreviewBuildPlanService.EvaluatePreview(_activeBlueprint, placements);
-            ApplyPerPiecePreviewColors(previewEvaluations);
+            var now = Time.realtimeSinceStartup;
+            _constructionPreviewStabilitySchedulerService.RequestAnalysis(
+                _activeBlueprint,
+                placements,
+                GetCurrentOriginPosition(),
+                GetCurrentRotation(),
+                now);
+            _constructionPreviewStabilitySchedulerService.Tick(now);
+
+            if (_constructionPreviewStabilitySchedulerService.TryGetCurrentEvaluations(out var previewEvaluations))
+            {
+                ApplyPerPiecePreviewColors(previewEvaluations);
+            }
+            else
+            {
+                ApplyPendingPreviewColor();
+            }
         }
         else
         {
+            _constructionPreviewStabilitySchedulerService.Reset();
             ApplyPreviewColor(isValid: false);
         }
 
@@ -415,6 +433,14 @@ public sealed class ConstructionPlacementPreviewService
         foreach (var previewPiece in _previewPieces)
         {
             ApplyPreviewPieceColor(previewPiece, color);
+        }
+    }
+
+    private void ApplyPendingPreviewColor()
+    {
+        foreach (var previewPiece in _previewPieces)
+        {
+            ApplyPreviewPieceColor(previewPiece, PendingColor);
         }
     }
 
