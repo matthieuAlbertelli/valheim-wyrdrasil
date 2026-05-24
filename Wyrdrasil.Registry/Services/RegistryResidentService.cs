@@ -3,6 +3,7 @@ using System.Reflection;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Registry.Components;
+using Wyrdrasil.Registry.PlayerTool;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Authoring;
 using Wyrdrasil.Settlements.Runtime;
@@ -88,6 +89,18 @@ public sealed class RegistryResidentService
         return TryGetTargetRegisteredResident(out resident);
     }
 
+    public bool TryGetRegisteredResidentForCharacter(Character character, out RegisteredNpcData resident)
+    {
+        resident = null!;
+        if (character == null)
+        {
+            return false;
+        }
+
+        return _soulsRuntimeApi.TryGetResidentId(character, out var residentId) &&
+               _soulsRuntimeApi.TryGetResidentById(residentId, out resident);
+    }
+
     public void PrepareResidentPresenceSnapshotsForSave()
     {
         _presenceService.PrepareResidentPresenceSnapshotsForSave();
@@ -135,17 +148,82 @@ public sealed class RegistryResidentService
             return;
         }
 
+        if (!TryRegisterCharacter(targetCharacter, out _, out var failureReason))
+        {
+            _log.LogWarning(failureReason);
+        }
+    }
+
+    public bool TrySpawnAndRegisterTestViking(out RegisteredNpcData resident, out string failureReason)
+    {
+        resident = null!;
+        failureReason = string.Empty;
+
+        if (!_soulsAuthoringApi.TrySpawnTestViking(out var spawnedCharacter, out var spawnFailureReason) || spawnedCharacter == null)
+        {
+            failureReason = spawnFailureReason;
+            return false;
+        }
+
+        if (!TryRegisterCharacter(spawnedCharacter, out resident, out failureReason))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public bool TryKillTargetedRegisteredResident(out RegisteredNpcData resident, out string failureReason)
+    {
+        resident = null!;
+        failureReason = string.Empty;
+
+        if (!TryGetTargetRegisteredResident(out resident))
+        {
+            failureReason = "No registered resident is under the crosshair.";
+            return false;
+        }
+
+        _assignmentService.ClearAllAssignmentsForResident(resident);
+        _presenceService.TryDespawnResident(resident);
+        resident.PresenceSnapshot.Clear();
+        _visualService.RemoveMarker(resident.Id);
+        _toolState.ClearPendingResidentForceAssign();
+        _visualService.SetPendingForceAssignResidentVisual(null);
+        _visualService.SetPendingConstructionAssignmentResidentVisual(null);
+
+        if (!_soulsRuntimeApi.RemoveResident(resident.Id))
+        {
+            failureReason = $"Resident #{resident.Id} could not be removed from the Souls catalog.";
+            return false;
+        }
+
+        _log.LogInfo($"Killed and unregistered resident #{resident.Id} ('{resident.DisplayName}').");
+        return true;
+    }
+
+    public bool TryRegisterCharacter(Character targetCharacter, out RegisteredNpcData resident, out string failureReason)
+    {
+        resident = null!;
+        failureReason = string.Empty;
+
+        if (targetCharacter == null)
+        {
+            failureReason = "Cannot register NPC: target character is null.";
+            return false;
+        }
+
         var localPlayer = Player.m_localPlayer;
         if (localPlayer != null && targetCharacter.gameObject == localPlayer.gameObject)
         {
-            _log.LogWarning("Cannot register NPC: the local player cannot be registered as a resident.");
-            return;
+            failureReason = "Cannot register NPC: the local player cannot be registered as a resident.";
+            return false;
         }
 
         if (_soulsRuntimeApi.TryGetResidentId(targetCharacter, out _))
         {
-            _log.LogWarning("Cannot register NPC: this character is already registered.");
-            return;
+            failureReason = "Cannot register NPC: this character is already registered.";
+            return false;
         }
 
         var displayName = GetCharacterName(targetCharacter);
@@ -158,7 +236,9 @@ public sealed class RegistryResidentService
         _visualService.EnsureMarker(data);
         _residentRoutineService.ForceRefreshResident(data);
 
+        resident = data;
         _log.LogInfo($"Registered NPC #{data.Id}: '{data.DisplayName}' with {(createdIdentity ? "new" : "existing")} identity seed={identity.GenerationSeed}, generatedRole={identity.Role}, female={identity.Appearance.IsFemale}.");
+        return true;
     }
 
     public void AssignCraftStationAtCrosshair()
@@ -583,23 +663,7 @@ public sealed class RegistryResidentService
 
     private bool TryGetTargetCharacter(out Character targetCharacter)
     {
-        var activeCamera = Camera.main;
-        if (activeCamera != null)
-        {
-            var ray = new Ray(activeCamera.transform.position, activeCamera.transform.forward);
-            if (Physics.Raycast(ray, out var hitInfo, 100f, ~0, QueryTriggerInteraction.Ignore))
-            {
-                var character = hitInfo.collider.GetComponentInParent<Character>();
-                if (character != null)
-                {
-                    targetCharacter = character;
-                    return true;
-                }
-            }
-        }
-
-        targetCharacter = null!;
-        return false;
+        return RegistryPlayerToolWorldTargeting.TryGetTargetCharacter(out targetCharacter);
     }
 
     private bool TryGetTargetRegisteredResident(out RegisteredNpcData resident)
@@ -610,13 +674,7 @@ public sealed class RegistryResidentService
             return false;
         }
 
-        if (!_soulsRuntimeApi.TryGetResidentId(targetCharacter, out var residentId) || !_soulsRuntimeApi.TryGetResidentById(residentId, out resident))
-        {
-            resident = null!;
-            return false;
-        }
-
-        return true;
+        return TryGetRegisteredResidentForCharacter(targetCharacter, out resident);
     }
 
     private bool TryGetTargetRegisteredResident(string actionLabel, out Character targetCharacter, out RegisteredNpcData resident)
@@ -628,7 +686,7 @@ public sealed class RegistryResidentService
             return false;
         }
 
-        if (!_soulsRuntimeApi.TryGetResidentId(targetCharacter, out var residentId) || !_soulsRuntimeApi.TryGetResidentById(residentId, out resident))
+        if (!TryGetRegisteredResidentForCharacter(targetCharacter, out resident))
         {
             _log.LogWarning($"{actionLabel}: the targeted character is not registered.");
             resident = null!;

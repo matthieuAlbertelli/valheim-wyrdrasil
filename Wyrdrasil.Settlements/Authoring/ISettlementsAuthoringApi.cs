@@ -14,6 +14,7 @@ public interface ISettlementsAuthoringApi
     void HandleZoneAuthoringSecondaryInput();
     void AdjustPendingZoneHeight(int direction, bool adjustBase);
     void CancelPendingZoneAuthoring();
+    void SetZoneAuthoringVisualsVisible(bool visible);
     bool TryGetPlacementPoint(out Vector3 placementPoint);
     bool TryFindZoneAtPoint(Vector3 point, out FunctionalZoneData zone);
     void UpdateTargetedZoneHighlight();

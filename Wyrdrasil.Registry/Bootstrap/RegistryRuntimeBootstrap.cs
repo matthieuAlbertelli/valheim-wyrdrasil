@@ -3,6 +3,7 @@ using BepInEx.Logging;
 using Wyrdrasil.Construction.Bootstrap;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Controllers;
+using Wyrdrasil.Registry.PlayerTool;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Services.Interactions;
 using Wyrdrasil.Registry.Services.Interactions.Modes;
@@ -28,6 +29,8 @@ public sealed class RegistryRuntimeBootstrap
         RegistryZoneAuthoringInteractionService zoneAuthoringInteractionService,
         RegistryInteractionSessionCoordinator interactionSessionCoordinator,
         RegistryInteractionModeRouter interactionModeRouter,
+        RegistryPlayerToolItemService registryPlayerToolItemService,
+        RegistryPlayerToolRuntimeService registryPlayerToolRuntimeService,
         RegistryToolController registryToolController)
     {
         DiagnosticsService = diagnosticsService;
@@ -43,6 +46,8 @@ public sealed class RegistryRuntimeBootstrap
         ZoneAuthoringInteractionService = zoneAuthoringInteractionService;
         InteractionSessionCoordinator = interactionSessionCoordinator;
         InteractionModeRouter = interactionModeRouter;
+        RegistryPlayerToolItemService = registryPlayerToolItemService;
+        RegistryPlayerToolRuntimeService = registryPlayerToolRuntimeService;
         RegistryToolController = registryToolController;
     }
 
@@ -59,6 +64,8 @@ public sealed class RegistryRuntimeBootstrap
     public RegistryZoneAuthoringInteractionService ZoneAuthoringInteractionService { get; }
     public RegistryInteractionSessionCoordinator InteractionSessionCoordinator { get; }
     public RegistryInteractionModeRouter InteractionModeRouter { get; }
+    public RegistryPlayerToolItemService RegistryPlayerToolItemService { get; }
+    public RegistryPlayerToolRuntimeService RegistryPlayerToolRuntimeService { get; }
     public RegistryToolController RegistryToolController { get; }
 
     internal static RegistryRuntimeBootstrap Create(
@@ -108,6 +115,35 @@ public sealed class RegistryRuntimeBootstrap
 
         var selectionService = new ToolSelectionService(modeService.State);
         var constructionDebugSessionService = new ConstructionDebugSessionService();
+        var registryPlayerToolBlueprintThumbnailService = new RegistryPlayerToolBlueprintThumbnailService(
+            log,
+            constructionBootstrap.AuthoringApi);
+        var registryPlayerToolPieceTableService = new RegistryPlayerToolPieceTableService(
+            log,
+            constructionBootstrap.AuthoringApi,
+            registryPlayerToolBlueprintThumbnailService);
+        var registryPlayerToolInspectionService = new RegistryPlayerToolInspectionService(log);
+        var registryPlayerToolSaveService = new RegistryPlayerToolSaveService(log, persistenceService);
+        var registryPlayerToolGameplayActionService = new RegistryPlayerToolGameplayActionService(
+            log,
+            settlements.AuthoringApi,
+            deletionService,
+            residents.Services.ResidentService,
+            residents.Services.ResidentAssignmentService,
+            constructionBootstrap.AuthoringApi,
+            constructionDebugSessionService);
+        RegistryPlayerToolActionRouter.Configure(
+            log,
+            registryPlayerToolInspectionService,
+            registryPlayerToolGameplayActionService,
+            registryPlayerToolSaveService);
+        var registryPlayerToolTargetFeedbackService = new RegistryPlayerToolTargetFeedbackService(
+            residents.Services.ResidentService);
+        var registryPlayerToolRuntimeService = new RegistryPlayerToolRuntimeService(
+            settlements.AuthoringApi,
+            registryPlayerToolGameplayActionService,
+            registryPlayerToolTargetFeedbackService);
+        var registryPlayerToolItemService = new RegistryPlayerToolItemService(log, registryPlayerToolPieceTableService);
         var actionRegistry = RegistryActionRegistryFactory.CreateDefault(
             log,
             settlements.AuthoringApi,
@@ -210,6 +246,8 @@ public sealed class RegistryRuntimeBootstrap
             zoneAuthoringInteractionService,
             interactionSessionCoordinator,
             interactionModeRouter,
+            registryPlayerToolItemService,
+            registryPlayerToolRuntimeService,
             registryToolController);
     }
 }

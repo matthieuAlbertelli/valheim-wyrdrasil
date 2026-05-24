@@ -39,6 +39,12 @@ public sealed class SoulsRuntimeApi : ISoulsRuntimeApi
         _catalogService.AddResident(resident);
     }
 
+    public bool RemoveResident(int residentId)
+    {
+        TryDespawnResident(residentId);
+        return _catalogService.RemoveResident(residentId);
+    }
+
     public int AllocateResidentId()
     {
         return _catalogService.AllocateResidentId();

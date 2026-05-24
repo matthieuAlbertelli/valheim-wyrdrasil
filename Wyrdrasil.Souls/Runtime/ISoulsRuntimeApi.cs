@@ -12,6 +12,7 @@ public interface ISoulsRuntimeApi
     void LoadResidents(IEnumerable<RegisteredNpcData> residents, int nextResidentId);
     bool TryGetResidentById(int residentId, out RegisteredNpcData resident);
     void AddResident(RegisteredNpcData resident);
+    bool RemoveResident(int residentId);
     int AllocateResidentId();
     void ClearResidents();
 

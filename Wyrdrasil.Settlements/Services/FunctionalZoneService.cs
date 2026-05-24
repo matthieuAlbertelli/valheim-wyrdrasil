@@ -39,6 +39,8 @@ public sealed class FunctionalZoneService
     private float _pendingTopY;
     private int _nextZoneId = 1;
     private int? _highlightedZoneId;
+    private bool _registryModeVisualsVisible;
+    private bool _playerAuthoringVisualsVisible;
     private bool _visualsVisible;
 
     public IReadOnlyList<FunctionalZoneData> Zones => _zones;
@@ -51,7 +53,9 @@ public sealed class FunctionalZoneService
     {
         _log = log;
         _buildingService = buildingService;
-        _visualsVisible = modeService.IsRegistryModeEnabled;
+        _registryModeVisualsVisible = modeService.IsRegistryModeEnabled;
+        _playerAuthoringVisualsVisible = false;
+        RefreshVisualsVisible();
         modeService.RegistryModeChanged += OnRegistryModeChanged;
     }
 
@@ -227,6 +231,17 @@ public sealed class FunctionalZoneService
         DestroyPendingPreviewVisuals();
     }
 
+    public void SetPlayerAuthoringVisualsVisible(bool visible)
+    {
+        if (_playerAuthoringVisualsVisible == visible)
+        {
+            return;
+        }
+
+        _playerAuthoringVisualsVisible = visible;
+        RefreshVisualsVisible();
+    }
+
     public bool TryGetPlacementPoint(out Vector3 placementPoint)
     {
         var localPlayer = Player.m_localPlayer;
@@ -352,15 +367,37 @@ public sealed class FunctionalZoneService
 
     private void OnRegistryModeChanged(bool isEnabled)
     {
-        _visualsVisible = isEnabled;
-        foreach (var marker in _markers.Values)
-        {
-            marker.SetVisualizationVisible(isEnabled);
-        }
+        _registryModeVisualsVisible = isEnabled;
+        RefreshVisualsVisible();
 
-        if (!isEnabled)
+        if (!isEnabled && !_playerAuthoringVisualsVisible)
         {
             CancelPendingZoneAuthoring();
+            SetHighlightedZone(null);
+        }
+    }
+
+    private void RefreshVisualsVisible()
+    {
+        var visible = _registryModeVisualsVisible || _playerAuthoringVisualsVisible;
+        if (_visualsVisible == visible)
+        {
+            return;
+        }
+
+        _visualsVisible = visible;
+        foreach (var marker in _markers.Values)
+        {
+            marker.SetVisualizationVisible(visible);
+        }
+
+        if (IsZoneAuthoringActive)
+        {
+            UpdatePendingPreviewVisuals();
+        }
+
+        if (!visible)
+        {
             SetHighlightedZone(null);
         }
     }

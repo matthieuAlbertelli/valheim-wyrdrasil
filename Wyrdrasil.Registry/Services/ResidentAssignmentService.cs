@@ -107,6 +107,22 @@ public sealed class ResidentAssignmentService
         return true;
     }
 
+    public void ClearAllAssignmentsForResident(RegisteredNpcData resident)
+    {
+        _routinesRuntimeApi.ReleaseOccupation(resident);
+
+        _settlementsRuntimeApi.ClearSlotAssignmentForResident(resident.Id);
+        _settlementsRuntimeApi.ClearCraftStationAssignmentForResident(resident.Id);
+        _settlementsRuntimeApi.ClearSeatAssignmentForResident(resident.Id);
+        _settlementsRuntimeApi.ClearBedAssignmentForResident(resident.Id);
+        _constructionRuntimeApi.TryClearResidentAssignment(resident.Id, out _, out _);
+
+        ClearWorkAssignment(resident, clearRole: true, clearConstructionRuntime: false);
+        ClearMealAssignment(resident);
+        ClearSleepAssignment(resident);
+        _visualService.UpdateMarker(resident);
+    }
+
     public bool TryAssignInnkeeperRole(RegisteredNpcData resident, Character targetCharacter, out ZoneSlotData? slotData)
     {
         DetachIfAttached(targetCharacter);

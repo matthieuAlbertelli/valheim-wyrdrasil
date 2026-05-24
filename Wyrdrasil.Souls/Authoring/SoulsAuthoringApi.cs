@@ -21,6 +21,11 @@ public sealed class SoulsAuthoringApi : ISoulsAuthoringApi
         _spawnService.SpawnTestViking();
     }
 
+    public bool TrySpawnTestViking(out Character? spawnedCharacter, out string failureReason)
+    {
+        return _spawnService.TrySpawnTestViking(out spawnedCharacter, out failureReason);
+    }
+
     public VikingIdentityData ResolveOrCreateIdentity(Character targetCharacter, NpcRole defaultRole, out bool createdIdentity)
     {
         return _identityService.ResolveOrCreateIdentity(targetCharacter, defaultRole, out createdIdentity);

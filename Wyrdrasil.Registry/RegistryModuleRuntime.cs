@@ -1,6 +1,7 @@
 using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Controllers;
+using Wyrdrasil.Registry.PlayerTool;
 using Wyrdrasil.Registry.Services;
 
 namespace Wyrdrasil.Registry;
@@ -15,6 +16,8 @@ public sealed class RegistryModuleRuntime
     private readonly ConstructionProjectGhostService _constructionProjectGhostService;
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionLinkVisualService _constructionLinkVisualService;
+    private readonly RegistryPlayerToolItemService _registryPlayerToolItemService;
+    private readonly RegistryPlayerToolRuntimeService _registryPlayerToolRuntimeService;
     private readonly RegistryToolController _registryToolController;
 
     public RegistryModuleRuntime(
@@ -26,6 +29,8 @@ public sealed class RegistryModuleRuntime
         ConstructionProjectGhostService constructionProjectGhostService,
         ConstructionProjectService constructionProjectService,
         ConstructionLinkVisualService constructionLinkVisualService,
+        RegistryPlayerToolItemService registryPlayerToolItemService,
+        RegistryPlayerToolRuntimeService registryPlayerToolRuntimeService,
         RegistryToolController registryToolController)
     {
         _persistenceService = persistenceService;
@@ -36,12 +41,16 @@ public sealed class RegistryModuleRuntime
         _constructionProjectGhostService = constructionProjectGhostService;
         _constructionProjectService = constructionProjectService;
         _constructionLinkVisualService = constructionLinkVisualService;
+        _registryPlayerToolItemService = registryPlayerToolItemService;
+        _registryPlayerToolRuntimeService = registryPlayerToolRuntimeService;
         _registryToolController = registryToolController;
     }
 
     public void Update()
     {
         WyrdrasilPlayerCraftDebugMonitor.EnsureAttached(Player.m_localPlayer);
+        _registryPlayerToolItemService.Update();
+        _registryPlayerToolRuntimeService.Update();
         _persistenceService.Update();
         _residentRoutineService.Update();
         _constructionProjectIntegrityService.Update();

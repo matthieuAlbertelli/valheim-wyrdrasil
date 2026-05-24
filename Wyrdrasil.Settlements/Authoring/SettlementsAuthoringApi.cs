@@ -38,6 +38,7 @@ public sealed class SettlementsAuthoringApi : ISettlementsAuthoringApi
     public void HandleZoneAuthoringSecondaryInput() => _zoneService.HandleZoneAuthoringSecondaryInput();
     public void AdjustPendingZoneHeight(int direction, bool adjustBase) => _zoneService.AdjustPendingZoneHeight(direction, adjustBase);
     public void CancelPendingZoneAuthoring() => _zoneService.CancelPendingZoneAuthoring();
+    public void SetZoneAuthoringVisualsVisible(bool visible) => _zoneService.SetPlayerAuthoringVisualsVisible(visible);
     public bool TryGetPlacementPoint(out Vector3 placementPoint) => _zoneService.TryGetPlacementPoint(out placementPoint);
     public bool TryFindZoneAtPoint(Vector3 point, out FunctionalZoneData zone) => _zoneService.TryFindZoneAtPoint(point, out zone);
     public void UpdateTargetedZoneHighlight() => _zoneService.UpdateTargetedZoneHighlight();

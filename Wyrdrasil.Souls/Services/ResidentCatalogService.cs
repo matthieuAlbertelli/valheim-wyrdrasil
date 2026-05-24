@@ -39,6 +39,18 @@ public sealed class ResidentCatalogService
         _registeredById[resident.Id] = resident;
     }
 
+    public bool RemoveResident(int residentId)
+    {
+        if (!_registeredById.TryGetValue(residentId, out var resident))
+        {
+            return false;
+        }
+
+        _registeredById.Remove(residentId);
+        _registeredNpcs.Remove(resident);
+        return true;
+    }
+
     public int AllocateResidentId()
     {
         return _nextRegisteredNpcId++;

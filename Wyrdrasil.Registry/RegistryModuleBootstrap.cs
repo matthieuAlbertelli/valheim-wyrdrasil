@@ -1,21 +1,48 @@
+using System;
 using BepInEx.Logging;
 using HarmonyLib;
 using Wyrdrasil.Construction.Bootstrap;
 using Wyrdrasil.Registry.Bootstrap;
+using Wyrdrasil.Registry.Patches;
 using Wyrdrasil.Routines;
 
 namespace Wyrdrasil.Registry;
 
 public static class RegistryModuleBootstrap
 {
-    public static void ApplyHarmony(Harmony harmony)
+    private const string DisabledPieceHighlightPatchTypeName =
+        "Wyrdrasil.Registry.Patches.WyrdrasilRegistryPlayerToolPieceHighlightPatch";
+
+    public static void ApplyHarmony(ManualLogSource log, Harmony harmony)
     {
-        harmony.PatchAll(typeof(RegistryModuleBootstrap).Assembly);
+        var assembly = typeof(RegistryModuleBootstrap).Assembly;
+
+        foreach (var type in assembly.GetTypes())
+        {
+            if (string.Equals(type.FullName, DisabledPieceHighlightPatchTypeName, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (!HasHarmonyPatchAttribute(type))
+            {
+                continue;
+            }
+
+            harmony.CreateClassProcessor(type).Patch();
+        }
+
+        WyrdrasilRegistryPlayerToolUpdateHoverPatchInstaller.Apply(harmony, log);
+    }
+
+    private static bool HasHarmonyPatchAttribute(Type type)
+    {
+        return type.GetCustomAttributes(typeof(HarmonyPatch), false).Length > 0;
     }
 
     public static RegistryModuleRuntime Create(ManualLogSource log, Harmony harmony)
     {
-        ApplyHarmony(harmony);
+        ApplyHarmony(log, harmony);
         RoutinesModuleBootstrap.ApplyHarmony(harmony);
 
         var modeService = new Wyrdrasil.Core.Services.RegistryModeService(log);
@@ -39,6 +66,8 @@ public static class RegistryModuleBootstrap
             constructionBootstrap.ConstructionProjectGhostService,
             constructionBootstrap.ConstructionProjectService,
             runtimeBootstrap.ConstructionLinkVisualService,
+            runtimeBootstrap.RegistryPlayerToolItemService,
+            runtimeBootstrap.RegistryPlayerToolRuntimeService,
             runtimeBootstrap.RegistryToolController);
     }
 }

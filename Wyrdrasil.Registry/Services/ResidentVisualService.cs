@@ -45,6 +45,23 @@ public sealed class ResidentVisualService
         }
     }
 
+    public void RemoveMarker(int residentId)
+    {
+        if (!_markers.TryGetValue(residentId, out var marker))
+        {
+            return;
+        }
+
+        if (marker != null)
+        {
+            marker.SetPendingForceAssign(false);
+            marker.SetPendingConstructionAssign(false);
+            marker.SetVisualizationVisible(false);
+        }
+
+        _markers.Remove(residentId);
+    }
+
     public void SetPendingForceAssignResidentVisual(int? residentId)
     {
         foreach (var pair in _markers)
