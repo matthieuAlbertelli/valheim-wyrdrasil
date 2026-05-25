@@ -89,6 +89,28 @@ public sealed class RegistryPlayerToolGameplayActionService
         return false;
     }
 
+    public bool DefineBuildingAtCrosshair()
+    {
+        if (RegistryPlayerToolWorldTargeting.TryGetTargetCharacter(out _))
+        {
+            ShowPlayerMessage("Registre : visez le sol ou une construction, pas un viking.");
+            return false;
+        }
+
+        var finalized = _settlementsAuthoringApi.AdvanceBuildingAuthoring();
+        ShowCurrentBuildingAuthoringState(finalized
+            ? "Registre : volume de bâtiment créé."
+            : "Registre : tracé de bâtiment en cours.");
+        return finalized;
+    }
+
+    public bool HandleBuildingSecondaryInput()
+    {
+        _settlementsAuthoringApi.HandleBuildingAuthoringSecondaryInput();
+        ShowCurrentBuildingAuthoringState("Registre : tracé de bâtiment annulé.");
+        return false;
+    }
+
     public bool DesignateBedAtCrosshair()
     {
         if (RegistryPlayerToolWorldTargeting.TryGetTargetCharacter(out _))
@@ -188,50 +210,51 @@ public sealed class RegistryPlayerToolGameplayActionService
     }
 
 
-    public bool CaptureTargetedTavernAsBlueprint()
+    public bool CaptureTargetedBuildingAsBlueprint()
     {
         if (RegistryPlayerToolWorldTargeting.TryGetTargetCharacter(out _))
         {
-            ShowPlayerMessage("Registre : visez une taverne, pas un viking.");
-            _log.LogWarning("Registry player tavern blueprint capture blocked: a viking is targeted, so the zone behind it is ignored.");
+            ShowPlayerMessage("Registre : visez un bâtiment, pas un viking.");
+            _log.LogWarning("Registry player building blueprint capture blocked: a viking is targeted, so the building behind it is ignored.");
             return false;
         }
 
-        if (!_settlementsAuthoringApi.TryGetPlacementPoint(out var point) ||
-            !_settlementsAuthoringApi.TryFindZoneAtPoint(point, out var zone))
+        if (!_settlementsAuthoringApi.TryGetBuildingAtCrosshair(out var building))
         {
-            ShowPlayerMessage("Registre : visez une zone de taverne.");
-            _log.LogWarning("Registry player tavern blueprint capture failed: no functional zone was found under the crosshair.");
+            ShowPlayerMessage("Registre : visez un volume de bâtiment.");
+            _log.LogWarning("Registry player building blueprint capture failed: no building volume was found under the crosshair.");
             return false;
         }
 
-        if (zone.ZoneType != ZoneType.Tavern)
+        if (!building.HasVolume)
         {
-            ShowPlayerMessage("Registre : le lieu visé n'est pas une taverne.");
-            _log.LogWarning($"Registry player tavern blueprint capture failed: targeted zone #{zone.Id} is {zone.ZoneType}, not Tavern.");
+            ShowPlayerMessage("Registre : ce bâtiment n'a pas de volume de capture.");
+            _log.LogWarning($"Registry player building blueprint capture failed: building #{building.Id} has no capture volume.");
             return false;
         }
 
-        var blueprintId = $"player.tavern.{zone.Id}";
-        var displayName = $"Taverne #{zone.Id}";
-        var request = new ConstructionZoneCaptureRequest
+        var blueprintId = $"player.building.{building.Id}";
+        var displayName = string.IsNullOrWhiteSpace(building.DisplayName)
+            ? $"Bâtiment #{building.Id}"
+            : building.DisplayName;
+        var request = new ConstructionBuildingCaptureRequest
         {
-            Zone = zone,
-            OriginPosition = zone.Position,
+            Building = building,
+            OriginPosition = building.AnchorPosition,
             BlueprintId = blueprintId,
             DisplayName = displayName
         };
 
-        if (!_constructionAuthoringApi.TryCaptureBlueprintFromZone(request, out var blueprint, out var failureReason))
+        if (!_constructionAuthoringApi.TryCaptureBlueprintFromBuilding(request, out var blueprint, out var failureReason))
         {
-            ShowPlayerMessage("Registre : impossible d'enregistrer cette taverne.");
-            _log.LogWarning($"Registry player tavern blueprint capture failed for zone #{zone.Id}: {failureReason}");
+            ShowPlayerMessage("Registre : impossible d'enregistrer ce bâtiment.");
+            _log.LogWarning($"Registry player building blueprint capture failed for building #{building.Id}: {failureReason}");
             return false;
         }
 
         _constructionDebugSessionService.SetLatestBlueprintId(blueprint.Id);
         ShowPlayerMessage($"Registre : modèle '{blueprint.DisplayName}' enregistré ({blueprint.Pieces.Count} pièces).");
-        _log.LogInfo($"Registry player action completed: captured tavern blueprint '{blueprint.DisplayName}' ({blueprint.Id}) from zone #{zone.Id} with {blueprint.Pieces.Count} pieces.");
+        _log.LogInfo($"Registry player action completed: captured building blueprint '{blueprint.DisplayName}' ({blueprint.Id}) from building #{building.Id} with {blueprint.Pieces.Count} pieces.");
         return true;
     }
 
@@ -287,6 +310,27 @@ public sealed class RegistryPlayerToolGameplayActionService
         ShowPlayerMessage(snapshot.CanCloseFootprint
             ? "Registre : contour prêt. Validez près du premier point, puis ajustez la hauteur."
             : $"Registre : point de taverne ajouté ({snapshot.PointCount}).");
+    }
+
+    private void ShowCurrentBuildingAuthoringState(string fallbackMessage)
+    {
+        var snapshot = _settlementsAuthoringApi.GetPendingBuildingAuthoringSnapshot();
+        if (snapshot == null)
+        {
+            ShowPlayerMessage(fallbackMessage);
+            _log.LogInfo("Registry player action completed: building authoring state changed.");
+            return;
+        }
+
+        if (snapshot.Phase == ZoneAuthoringPhase.Height)
+        {
+            ShowPlayerMessage("Registre : volume prêt. Ajustez la hauteur avec la molette, puis validez.");
+            return;
+        }
+
+        ShowPlayerMessage(snapshot.CanCloseFootprint
+            ? "Registre : contour du bâtiment prêt. Validez près du premier point, puis ajustez la hauteur."
+            : $"Registre : point de bâtiment ajouté ({snapshot.PointCount}).");
     }
 
     private void SetPendingAssignBedResident(RegisteredNpcData resident)

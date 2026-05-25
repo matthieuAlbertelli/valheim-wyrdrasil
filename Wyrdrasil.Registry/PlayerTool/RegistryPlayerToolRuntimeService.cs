@@ -27,7 +27,7 @@ public sealed class RegistryPlayerToolRuntimeService
         if (!RegistryPlayerToolSelectionService.TryGetSelectedActionPieceName(player, out var selectedActionPieceName))
         {
             _gameplayActionService.ClearPendingSubjectSilently();
-            DisablePlayerZoneVisualsAndCancelAuthoringIfNeeded();
+            DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
             return;
         }
 
@@ -38,26 +38,30 @@ public sealed class RegistryPlayerToolRuntimeService
 
         if (selectedActionPieceName == RegistryPlayerToolConstants.CreateTavernZoneActionPiecePrefabName)
         {
+            DisablePlayerBuildingVisualsAndCancelAuthoringIfNeeded();
             UpdatePlayerZoneAuthoringRuntime();
             return;
         }
 
-        if (selectedActionPieceName == RegistryPlayerToolConstants.CaptureTavernBlueprintActionPiecePrefabName)
+        if (selectedActionPieceName == RegistryPlayerToolConstants.DefineBuildingActionPiecePrefabName)
         {
-            UpdatePlayerZoneSelectionRuntime();
+            DisablePlayerZoneVisualsAndCancelAuthoringIfNeeded();
+            UpdatePlayerBuildingAuthoringRuntime();
             return;
         }
 
-        DisablePlayerZoneVisualsAndCancelAuthoringIfNeeded();
+        if (selectedActionPieceName == RegistryPlayerToolConstants.CaptureBuildingBlueprintActionPiecePrefabName)
+        {
+            DisablePlayerZoneVisualsAndCancelAuthoringIfNeeded();
+            UpdatePlayerBuildingSelectionRuntime();
+            return;
+        }
+
+        DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
     }
 
     private void UpdatePlayerZoneAuthoringRuntime()
     {
-        // The player Registry tool must reuse the same polygonal zone authoring
-        // system as the developer HUD action "Créer zone : Taverne". The dev
-        // HUD makes those visuals visible through RegistryModeService; the player
-        // tool keeps F8/dev mode separate, so it explicitly enables only the zone
-        // authoring visuals while the tavern action is selected.
         _settlementsAuthoringApi.SetZoneAuthoringVisualsVisible(true);
         _settlementsAuthoringApi.UpdatePendingZoneAuthoringPreview();
         _settlementsAuthoringApi.UpdateTargetedZoneHighlight();
@@ -78,18 +82,43 @@ public sealed class RegistryPlayerToolRuntimeService
         _settlementsAuthoringApi.AdjustPendingZoneHeight(direction, adjustBase);
     }
 
-    private void UpdatePlayerZoneSelectionRuntime()
+    private void UpdatePlayerBuildingAuthoringRuntime()
     {
-        // Blueprint capture is a selection action, not an authoring action, but it
-        // still needs the same existing zone visualization layer. Without this,
-        // the player cannot physically designate the tavern zone to capture.
-        if (_settlementsAuthoringApi.IsZoneAuthoringActive)
+        _settlementsAuthoringApi.SetBuildingAuthoringVisualsVisible(true);
+        _settlementsAuthoringApi.UpdatePendingBuildingAuthoringPreview();
+        _settlementsAuthoringApi.UpdateTargetedBuildingHighlight();
+
+        if (!_settlementsAuthoringApi.IsBuildingHeightEditingActive)
         {
-            _settlementsAuthoringApi.CancelPendingZoneAuthoring();
+            return;
         }
 
-        _settlementsAuthoringApi.SetZoneAuthoringVisualsVisible(true);
-        _settlementsAuthoringApi.UpdateTargetedZoneHighlight();
+        var scrollDelta = Input.mouseScrollDelta.y;
+        if (Mathf.Abs(scrollDelta) <= 0.01f)
+        {
+            return;
+        }
+
+        var direction = scrollDelta > 0f ? 1 : -1;
+        var adjustBase = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        _settlementsAuthoringApi.AdjustPendingBuildingHeight(direction, adjustBase);
+    }
+
+    private void UpdatePlayerBuildingSelectionRuntime()
+    {
+        if (_settlementsAuthoringApi.IsBuildingAuthoringActive)
+        {
+            _settlementsAuthoringApi.CancelPendingBuildingAuthoring();
+        }
+
+        _settlementsAuthoringApi.SetBuildingAuthoringVisualsVisible(true);
+        _settlementsAuthoringApi.UpdateTargetedBuildingHighlight();
+    }
+
+    private void DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded()
+    {
+        DisablePlayerZoneVisualsAndCancelAuthoringIfNeeded();
+        DisablePlayerBuildingVisualsAndCancelAuthoringIfNeeded();
     }
 
     private void DisablePlayerZoneVisualsAndCancelAuthoringIfNeeded()
@@ -100,5 +129,15 @@ public sealed class RegistryPlayerToolRuntimeService
         }
 
         _settlementsAuthoringApi.SetZoneAuthoringVisualsVisible(false);
+    }
+
+    private void DisablePlayerBuildingVisualsAndCancelAuthoringIfNeeded()
+    {
+        if (_settlementsAuthoringApi.IsBuildingAuthoringActive)
+        {
+            _settlementsAuthoringApi.CancelPendingBuildingAuthoring();
+        }
+
+        _settlementsAuthoringApi.SetBuildingAuthoringVisualsVisible(false);
     }
 }

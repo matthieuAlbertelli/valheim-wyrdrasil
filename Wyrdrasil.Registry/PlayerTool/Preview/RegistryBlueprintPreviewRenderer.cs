@@ -86,10 +86,7 @@ public sealed class RegistryBlueprintPreviewRenderer
         }
         finally
         {
-            if (previousActive != null)
-            {
-                RenderTexture.active = previousActive;
-            }
+            RenderTexture.active = previousActive;
 
             if (renderTexture != null)
             {

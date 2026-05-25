@@ -155,7 +155,14 @@ public sealed class RegistryPlayerToolItemService
     private void TryRefreshEquippedRegistryToolBuildPieces(PieceTable pieceTable)
     {
         var player = Player.m_localPlayer;
-        if (player == null || !RegistryPlayerToolSelectionService.IsRegistryToolActive(player))
+        if (player == null)
+        {
+            return;
+        }
+
+        var isRegistryToolAlreadyActive = RegistryPlayerToolSelectionService.IsRegistryToolActive(player);
+        var hasEquippedRegistryTool = TryRepairEquippedRegistryToolItemData(player, pieceTable);
+        if (!isRegistryToolAlreadyActive && !hasEquippedRegistryTool)
         {
             return;
         }
@@ -174,6 +181,77 @@ public sealed class RegistryPlayerToolItemService
             field.SetValue(player, pieceTable);
             return;
         }
+    }
+
+    private bool TryRepairEquippedRegistryToolItemData(Player player, PieceTable pieceTable)
+    {
+        var repaired = false;
+        for (var type = player.GetType(); type != null; type = type.BaseType)
+        {
+            foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (field.FieldType != typeof(ItemDrop.ItemData))
+                {
+                    continue;
+                }
+
+                if (field.GetValue(player) is not ItemDrop.ItemData itemData || !LooksLikeRegistryTool(itemData))
+                {
+                    continue;
+                }
+
+                RepairRegistryToolItemData(itemData, pieceTable);
+                repaired = true;
+            }
+        }
+
+        return repaired;
+    }
+
+    private void RepairRegistryToolItemData(ItemDrop.ItemData itemData, PieceTable pieceTable)
+    {
+        if (itemData == null || itemData.m_shared == null)
+        {
+            return;
+        }
+
+        itemData.m_shared.m_name = RegistryPlayerToolConstants.DisplayName;
+        itemData.m_shared.m_description = RegistryPlayerToolConstants.Description;
+        itemData.m_shared.m_buildPieces = pieceTable;
+
+        if (_runtimeItemPrefab != null)
+        {
+            itemData.m_dropPrefab = _runtimeItemPrefab;
+        }
+    }
+
+    private static bool LooksLikeRegistryTool(ItemDrop.ItemData itemData)
+    {
+        var sharedData = itemData.m_shared;
+        if (sharedData == null)
+        {
+            return false;
+        }
+
+        if (string.Equals(sharedData.m_name, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(sharedData.m_description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (sharedData.m_buildPieces != null &&
+            string.Equals(sharedData.m_buildPieces.name, RegistryPlayerToolConstants.PieceTableName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var dropPrefab = itemData.m_dropPrefab;
+        return dropPrefab != null &&
+               string.Equals(dropPrefab.name, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase);
     }
 
 

@@ -59,6 +59,23 @@ public sealed class ConstructionAuthoringApi : IConstructionAuthoringApi
         return TryRegisterBlueprint(blueprint, out failureReason);
     }
 
+
+    public bool TryCaptureBlueprintFromBuilding(ConstructionBuildingCaptureRequest request, out StructureBlueprintData blueprint, out string failureReason)
+    {
+        if (!_constructionBlueprintCaptureService.TryCaptureFromBuilding(
+                request.Building,
+                request.OriginPosition,
+                request.BlueprintId,
+                request.DisplayName,
+                out blueprint,
+                out failureReason))
+        {
+            return false;
+        }
+
+        return TryRegisterBlueprint(blueprint, out failureReason);
+    }
+
     public bool TryRegisterBlueprint(StructureBlueprintData blueprint, out string failureReason)
     {
         if (string.IsNullOrWhiteSpace(blueprint.Id))

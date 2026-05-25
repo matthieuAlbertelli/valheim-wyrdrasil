@@ -54,7 +54,7 @@ public sealed class SettlementsModuleBootstrap
 
     public static SettlementsModuleBootstrap Create(ManualLogSource log, RegistryModeService modeService)
     {
-        var buildingService = new BuildingService(log);
+        var buildingService = new BuildingService(log, modeService);
         var zoneDefinitionCatalog = new ZoneDefinitionCatalog();
         var zonePlacementPolicyService = new ZonePlacementPolicyService(zoneDefinitionCatalog);
         var zoneService = new FunctionalZoneService(log, modeService, buildingService);
@@ -82,6 +82,7 @@ public sealed class SettlementsModuleBootstrap
             craftStationService);
 
         var authoringApi = new SettlementsAuthoringApi(
+            buildingService,
             zoneService,
             waypointService,
             slotService,

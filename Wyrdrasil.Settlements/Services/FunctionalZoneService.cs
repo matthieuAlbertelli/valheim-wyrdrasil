@@ -428,7 +428,8 @@ public sealed class FunctionalZoneService
         }
 
         var anchorPosition = ComputeAnchorPosition(_pendingFootprintPoints);
-        var building = _buildingService.CreateImplicitBuildingForZone(_pendingZoneType.Value, anchorPosition);
+        var building = _buildingService.FindBuildingContainingPoint(anchorPosition) ??
+                       _buildingService.CreateImplicitBuildingForZone(_pendingZoneType.Value, anchorPosition);
         var zoneData = new FunctionalZoneData(_nextZoneId++, building.Id, _pendingZoneType.Value, anchorPosition,
             _pendingFootprintPoints.Select(point => new Vector2(point.x, point.z)), _pendingBaseY, _pendingTopY, 0);
 

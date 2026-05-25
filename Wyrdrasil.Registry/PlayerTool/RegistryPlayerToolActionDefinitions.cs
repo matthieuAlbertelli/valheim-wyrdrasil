@@ -41,9 +41,15 @@ public static class RegistryPlayerToolActionDefinitions
             categoryIndex: 3),
 
         new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.CaptureTavernBlueprintActionPiecePrefabName,
-            RegistryPlayerToolConstants.CaptureTavernBlueprintActionDisplayName,
-            RegistryPlayerToolConstants.CaptureTavernBlueprintActionDescription,
+            RegistryPlayerToolConstants.DefineBuildingActionPiecePrefabName,
+            RegistryPlayerToolConstants.DefineBuildingActionDisplayName,
+            RegistryPlayerToolConstants.DefineBuildingActionDescription,
+            categoryIndex: RegistryPlayerToolConstants.PlansCategoryIndex),
+
+        new RegistryPlayerToolActionDefinition(
+            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionPiecePrefabName,
+            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionDisplayName,
+            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionDescription,
             categoryIndex: RegistryPlayerToolConstants.PlansCategoryIndex)
     };
 

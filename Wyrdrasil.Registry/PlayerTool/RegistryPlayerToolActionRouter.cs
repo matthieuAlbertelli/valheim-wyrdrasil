@@ -92,14 +92,24 @@ public static class RegistryPlayerToolActionRouter
                 SaveIfPersistent(_gameplayActionService.AssignBedAtCrosshair(), "Assigner lit");
                 return true;
 
-            case RegistryPlayerToolConstants.CaptureTavernBlueprintActionPiecePrefabName:
+            case RegistryPlayerToolConstants.DefineBuildingActionPiecePrefabName:
                 if (_gameplayActionService == null)
                 {
-                    _log?.LogWarning("Registry player action router is not configured; tavern blueprint capture action was consumed but not executed.");
+                    _log?.LogWarning("Registry player action router is not configured; building definition action was consumed but not executed.");
                     return true;
                 }
 
-                SaveIfPersistent(_gameplayActionService.CaptureTargetedTavernAsBlueprint(), "Enregistrer taverne");
+                SaveIfPersistent(_gameplayActionService.DefineBuildingAtCrosshair(), "Délimiter bâtiment");
+                return true;
+
+            case RegistryPlayerToolConstants.CaptureBuildingBlueprintActionPiecePrefabName:
+                if (_gameplayActionService == null)
+                {
+                    _log?.LogWarning("Registry player action router is not configured; building blueprint capture action was consumed but not executed.");
+                    return true;
+                }
+
+                SaveIfPersistent(_gameplayActionService.CaptureTargetedBuildingAsBlueprint(), "Enregistrer bâtiment");
                 return true;
 
             default:
@@ -136,6 +146,10 @@ public static class RegistryPlayerToolActionRouter
 
             case RegistryPlayerToolConstants.CreateTavernZoneActionPiecePrefabName:
                 SaveIfPersistent(_gameplayActionService.HandleTavernZoneSecondaryInput(), "Annuler tracé taverne");
+                return true;
+
+            case RegistryPlayerToolConstants.DefineBuildingActionPiecePrefabName:
+                SaveIfPersistent(_gameplayActionService.HandleBuildingSecondaryInput(), "Annuler tracé bâtiment");
                 return true;
 
             default:

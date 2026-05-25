@@ -51,6 +51,11 @@ public sealed class RegistryPlayerToolPieceTableService
                 $"Refreshing '{RegistryPlayerToolConstants.PieceTableName}' because player tool actions changed. " +
                 $"Built='{_builtActionSignature}', expected='{expectedActionSignature}'.");
 
+            // Keep the PieceTable instance stable while the Registre is equipped. Valheim keeps
+            // references to the active PieceTable in Player and in the equipped ItemData; destroying
+            // and recreating the table can make the middle-mouse build panel stop opening until the
+            // tool is unequipped/re-equipped. Now that we rebuild m_availablePieces manually, mutating
+            // the existing dedicated table in place is the safer integration point.
             if (TryRefreshExistingPieceTable(zNetScene, sourcePieceTable, actionDefinitions, expectedActionSignature))
             {
                 return _pieceTable;
@@ -220,31 +225,234 @@ public sealed class RegistryPlayerToolPieceTableService
             Type.EmptyTypes,
             null);
 
-        if (updateAvailableMethod == null)
+        if (updateAvailableMethod != null)
+        {
+            try
+            {
+                updateAvailableMethod.Invoke(pieceTable, null);
+
+                var nativeAvailablePieces = GetListFieldValue(pieceTable, "m_availablePieces");
+                if (AvailablePiecesCoverConfiguredCategories(pieceTable, nativeAvailablePieces))
+                {
+                    _log.LogInfo(
+                        $"Refreshed '{RegistryPlayerToolConstants.PieceTableName}' available pieces with native PieceTable.UpdateAvailable: " +
+                        $"source pieces={pieceTable.m_pieces.Count}, available categories={nativeAvailablePieces?.Count ?? 0}, " +
+                        $"counts={FormatAvailablePieceCounts(nativeAvailablePieces)}.");
+                    return;
+                }
+
+                _log.LogWarning(
+                    $"Native PieceTable.UpdateAvailable produced an incomplete available-piece cache for " +
+                    $"'{RegistryPlayerToolConstants.PieceTableName}'. Rebuilding it manually.");
+            }
+            catch (Exception exception)
+            {
+                _log.LogWarning(
+                    $"Could not refresh available Wyrdrasil action pieces for '{RegistryPlayerToolConstants.PieceTableName}' " +
+                    $"with native PieceTable.UpdateAvailable: {exception.Message}. Rebuilding manually.");
+            }
+        }
+        else
+        {
+            _log.LogInfo(
+                $"PieceTable.UpdateAvailable was not found for '{RegistryPlayerToolConstants.PieceTableName}'. " +
+                "Rebuilding available Wyrdrasil action pieces manually.");
+        }
+
+        RebuildAvailablePiecesManually(pieceTable);
+    }
+
+    private void RebuildAvailablePiecesManually(PieceTable pieceTable)
+    {
+        var availablePiecesField = pieceTable.GetType().GetField(
+            "m_availablePieces",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (availablePiecesField == null || !typeof(IList).IsAssignableFrom(availablePiecesField.FieldType))
         {
             _log.LogWarning(
-                $"Could not refresh available Wyrdrasil action pieces for '{RegistryPlayerToolConstants.PieceTableName}': " +
-                "PieceTable.UpdateAvailable was not found.");
+                $"Could not manually rebuild available Wyrdrasil action pieces for " +
+                $"'{RegistryPlayerToolConstants.PieceTableName}': m_availablePieces field was not found or is not a list.");
             return;
         }
 
-        try
-        {
-            updateAvailableMethod.Invoke(pieceTable, null);
-        }
-        catch (Exception exception)
+        if (Activator.CreateInstance(availablePiecesField.FieldType) is not IList availablePieces)
         {
             _log.LogWarning(
-                $"Could not refresh available Wyrdrasil action pieces for '{RegistryPlayerToolConstants.PieceTableName}': " +
-                exception.Message);
+                $"Could not manually rebuild available Wyrdrasil action pieces for " +
+                $"'{RegistryPlayerToolConstants.PieceTableName}': m_availablePieces could not be created.");
             return;
         }
 
-        var availablePieces = GetListFieldValue(pieceTable, "m_availablePieces");
+        var categoryListType = GetAvailablePieceCategoryListType(availablePiecesField.FieldType);
+        if (categoryListType == null || !typeof(IList).IsAssignableFrom(categoryListType))
+        {
+            _log.LogWarning(
+                $"Could not manually rebuild available Wyrdrasil action pieces for " +
+                $"'{RegistryPlayerToolConstants.PieceTableName}': m_availablePieces category list type is unsupported.");
+            return;
+        }
+
+        var maxCategoryIndex = GetMaximumKnownPieceCategoryIndex(pieceTable);
+        for (var i = 0; i <= maxCategoryIndex; i++)
+        {
+            availablePieces.Add(CreateAvailablePieceCategoryList(categoryListType));
+        }
+
+        foreach (var piecePrefab in pieceTable.m_pieces)
+        {
+            if (piecePrefab == null)
+            {
+                continue;
+            }
+
+            var piece = piecePrefab.GetComponent<Piece>();
+            if (piece == null)
+            {
+                continue;
+            }
+
+            var categoryIndex = Math.Max(0, GetPieceCategoryIndex(piece));
+            EnsureAvailablePiecesCategorySlot(availablePieces, categoryListType, categoryIndex);
+
+            if (availablePieces[categoryIndex] is IList categoryPieces)
+            {
+                AddPieceToAvailableCategory(categoryPieces, piece, piecePrefab);
+            }
+        }
+
+        availablePiecesField.SetValue(pieceTable, availablePieces);
+
         _log.LogInfo(
-            $"Refreshed '{RegistryPlayerToolConstants.PieceTableName}' available pieces: " +
-            $"source pieces={pieceTable.m_pieces.Count}, available categories={availablePieces?.Count ?? 0}, " +
+            $"Manually rebuilt '{RegistryPlayerToolConstants.PieceTableName}' available pieces: " +
+            $"source pieces={pieceTable.m_pieces.Count}, available categories={availablePieces.Count}, " +
             $"counts={FormatAvailablePieceCounts(availablePieces)}.");
+    }
+
+    private static bool AvailablePiecesCoverConfiguredCategories(PieceTable pieceTable, IList? availablePieces)
+    {
+        if (availablePieces == null || availablePieces.Count == 0)
+        {
+            return false;
+        }
+
+        var maxCategoryIndex = GetMaximumKnownPieceCategoryIndex(pieceTable);
+        return availablePieces.Count > maxCategoryIndex;
+    }
+
+    private static Type? GetAvailablePieceCategoryListType(Type availablePiecesType)
+    {
+        if (availablePiecesType.IsGenericType)
+        {
+            return availablePiecesType.GetGenericArguments().FirstOrDefault();
+        }
+
+        return availablePiecesType
+            .GetInterfaces()
+            .Where(iface => iface.IsGenericType && iface.GetGenericArguments().Length == 1)
+            .Select(iface => iface.GetGenericArguments()[0])
+            .FirstOrDefault();
+    }
+
+    private static IList CreateAvailablePieceCategoryList(Type categoryListType)
+    {
+        if (Activator.CreateInstance(categoryListType) is IList categoryPieces)
+        {
+            return categoryPieces;
+        }
+
+        return new ArrayList();
+    }
+
+    private static void EnsureAvailablePiecesCategorySlot(IList availablePieces, Type categoryListType, int categoryIndex)
+    {
+        while (availablePieces.Count <= categoryIndex)
+        {
+            availablePieces.Add(CreateAvailablePieceCategoryList(categoryListType));
+        }
+    }
+
+    private static void AddPieceToAvailableCategory(IList categoryPieces, Piece piece, GameObject piecePrefab)
+    {
+        var itemType = GetCollectionItemType(categoryPieces.GetType());
+        if (itemType == null || itemType.IsInstanceOfType(piece))
+        {
+            categoryPieces.Add(piece);
+            return;
+        }
+
+        if (itemType.IsInstanceOfType(piecePrefab))
+        {
+            categoryPieces.Add(piecePrefab);
+        }
+    }
+
+    private static Type? GetCollectionItemType(Type collectionType)
+    {
+        if (collectionType.IsGenericType && collectionType.GetGenericArguments().Length == 1)
+        {
+            return collectionType.GetGenericArguments()[0];
+        }
+
+        return collectionType
+            .GetInterfaces()
+            .Where(iface => iface.IsGenericType && iface.GetGenericArguments().Length == 1)
+            .Select(iface => iface.GetGenericArguments()[0])
+            .FirstOrDefault();
+    }
+
+    private static int GetMaximumKnownPieceCategoryIndex(PieceTable pieceTable)
+    {
+        var maxCategoryIndex = 0;
+
+        foreach (var enumValue in Enum.GetValues(typeof(Piece.PieceCategory)))
+        {
+            maxCategoryIndex = Math.Max(maxCategoryIndex, Convert.ToInt32(enumValue));
+        }
+
+        var categories = GetListFieldValue(pieceTable, "m_categories");
+        if (categories != null)
+        {
+            for (var i = 0; i < categories.Count; i++)
+            {
+                if (categories[i] != null)
+                {
+                    maxCategoryIndex = Math.Max(maxCategoryIndex, Convert.ToInt32(categories[i]));
+                }
+            }
+        }
+
+        foreach (var piecePrefab in pieceTable.m_pieces)
+        {
+            if (piecePrefab == null)
+            {
+                continue;
+            }
+
+            var piece = piecePrefab.GetComponent<Piece>();
+            if (piece == null)
+            {
+                continue;
+            }
+
+            maxCategoryIndex = Math.Max(maxCategoryIndex, GetPieceCategoryIndex(piece));
+        }
+
+        return Math.Max(maxCategoryIndex, RegistryPlayerToolConstants.PlayerToolCategoryLabels.Length - 1);
+    }
+
+    private static int GetPieceCategoryIndex(Piece piece)
+    {
+        var field = piece.GetType().GetField(
+            "m_category",
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (field?.GetValue(piece) is { } categoryValue)
+        {
+            return Convert.ToInt32(categoryValue);
+        }
+
+        return 0;
     }
 
     private static string FormatAvailablePieceCounts(IList? availablePieces)
@@ -273,7 +481,9 @@ public sealed class RegistryPlayerToolPieceTableService
     private static void EnsureSelectedPieceStateMatchesAvailableCategories(PieceTable pieceTable, int configuredCategoryCount)
     {
         var availablePieces = GetListFieldValue(pieceTable, "m_availablePieces");
-        var selectedPieceCount = Math.Max(configuredCategoryCount, availablePieces?.Count ?? 0);
+        var selectedPieceCount = Math.Max(
+            Math.Max(configuredCategoryCount, availablePieces?.Count ?? 0),
+            GetMaximumKnownPieceCategoryIndex(pieceTable) + 1);
         if (selectedPieceCount <= 0)
         {
             selectedPieceCount = 1;
@@ -281,6 +491,7 @@ public sealed class RegistryPlayerToolPieceTableService
 
         SetVector2IntArrayFieldIfPresent(pieceTable, "m_selectedPiece", selectedPieceCount);
         SetVector2IntArrayFieldIfPresent(pieceTable, "m_lastSelectedPiece", selectedPieceCount);
+        ClampIntFieldIfPresent(pieceTable, "m_selectedCategory", 0, Math.Max(0, configuredCategoryCount - 1));
     }
 
     private static void SetVector2IntArrayFieldIfPresent(object target, string fieldName, int length)
@@ -301,6 +512,25 @@ public sealed class RegistryPlayerToolPieceTableService
         }
 
         field.SetValue(target, values);
+    }
+
+    private static void ClampIntFieldIfPresent(object target, string fieldName, int minValue, int maxValue)
+    {
+        var field = target.GetType().GetField(
+            fieldName,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+        if (field == null || field.FieldType != typeof(int))
+        {
+            return;
+        }
+
+        var value = (int)field.GetValue(target);
+        var clamped = Math.Max(minValue, Math.Min(maxValue, value));
+        if (clamped != value)
+        {
+            field.SetValue(target, clamped);
+        }
     }
 
     private GameObject? GetOrCreateActionPiecePrefab(

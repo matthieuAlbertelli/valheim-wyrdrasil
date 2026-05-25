@@ -31,9 +31,13 @@ public static class RegistryPlayerToolConstants
     public const string SpawnAndRegisterVikingActionDisplayName = "Appeler viking";
     public const string SpawnAndRegisterVikingActionDescription = "Fait apparaître un viking devant vous et l'enregistre comme âme du village.";
 
-    public const string CaptureTavernBlueprintActionPiecePrefabName = "Wyrdrasil_Action_CaptureTavernBlueprint";
-    public const string CaptureTavernBlueprintActionDisplayName = "Enregistrer taverne";
-    public const string CaptureTavernBlueprintActionDescription = "Capture la taverne visée comme modèle de construction.";
+    public const string DefineBuildingActionPiecePrefabName = "Wyrdrasil_Action_DefineBuilding";
+    public const string DefineBuildingActionDisplayName = "Délimiter bâtiment";
+    public const string DefineBuildingActionDescription = "Trace le volume physique d'un bâtiment à capturer en plan.";
+
+    public const string CaptureBuildingBlueprintActionPiecePrefabName = "Wyrdrasil_Action_CaptureBuildingBlueprint";
+    public const string CaptureBuildingBlueprintActionDisplayName = "Enregistrer bâtiment";
+    public const string CaptureBuildingBlueprintActionDescription = "Capture le bâtiment visé comme modèle de construction.";
 
     public const int PlansCategoryIndex = 4;
     public const string BlueprintPlanActionPiecePrefabNamePrefix = "Wyrdrasil_Blueprint_";

@@ -7,7 +7,10 @@ public interface ISettlementsAuthoringApi
 {
     bool IsZoneAuthoringActive { get; }
     bool IsZoneHeightEditingActive { get; }
+    bool IsBuildingAuthoringActive { get; }
+    bool IsBuildingHeightEditingActive { get; }
     PendingZoneAuthoringSnapshot? GetPendingZoneAuthoringSnapshot();
+    PendingZoneAuthoringSnapshot? GetPendingBuildingAuthoringSnapshot();
     void CreateTavernZone();
     void CreateBedroomZone();
     void UpdatePendingZoneAuthoringPreview();
@@ -15,9 +18,18 @@ public interface ISettlementsAuthoringApi
     void AdjustPendingZoneHeight(int direction, bool adjustBase);
     void CancelPendingZoneAuthoring();
     void SetZoneAuthoringVisualsVisible(bool visible);
+    bool AdvanceBuildingAuthoring();
+    void UpdatePendingBuildingAuthoringPreview();
+    void HandleBuildingAuthoringSecondaryInput();
+    void AdjustPendingBuildingHeight(int direction, bool adjustBase);
+    void CancelPendingBuildingAuthoring();
+    void SetBuildingAuthoringVisualsVisible(bool visible);
     bool TryGetPlacementPoint(out Vector3 placementPoint);
     bool TryFindZoneAtPoint(Vector3 point, out FunctionalZoneData zone);
+    bool TryFindBuildingAtPoint(Vector3 point, out BuildingData building);
+    bool TryGetBuildingAtCrosshair(out BuildingData building);
     void UpdateTargetedZoneHighlight();
+    void UpdateTargetedBuildingHighlight();
     void CreateNavigationWaypoint();
     void ConnectNavigationWaypoints();
     void CreateInnkeeperSlot();

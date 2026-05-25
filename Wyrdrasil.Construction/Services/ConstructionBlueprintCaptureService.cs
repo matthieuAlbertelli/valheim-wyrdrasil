@@ -17,8 +17,66 @@ public sealed class ConstructionBlueprintCaptureService
         out StructureBlueprintData blueprint,
         out string failureReason)
     {
+        if (zone == null)
+        {
+            blueprint = new StructureBlueprintData();
+            failureReason = "Zone is required.";
+            return false;
+        }
+
+        return TryCaptureFromVolume(
+            candidate => zone.ContainsPoint(candidate.transform.position),
+            originPosition,
+            blueprintId,
+            string.IsNullOrWhiteSpace(displayName) ? $"Captured Zone {zone.Id}" : displayName,
+            $"zone #{zone.Id}",
+            out blueprint,
+            out failureReason);
+    }
+
+    public bool TryCaptureFromBuilding(
+        BuildingData building,
+        Vector3 originPosition,
+        string blueprintId,
+        string displayName,
+        out StructureBlueprintData blueprint,
+        out string failureReason)
+    {
+        if (building == null)
+        {
+            blueprint = new StructureBlueprintData();
+            failureReason = "Building is required.";
+            return false;
+        }
+
+        if (!building.HasVolume)
+        {
+            blueprint = new StructureBlueprintData();
+            failureReason = $"Building #{building.Id} has no capture volume.";
+            return false;
+        }
+
+        return TryCaptureFromVolume(
+            candidate => building.ContainsPoint(candidate.transform.position),
+            originPosition,
+            blueprintId,
+            string.IsNullOrWhiteSpace(displayName) ? building.DisplayName : displayName,
+            $"building #{building.Id}",
+            out blueprint,
+            out failureReason);
+    }
+
+    private static bool TryCaptureFromVolume(
+        Func<Piece, bool> containsPiece,
+        Vector3 originPosition,
+        string blueprintId,
+        string displayName,
+        string captureLabel,
+        out StructureBlueprintData blueprint,
+        out string failureReason)
+    {
         var pieces = UnityEngine.Object.FindObjectsByType<Piece>(FindObjectsSortMode.None)
-            .Where(candidate => candidate != null && candidate.gameObject != null && zone.ContainsPoint(candidate.transform.position))
+            .Where(candidate => candidate != null && candidate.gameObject != null && containsPiece(candidate))
             .OrderBy(candidate => candidate.transform.position.y)
             .ThenBy(candidate => candidate.transform.position.x)
             .ThenBy(candidate => candidate.transform.position.z)
@@ -27,7 +85,7 @@ public sealed class ConstructionBlueprintCaptureService
         if (pieces.Count == 0)
         {
             blueprint = new StructureBlueprintData();
-            failureReason = $"No build pieces were found inside zone #{zone.Id}.";
+            failureReason = $"No build pieces were found inside {captureLabel}.";
             return false;
         }
 
@@ -48,7 +106,7 @@ public sealed class ConstructionBlueprintCaptureService
         blueprint = new StructureBlueprintData
         {
             Id = string.IsNullOrWhiteSpace(blueprintId) ? Guid.NewGuid().ToString("N") : blueprintId,
-            DisplayName = string.IsNullOrWhiteSpace(displayName) ? $"Captured Zone {zone.Id}" : displayName,
+            DisplayName = string.IsNullOrWhiteSpace(displayName) ? "Captured Building" : displayName,
             Pieces = capturedPieces
         };
 

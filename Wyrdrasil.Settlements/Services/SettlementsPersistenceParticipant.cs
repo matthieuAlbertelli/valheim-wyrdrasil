@@ -336,13 +336,24 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
         {
             Id = data.Id,
             DisplayName = data.DisplayName,
-            AnchorPosition = Float3SaveData.FromVector3(data.AnchorPosition)
+            AnchorPosition = Float3SaveData.FromVector3(data.AnchorPosition),
+            FootprintPoints = data.FootprintPoints.Select(Float2SaveData.FromVector2).ToList(),
+            BaseY = data.BaseY,
+            TopY = data.TopY,
+            LevelIndex = data.LevelIndex
         };
     }
 
     private static BuildingData ToBuildingData(BuildingSaveData data)
     {
-        return new BuildingData(data.Id, data.DisplayName, data.AnchorPosition.ToVector3());
+        return new BuildingData(
+            data.Id,
+            data.DisplayName,
+            data.AnchorPosition.ToVector3(),
+            data.FootprintPoints == null ? Enumerable.Empty<UnityEngine.Vector2>() : data.FootprintPoints.Select(point => point.ToVector2()),
+            data.BaseY,
+            data.TopY,
+            data.LevelIndex);
     }
 
     private static FunctionalZoneSaveData FromFunctionalZoneData(FunctionalZoneData data)
