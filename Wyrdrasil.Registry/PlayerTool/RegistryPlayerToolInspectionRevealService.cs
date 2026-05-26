@@ -4,6 +4,9 @@ using System.Linq;
 using System.Reflection;
 using UnityEngine;
 using Wyrdrasil.Construction.Services;
+using Wyrdrasil.Registry.PlayerTool.Inspection;
+using Wyrdrasil.Settlements.Runtime;
+using Wyrdrasil.Souls.Runtime;
 using Object = UnityEngine.Object;
 
 namespace Wyrdrasil.Registry.PlayerTool;
@@ -29,6 +32,9 @@ public sealed class RegistryPlayerToolInspectionRevealService
 
     private readonly ConstructionProjectMarkerService _constructionProjectMarkerService;
     private readonly ConstructionProjectGhostService _constructionProjectGhostService;
+    private readonly RegistryPlayerToolInspectionLinkService _inspectionLinkService;
+    private readonly ISettlementsRuntimeApi _settlementsRuntimeApi;
+    private readonly ISoulsRuntimeApi _soulsRuntimeApi;
     private readonly Dictionary<int, MarkerRevealBinding> _bindingsByInstanceId = new();
     private bool _isVisible;
     private float _nextRefreshTime;
@@ -37,10 +43,16 @@ public sealed class RegistryPlayerToolInspectionRevealService
 
     public RegistryPlayerToolInspectionRevealService(
         ConstructionProjectMarkerService constructionProjectMarkerService,
-        ConstructionProjectGhostService constructionProjectGhostService)
+        ConstructionProjectGhostService constructionProjectGhostService,
+        RegistryPlayerToolInspectionLinkService inspectionLinkService,
+        ISettlementsRuntimeApi settlementsRuntimeApi,
+        ISoulsRuntimeApi soulsRuntimeApi)
     {
         _constructionProjectMarkerService = constructionProjectMarkerService;
         _constructionProjectGhostService = constructionProjectGhostService;
+        _inspectionLinkService = inspectionLinkService;
+        _settlementsRuntimeApi = settlementsRuntimeApi;
+        _soulsRuntimeApi = soulsRuntimeApi;
     }
 
     public void SetRevealVisible(bool visible)
@@ -51,6 +63,7 @@ public sealed class RegistryPlayerToolInspectionRevealService
             {
                 ApplyRevealToExistingBindings();
                 RefreshBindingsIfDue();
+                _inspectionLinkService.Update();
             }
 
             return;
@@ -59,6 +72,7 @@ public sealed class RegistryPlayerToolInspectionRevealService
         _isVisible = visible;
         _constructionProjectMarkerService.SetInspectionRevealVisible(visible);
         _constructionProjectGhostService.SetInspectionRevealVisible(visible);
+        _inspectionLinkService.SetVisible(visible);
 
         if (!visible)
         {
@@ -78,6 +92,7 @@ public sealed class RegistryPlayerToolInspectionRevealService
         }
 
         RefreshBindingsIfDue();
+        _inspectionLinkService.Update();
     }
 
     private void ApplyRevealToExistingBindings()
@@ -123,7 +138,7 @@ public sealed class RegistryPlayerToolInspectionRevealService
                 continue;
             }
 
-            if (MarkerRevealBinding.TryCreate(component, out var binding))
+            if (MarkerRevealBinding.TryCreate(component, _settlementsRuntimeApi, _soulsRuntimeApi, out var binding))
             {
                 _bindingsByInstanceId[instanceId] = binding;
                 binding.ApplyReveal();
@@ -153,6 +168,8 @@ public sealed class RegistryPlayerToolInspectionRevealService
         private readonly MethodInfo? _setVisualizationVisibleAssignedMethod;
         private readonly MethodInfo? _setHighlightedMethod;
         private readonly MethodInfo? _setSelectedMethod;
+        private readonly ISettlementsRuntimeApi _settlementsRuntimeApi;
+        private readonly ISoulsRuntimeApi _soulsRuntimeApi;
         private readonly bool _originalVisualizationVisible;
         private readonly bool _originalAssigned;
         private readonly bool _originalHighlighted;
@@ -164,7 +181,9 @@ public sealed class RegistryPlayerToolInspectionRevealService
             MethodInfo? setVisualizationVisibleSingleMethod,
             MethodInfo? setVisualizationVisibleAssignedMethod,
             MethodInfo? setHighlightedMethod,
-            MethodInfo? setSelectedMethod)
+            MethodInfo? setSelectedMethod,
+            ISettlementsRuntimeApi settlementsRuntimeApi,
+            ISoulsRuntimeApi soulsRuntimeApi)
         {
             _component = component;
             _setInspectionRevealVisibleMethod = setInspectionRevealVisibleMethod;
@@ -172,15 +191,21 @@ public sealed class RegistryPlayerToolInspectionRevealService
             _setVisualizationVisibleAssignedMethod = setVisualizationVisibleAssignedMethod;
             _setHighlightedMethod = setHighlightedMethod;
             _setSelectedMethod = setSelectedMethod;
+            _settlementsRuntimeApi = settlementsRuntimeApi;
+            _soulsRuntimeApi = soulsRuntimeApi;
             _originalVisualizationVisible = ResolveOriginalVisibility(component);
-            _originalAssigned = ResolveBoolField(component, "_isAssigned", false);
+            _originalAssigned = ResolveRuntimeAssigned(component) ?? ResolveBoolField(component, "_isAssigned", false);
             _originalHighlighted = ResolveBoolField(component, "_isHighlighted", false);
             _originalSelected = ResolveBoolField(component, "_isSelected", false);
         }
 
         public bool IsStale => _component == null;
 
-        public static bool TryCreate(MonoBehaviour component, out MarkerRevealBinding binding)
+        public static bool TryCreate(
+            MonoBehaviour component,
+            ISettlementsRuntimeApi settlementsRuntimeApi,
+            ISoulsRuntimeApi soulsRuntimeApi,
+            out MarkerRevealBinding binding)
         {
             binding = null!;
 
@@ -211,7 +236,9 @@ public sealed class RegistryPlayerToolInspectionRevealService
                 setVisualizationVisibleSingleMethod,
                 setVisualizationVisibleAssignedMethod,
                 setHighlightedMethod,
-                setSelectedMethod);
+                setSelectedMethod,
+                settlementsRuntimeApi,
+                soulsRuntimeApi);
 
             return true;
         }
@@ -223,13 +250,19 @@ public sealed class RegistryPlayerToolInspectionRevealService
                 return;
             }
 
-            if (TryInvoke(_setInspectionRevealVisibleMethod, true))
+            var assigned = ResolveRuntimeAssigned(_component) ?? _originalAssigned;
+
+            // Prefer the explicit inspect visualization overload when it exists.
+            // Calling the single-boolean method afterwards can overwrite the assigned color
+            // on some markers, so the two-boolean form is authoritative.
+            if (!TryInvoke(_setVisualizationVisibleAssignedMethod, true, assigned))
             {
-                return;
+                if (!TryInvoke(_setInspectionRevealVisibleMethod, true))
+                {
+                    TryInvoke(_setVisualizationVisibleSingleMethod, true);
+                }
             }
 
-            TryInvoke(_setVisualizationVisibleAssignedMethod, true, _originalAssigned);
-            TryInvoke(_setVisualizationVisibleSingleMethod, true);
             TryInvoke(_setHighlightedMethod, true);
             TryInvoke(_setSelectedMethod, true);
         }
@@ -241,15 +274,17 @@ public sealed class RegistryPlayerToolInspectionRevealService
                 return;
             }
 
-            if (TryInvoke(_setInspectionRevealVisibleMethod, false))
-            {
-                return;
-            }
-
             TryInvoke(_setHighlightedMethod, _originalHighlighted);
             TryInvoke(_setSelectedMethod, _originalSelected);
-            TryInvoke(_setVisualizationVisibleAssignedMethod, _originalVisualizationVisible, _originalAssigned);
-            TryInvoke(_setVisualizationVisibleSingleMethod, _originalVisualizationVisible);
+
+            var assigned = ResolveRuntimeAssigned(_component) ?? _originalAssigned;
+            if (!TryInvoke(_setVisualizationVisibleAssignedMethod, _originalVisualizationVisible, assigned))
+            {
+                if (!TryInvoke(_setInspectionRevealVisibleMethod, false))
+                {
+                    TryInvoke(_setVisualizationVisibleSingleMethod, _originalVisualizationVisible);
+                }
+            }
         }
 
         private static bool IsWyrdrasilMarkerType(Type type)
@@ -321,6 +356,136 @@ public sealed class RegistryPlayerToolInspectionRevealService
                 : fallback;
         }
 
+        private bool? ResolveRuntimeAssigned(MonoBehaviour component)
+        {
+            if (TryResolveIntField(component, "_bedId", out var bedId))
+            {
+                return IsBedAssignedByRuntimeState(bedId) || IsBedAssignedByResident(bedId);
+            }
+
+            if (TryResolveIntField(component, "_craftStationId", out var craftStationId) ||
+                TryResolveIntProperty(component, "CraftStationId", out craftStationId))
+            {
+                return IsCraftStationAssignedByRuntimeState(craftStationId) || IsCraftStationAssignedByResident(craftStationId);
+            }
+
+            if (TryResolveIntField(component, "_seatId", out var seatId))
+            {
+                return IsSeatAssignedByRuntimeState(seatId) || IsSeatAssignedByResident(seatId);
+            }
+
+            if (TryResolveIntProperty(component, "SlotId", out var slotId))
+            {
+                return IsSlotAssignedByRuntimeState(slotId) || IsSlotAssignedByResident(slotId);
+            }
+
+            return null;
+        }
+
+        private bool IsBedAssignedByRuntimeState(int bedId)
+        {
+            foreach (var bed in _settlementsRuntimeApi.Beds)
+            {
+                if (bed.Id == bedId)
+                {
+                    return bed.AssignedRegisteredNpcId.HasValue;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsCraftStationAssignedByRuntimeState(int craftStationId)
+        {
+            foreach (var station in _settlementsRuntimeApi.CraftStations)
+            {
+                if (station.Id == craftStationId)
+                {
+                    return station.AssignedRegisteredNpcId.HasValue;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsSeatAssignedByRuntimeState(int seatId)
+        {
+            foreach (var seat in _settlementsRuntimeApi.Seats)
+            {
+                if (seat.Id == seatId)
+                {
+                    return seat.AssignedRegisteredNpcId.HasValue;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsSlotAssignedByRuntimeState(int slotId)
+        {
+            foreach (var slot in _settlementsRuntimeApi.Slots)
+            {
+                if (slot.Id == slotId)
+                {
+                    return slot.AssignedRegisteredNpcId.HasValue;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsBedAssignedByResident(int bedId)
+        {
+            foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
+            {
+                if (resident.AssignedBedId == bedId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsCraftStationAssignedByResident(int craftStationId)
+        {
+            foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
+            {
+                if (resident.AssignedCraftStationId == craftStationId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsSeatAssignedByResident(int seatId)
+        {
+            foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
+            {
+                if (resident.AssignedSeatId == seatId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsSlotAssignedByResident(int slotId)
+        {
+            foreach (var resident in _soulsRuntimeApi.RegisteredNpcs)
+            {
+                if (resident.AssignedSlotId == slotId)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         private static bool TryResolveBoolField(MonoBehaviour component, string fieldName, out bool value)
         {
             value = false;
@@ -334,6 +499,42 @@ public sealed class RegistryPlayerToolInspectionRevealService
 
                 value = (bool)field.GetValue(component);
                 return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryResolveIntField(MonoBehaviour component, string fieldName, out int value)
+        {
+            value = 0;
+            for (var type = component.GetType(); type != null; type = type.BaseType)
+            {
+                var field = type.GetField(fieldName, InstanceFlags);
+                if (field == null || field.FieldType != typeof(int))
+                {
+                    continue;
+                }
+
+                value = (int)field.GetValue(component);
+                return value > 0;
+            }
+
+            return false;
+        }
+
+        private static bool TryResolveIntProperty(MonoBehaviour component, string propertyName, out int value)
+        {
+            value = 0;
+            for (var type = component.GetType(); type != null; type = type.BaseType)
+            {
+                var property = type.GetProperty(propertyName, InstanceFlags);
+                if (property == null || property.PropertyType != typeof(int))
+                {
+                    continue;
+                }
+
+                value = (int)property.GetValue(component, null);
+                return value > 0;
             }
 
             return false;

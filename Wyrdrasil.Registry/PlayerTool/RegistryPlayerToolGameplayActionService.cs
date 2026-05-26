@@ -6,6 +6,7 @@ using Wyrdrasil.Construction.Authoring;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Services.Interactions;
 using Wyrdrasil.Registry.PlayerTool.Assignments;
+using Wyrdrasil.Registry.PlayerTool.Marking;
 using Wyrdrasil.Settlements.Authoring;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Tool;
@@ -16,8 +17,8 @@ public sealed class RegistryPlayerToolGameplayActionService
 {
     private readonly ManualLogSource _log;
     private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
-    private readonly RegistryDeletionService _deletionService;
     private readonly RegistryResidentService _residentService;
+    private readonly RegistryPlayerToolMarkingService _playerToolMarkingService;
     private readonly RegistryPlayerToolAssignmentService _playerToolAssignmentService;
     private readonly IConstructionAuthoringApi _constructionAuthoringApi;
     private readonly ConstructionDebugSessionService _constructionDebugSessionService;
@@ -27,8 +28,8 @@ public sealed class RegistryPlayerToolGameplayActionService
     public RegistryPlayerToolGameplayActionService(
         ManualLogSource log,
         ISettlementsAuthoringApi settlementsAuthoringApi,
-        RegistryDeletionService deletionService,
         RegistryResidentService residentService,
+        RegistryPlayerToolMarkingService playerToolMarkingService,
         RegistryPlayerToolAssignmentService playerToolAssignmentService,
         IConstructionAuthoringApi constructionAuthoringApi,
         ConstructionDebugSessionService constructionDebugSessionService,
@@ -36,8 +37,8 @@ public sealed class RegistryPlayerToolGameplayActionService
     {
         _log = log;
         _settlementsAuthoringApi = settlementsAuthoringApi;
-        _deletionService = deletionService;
         _residentService = residentService;
+        _playerToolMarkingService = playerToolMarkingService;
         _playerToolAssignmentService = playerToolAssignmentService;
         _constructionAuthoringApi = constructionAuthoringApi;
         _constructionDebugSessionService = constructionDebugSessionService;
@@ -115,56 +116,19 @@ public sealed class RegistryPlayerToolGameplayActionService
         return false;
     }
 
-    public bool DesignateBedAtCrosshair()
+    public void RefreshMarkActionDescription()
     {
-        if (RegistryPlayerToolWorldTargeting.TryGetTargetCharacter(out _))
-        {
-            ShowPlayerMessage("Registre : visez un lit, pas un viking.");
-            _log.LogWarning("Registry player bed designation blocked: a viking is targeted, so the construction behind it is ignored.");
-            return false;
-        }
-
-        if (_settlementsAuthoringApi.TryGetBedAtCrosshair(out var existingBed))
-        {
-            ShowPlayerMessage($"Registre : lit déjà marqué #{existingBed.Id}.");
-            _log.LogInfo($"Registry player action skipped: targeted bed is already designated as bed #{existingBed.Id}.");
-            return false;
-        }
-
-        _settlementsAuthoringApi.DesignateBedAtCrosshair();
-
-        if (_settlementsAuthoringApi.TryGetBedAtCrosshair(out var designatedBed))
-        {
-            ShowPlayerMessage($"Registre : lit marqué #{designatedBed.Id}.");
-            _log.LogInfo($"Registry player action completed: designated bed #{designatedBed.Id}.");
-            return true;
-        }
-
-        ShowPlayerMessage("Registre : visez un lit Valheim valide.");
-        _log.LogWarning("Registry player action failed: no designated bed could be resolved after designation attempt.");
-        return false;
+        _playerToolMarkingService.RefreshActionDescription();
     }
 
-    public bool RemoveDesignatedBedAtCrosshair()
+    public bool MarkAtCrosshair()
     {
-        if (RegistryPlayerToolWorldTargeting.TryGetTargetCharacter(out _))
-        {
-            ShowPlayerMessage("Registre : visez un lit marqué, pas un viking.");
-            _log.LogWarning("Registry player bed removal blocked: a viking is targeted, so the construction behind it is ignored.");
-            return false;
-        }
+        return _playerToolMarkingService.HandlePrimaryActionAtCrosshair();
+    }
 
-        if (!_settlementsAuthoringApi.TryGetBedAtCrosshair(out var bedData))
-        {
-            ShowPlayerMessage("Registre : visez un lit marqué.");
-            _log.LogWarning("Registry player secondary action failed: no designated bed is under the crosshair.");
-            return false;
-        }
-
-        _deletionService.DeleteDesignatedBedAtCrosshair();
-        ShowPlayerMessage($"Registre : lit #{bedData.Id} retiré du Registre.");
-        _log.LogInfo($"Registry player secondary action completed: removed designated bed #{bedData.Id}.");
-        return true;
+    public bool RemoveMarkedObjectAtCrosshair()
+    {
+        return _playerToolMarkingService.HandleSecondaryActionAtCrosshair();
     }
 
     public void RefreshAssignActionDescription()

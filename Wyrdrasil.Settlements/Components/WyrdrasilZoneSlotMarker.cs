@@ -70,7 +70,7 @@ public sealed class WyrdrasilZoneSlotMarker : MonoBehaviour
             var color = _isPendingForceAssignTarget
                 ? new Color(1f, 0.2f, 0.2f, 1f)
                 : _isOccupied
-                    ? new Color(0.35f, 1f, 0.35f, 1f)
+                    ? WyrdrasilVisualizationPalette.AssignedPurple
                     : SlotType == ZoneSlotType.Innkeeper
                         ? new Color(0.2f, 0.8f, 0.95f, 1f)
                         : new Color(0.95f, 0.95f, 0.35f, 1f);

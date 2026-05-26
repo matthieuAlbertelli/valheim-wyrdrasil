@@ -16,6 +16,7 @@ public sealed class RegistryModuleRuntime
     private readonly ConstructionProjectGhostService _constructionProjectGhostService;
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionLinkVisualService _constructionLinkVisualService;
+    private readonly RegistryCraftStationIntegrityService _craftStationIntegrityService;
     private readonly RegistryPlayerToolItemService _registryPlayerToolItemService;
     private readonly RegistryPlayerToolRuntimeService _registryPlayerToolRuntimeService;
     private readonly RegistryToolController _registryToolController;
@@ -29,6 +30,7 @@ public sealed class RegistryModuleRuntime
         ConstructionProjectGhostService constructionProjectGhostService,
         ConstructionProjectService constructionProjectService,
         ConstructionLinkVisualService constructionLinkVisualService,
+        RegistryCraftStationIntegrityService craftStationIntegrityService,
         RegistryPlayerToolItemService registryPlayerToolItemService,
         RegistryPlayerToolRuntimeService registryPlayerToolRuntimeService,
         RegistryToolController registryToolController)
@@ -41,6 +43,7 @@ public sealed class RegistryModuleRuntime
         _constructionProjectGhostService = constructionProjectGhostService;
         _constructionProjectService = constructionProjectService;
         _constructionLinkVisualService = constructionLinkVisualService;
+        _craftStationIntegrityService = craftStationIntegrityService;
         _registryPlayerToolItemService = registryPlayerToolItemService;
         _registryPlayerToolRuntimeService = registryPlayerToolRuntimeService;
         _registryToolController = registryToolController;
@@ -52,6 +55,7 @@ public sealed class RegistryModuleRuntime
         _registryPlayerToolItemService.Update();
         _registryPlayerToolRuntimeService.Update();
         _persistenceService.Update();
+        _craftStationIntegrityService.Update();
         _residentRoutineService.Update();
         _constructionProjectIntegrityService.Update();
         _constructionProjectProgressService.Update();

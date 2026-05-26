@@ -1,5 +1,5 @@
 using Wyrdrasil.Registry.Services;
-using Wyrdrasil.Settlements.Authoring;
+using Wyrdrasil.Registry.PlayerTool.WorldObjects;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Tool;
 
@@ -7,46 +7,34 @@ namespace Wyrdrasil.Registry.PlayerTool.Assignments;
 
 public sealed class RegistryPlayerToolBedAssignmentTargetHandler : IRegistryPlayerToolAssignmentTargetHandler
 {
-    private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
+    private readonly IRegistryPlayerToolWorldObjectTargetHandler _targetHandler;
     private readonly ResidentAssignmentService _assignmentService;
 
     public RegistryPlayerToolBedAssignmentTargetHandler(
-        ISettlementsAuthoringApi settlementsAuthoringApi,
+        IRegistryPlayerToolWorldObjectTargetHandler targetHandler,
         ResidentAssignmentService assignmentService)
     {
-        _settlementsAuthoringApi = settlementsAuthoringApi;
+        _targetHandler = targetHandler;
         _assignmentService = assignmentService;
     }
 
-    public string TargetKindDisplayName => "lit";
+    public string TargetKindDisplayName => _targetHandler.TargetKindDisplayName;
 
     public bool CanTargetAssignableObjectAtCrosshair()
     {
-        return RegistryPlayerToolAssignmentWorldTargeting.HasComponentAtCrosshair<Bed>();
+        return _targetHandler.CanTargetObjectAtCrosshair();
     }
 
     public bool TryResolveOrCreateTargetAtCrosshair(
-        out RegistryPlayerToolAssignmentTarget target,
+        out RegistryPlayerToolWorldObjectTarget target,
         out string failureReason)
     {
-        if (!_settlementsAuthoringApi.TryGetOrDesignateBedAtCrosshair(out var bedData, out failureReason))
-        {
-            target = null!;
-            return false;
-        }
-
-        target = new RegistryPlayerToolAssignmentTarget(
-            RegistryPlayerToolAssignmentTargetKind.Bed,
-            bedData.Id,
-            bedData.DisplayName,
-            bedData);
-        failureReason = string.Empty;
-        return true;
+        return _targetHandler.TryResolveOrCreateTargetAtCrosshair(out target, out failureReason);
     }
 
     public bool TryAssign(
         RegisteredNpcData resident,
-        RegistryPlayerToolAssignmentTarget target,
+        RegistryPlayerToolWorldObjectTarget target,
         out string playerMessage,
         out string logMessage)
     {

@@ -5,6 +5,9 @@ using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.PlayerTool;
 using Wyrdrasil.Registry.PlayerTool.Assignments;
+using Wyrdrasil.Registry.PlayerTool.Marking;
+using Wyrdrasil.Registry.PlayerTool.Inspection;
+using Wyrdrasil.Registry.PlayerTool.WorldObjects;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Services.Interactions;
 using Wyrdrasil.Registry.Services.Interactions.Modes;
@@ -24,6 +27,7 @@ public sealed class RegistryRuntimeBootstrap
         RegistryFlushService flushService,
         ConstructionDebugSessionService constructionDebugSessionService,
         ConstructionLinkVisualService constructionLinkVisualService,
+        RegistryCraftStationIntegrityService craftStationIntegrityService,
         RegistrySelectionFeedbackService selectionFeedbackService,
         RegistryRuntimeFeedbackService runtimeFeedbackService,
         RegistryConstructionPreviewInteractionService constructionPreviewInteractionService,
@@ -41,6 +45,7 @@ public sealed class RegistryRuntimeBootstrap
         FlushService = flushService;
         ConstructionDebugSessionService = constructionDebugSessionService;
         ConstructionLinkVisualService = constructionLinkVisualService;
+        CraftStationIntegrityService = craftStationIntegrityService;
         SelectionFeedbackService = selectionFeedbackService;
         RuntimeFeedbackService = runtimeFeedbackService;
         ConstructionPreviewInteractionService = constructionPreviewInteractionService;
@@ -59,6 +64,7 @@ public sealed class RegistryRuntimeBootstrap
     public RegistryFlushService FlushService { get; }
     public ConstructionDebugSessionService ConstructionDebugSessionService { get; }
     public ConstructionLinkVisualService ConstructionLinkVisualService { get; }
+    public RegistryCraftStationIntegrityService CraftStationIntegrityService { get; }
     public RegistrySelectionFeedbackService SelectionFeedbackService { get; }
     public RegistryRuntimeFeedbackService RuntimeFeedbackService { get; }
     public RegistryConstructionPreviewInteractionService ConstructionPreviewInteractionService { get; }
@@ -114,6 +120,13 @@ public sealed class RegistryRuntimeBootstrap
             residents.Services.ResidentService,
             persistenceService);
 
+        var craftStationIntegrityService = new RegistryCraftStationIntegrityService(
+            log,
+            settlements.Services.CraftStationService,
+            settlements.PersistenceParticipant,
+            residents.Services.ResidentService,
+            persistenceService);
+
         var selectionService = new ToolSelectionService(modeService.State);
         var constructionDebugSessionService = new ConstructionDebugSessionService();
         var registryPlayerToolBlueprintThumbnailService = new RegistryPlayerToolBlueprintThumbnailService(
@@ -130,6 +143,19 @@ public sealed class RegistryRuntimeBootstrap
             settlements.AuthoringApi,
             constructionBootstrap.ConstructionPlacementPreviewService,
             constructionDebugSessionService);
+        var registryPlayerToolWorldObjectHandlers = new IRegistryPlayerToolWorldObjectTargetHandler[]
+        {
+            new RegistryPlayerToolBedWorldObjectTargetHandler(
+                settlements.AuthoringApi,
+                deletionService),
+            new RegistryPlayerToolCraftStationWorldObjectTargetHandler(
+                settlements.AuthoringApi,
+                deletionService)
+        };
+        var registryPlayerToolMarkingService = new RegistryPlayerToolMarkingService(
+            log,
+            registryPlayerToolPieceTableService,
+            registryPlayerToolWorldObjectHandlers);
         var registryPlayerToolAssignmentService = new RegistryPlayerToolAssignmentService(
             log,
             residents.Services.ResidentService,
@@ -137,17 +163,17 @@ public sealed class RegistryRuntimeBootstrap
             new IRegistryPlayerToolAssignmentTargetHandler[]
             {
                 new RegistryPlayerToolBedAssignmentTargetHandler(
-                    settlements.AuthoringApi,
+                    registryPlayerToolWorldObjectHandlers[0],
                     residents.Services.ResidentAssignmentService),
                 new RegistryPlayerToolCraftStationAssignmentTargetHandler(
-                    settlements.AuthoringApi,
+                    registryPlayerToolWorldObjectHandlers[1],
                     residents.Services.ResidentAssignmentService)
             });
         var registryPlayerToolGameplayActionService = new RegistryPlayerToolGameplayActionService(
             log,
             settlements.AuthoringApi,
-            deletionService,
             residents.Services.ResidentService,
+            registryPlayerToolMarkingService,
             registryPlayerToolAssignmentService,
             constructionBootstrap.AuthoringApi,
             constructionDebugSessionService,
@@ -160,9 +186,16 @@ public sealed class RegistryRuntimeBootstrap
             constructionPreviewInteractionService);
         var registryPlayerToolTargetFeedbackService = new RegistryPlayerToolTargetFeedbackService(
             residents.Services.ResidentService);
+        var registryPlayerToolInspectionLinkService = new RegistryPlayerToolInspectionLinkService(
+            residents.RuntimeApi,
+            settlements.RuntimeApi,
+            constructionBootstrap.RuntimeApi);
         var registryPlayerToolInspectionRevealService = new RegistryPlayerToolInspectionRevealService(
             constructionBootstrap.ConstructionProjectMarkerService,
-            constructionBootstrap.ConstructionProjectGhostService);
+            constructionBootstrap.ConstructionProjectGhostService,
+            registryPlayerToolInspectionLinkService,
+            settlements.RuntimeApi,
+            residents.RuntimeApi);
         var registryPlayerToolRuntimeService = new RegistryPlayerToolRuntimeService(
             settlements.AuthoringApi,
             registryPlayerToolGameplayActionService,
@@ -261,6 +294,7 @@ public sealed class RegistryRuntimeBootstrap
             flushService,
             constructionDebugSessionService,
             constructionLinkVisualService,
+            craftStationIntegrityService,
             selectionFeedbackService,
             runtimeFeedbackService,
             constructionPreviewInteractionService,

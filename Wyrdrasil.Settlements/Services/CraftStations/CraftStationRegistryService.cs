@@ -60,7 +60,9 @@ public sealed class CraftStationRegistryService
 
     public RegisteredCraftStationData? FindCraftStationByFurniture(GameObject furnitureRoot)
     {
-        return _craftStations.FirstOrDefault(candidate => candidate.FurnitureRoot != null && candidate.FurnitureRoot == furnitureRoot);
+        return _craftStations.FirstOrDefault(candidate =>
+            candidate.FurnitureRoot != null &&
+            CraftStationRuntimeBindingResolver.RefersToSameFurniture(candidate.FurnitureRoot, furnitureRoot));
     }
 
     public RegisteredCraftStationData AddCraftStation(
@@ -86,7 +88,7 @@ public sealed class CraftStationRegistryService
             anchorLocalForward,
             interactionProfileId);
 
-        station.UpdateRuntimeBinding(furnitureRoot, craftingStation);
+        station.UpdateRuntimeBinding(furnitureRoot, craftingStation, referenceWorldPosition);
         _craftStations.Add(station);
         return station;
     }

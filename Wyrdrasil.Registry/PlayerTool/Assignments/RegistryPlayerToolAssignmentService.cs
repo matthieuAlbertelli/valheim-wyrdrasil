@@ -5,6 +5,7 @@ using BepInEx.Logging;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Souls.Tool;
 using Wyrdrasil.Registry.PlayerTool;
+using Wyrdrasil.Registry.PlayerTool.WorldObjects;
 
 namespace Wyrdrasil.Registry.PlayerTool.Assignments;
 
@@ -152,7 +153,7 @@ public sealed class RegistryPlayerToolAssignmentService
 
     private bool TryResolveAssignableTarget(
         out IRegistryPlayerToolAssignmentTargetHandler handler,
-        out RegistryPlayerToolAssignmentTarget target,
+        out RegistryPlayerToolWorldObjectTarget target,
         out string failureSummary)
     {
         var failureReasons = new List<string>();

@@ -85,14 +85,14 @@ public static class RegistryPlayerToolActionRouter
                 SaveIfPersistent(_gameplayActionService.CreateTavernZoneAtCrosshair(), "Délimiter taverne");
                 return true;
 
-            case RegistryPlayerToolConstants.DesignateBedActionPiecePrefabName:
+            case RegistryPlayerToolConstants.MarkActionPiecePrefabName:
                 if (_gameplayActionService == null)
                 {
-                    _log?.LogWarning("Registry player action router is not configured; bed designation action was consumed but not executed.");
+                    _log?.LogWarning("Registry player action router is not configured; mark action was consumed but not executed.");
                     return true;
                 }
 
-                SaveIfPersistent(_gameplayActionService.DesignateBedAtCrosshair(), "Marquer lit");
+                SaveIfPersistent(_gameplayActionService.MarkAtCrosshair(), "Marquer");
                 return true;
 
             case RegistryPlayerToolConstants.AssignActionPiecePrefabName:
@@ -154,8 +154,8 @@ public static class RegistryPlayerToolActionRouter
                 SaveIfPersistent(_gameplayActionService.KillTargetedRegisteredViking(), "Tuer viking enregistré");
                 return true;
 
-            case RegistryPlayerToolConstants.DesignateBedActionPiecePrefabName:
-                SaveIfPersistent(_gameplayActionService.RemoveDesignatedBedAtCrosshair(), "Retirer lit marqué");
+            case RegistryPlayerToolConstants.MarkActionPiecePrefabName:
+                SaveIfPersistent(_gameplayActionService.RemoveMarkedObjectAtCrosshair(), "Retirer objet marqué");
                 return true;
 
             case RegistryPlayerToolConstants.AssignActionPiecePrefabName:

@@ -22,9 +22,10 @@ public sealed class RegisteredCraftStationData
     public CraftingStation? CraftingStationComponent => _craftingStationComponent;
     public Interactable? Interactable => _interactable;
     public bool HasRuntimeBinding => _furnitureRoot != null && _craftingStationComponent != null && _interactable != null;
+    public bool HasAliveRuntimeObject => _furnitureRoot != null && _craftingStationComponent != null;
     public int? AssignedRegisteredNpcId { get; private set; }
     public InteractionAnchorPose AnchorPoseLocal => new(_anchorLocalPosition, _anchorLocalForward);
-    public Vector3 ReferenceWorldPosition => _furnitureRoot != null ? _furnitureRoot.transform.position : _referenceWorldPositionSnapshot;
+    public Vector3 ReferenceWorldPosition => _referenceWorldPositionSnapshot;
 
     public RegisteredCraftStationData(
         int id,
@@ -49,10 +50,15 @@ public sealed class RegisteredCraftStationData
 
     public void UpdateRuntimeBinding(GameObject furnitureRoot, CraftingStation craftingStationComponent)
     {
+        UpdateRuntimeBinding(furnitureRoot, craftingStationComponent, craftingStationComponent.transform.position);
+    }
+
+    public void UpdateRuntimeBinding(GameObject furnitureRoot, CraftingStation craftingStationComponent, Vector3 referenceWorldPosition)
+    {
         _furnitureRoot = furnitureRoot;
         _craftingStationComponent = craftingStationComponent;
         _interactable = craftingStationComponent as Interactable;
-        _referenceWorldPositionSnapshot = furnitureRoot.transform.position;
+        _referenceWorldPositionSnapshot = referenceWorldPosition;
     }
 
     public void ClearRuntimeBinding()

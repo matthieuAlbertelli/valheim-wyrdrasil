@@ -1,3 +1,4 @@
+using Wyrdrasil.Registry.PlayerTool.WorldObjects;
 using Wyrdrasil.Souls.Tool;
 
 namespace Wyrdrasil.Registry.PlayerTool.Assignments;
@@ -9,12 +10,12 @@ public interface IRegistryPlayerToolAssignmentTargetHandler
     bool CanTargetAssignableObjectAtCrosshair();
 
     bool TryResolveOrCreateTargetAtCrosshair(
-        out RegistryPlayerToolAssignmentTarget target,
+        out RegistryPlayerToolWorldObjectTarget target,
         out string failureReason);
 
     bool TryAssign(
         RegisteredNpcData resident,
-        RegistryPlayerToolAssignmentTarget target,
+        RegistryPlayerToolWorldObjectTarget target,
         out string playerMessage,
         out string logMessage);
 }

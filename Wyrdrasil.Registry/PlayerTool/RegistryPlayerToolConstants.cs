@@ -20,9 +20,13 @@ public static class RegistryPlayerToolConstants
     public const string CreateTavernZoneActionDisplayName = "Délimiter taverne";
     public const string CreateTavernZoneActionDescription = "Trace physiquement les limites d'une taverne.";
 
-    public const string DesignateBedActionPiecePrefabName = "Wyrdrasil_Action_DesignateBed";
-    public const string DesignateBedActionDisplayName = "Marquer lit";
-    public const string DesignateBedActionDescription = "Enregistre le lit visé comme lit assignable.";
+    public const string MarkActionPiecePrefabName = "Wyrdrasil_Action_Mark";
+    public const string MarkActionDisplayName = "Marquer";
+    public const string MarkActionDescription = "Enregistre automatiquement le lit, l'établi, la forge ou tout autre objet marquable visé.";
+
+    public const string DesignateBedActionPiecePrefabName = MarkActionPiecePrefabName;
+    public const string DesignateBedActionDisplayName = MarkActionDisplayName;
+    public const string DesignateBedActionDescription = MarkActionDescription;
 
     public const string AssignActionPiecePrefabName = "Wyrdrasil_Action_Assign";
     public const string AssignActionDisplayName = "Assigner";

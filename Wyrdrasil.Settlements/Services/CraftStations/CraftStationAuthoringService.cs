@@ -198,7 +198,8 @@ public sealed class CraftStationAuthoringService
 
     private RegisteredCraftStationData BuildResolvedCraftStation(RegisteredCraftStationSaveData saveData, CraftingStation runtimeStation, string persistentId)
     {
-        var profile = ResolveProfileForRestoredStation(saveData, runtimeStation.gameObject.name);
+        var furnitureRoot = CraftStationRuntimeBindingResolver.ResolveFurnitureRoot(runtimeStation);
+        var profile = ResolveProfileForRestoredStation(saveData, furnitureRoot.name);
         var craftStationData = new RegisteredCraftStationData(
             saveData.Id,
             saveData.BuildingId,
@@ -210,7 +211,7 @@ public sealed class CraftStationAuthoringService
             saveData.AnchorLocalForward.ToVector3(),
             profile.ProfileId);
 
-        craftStationData.UpdateRuntimeBinding(runtimeStation.gameObject, runtimeStation);
+        craftStationData.UpdateRuntimeBinding(furnitureRoot, runtimeStation, GetReferencePosition(runtimeStation));
         if (saveData.AssignedRegisteredNpcId.HasValue)
         {
             craftStationData.AssignRegisteredNpc(saveData.AssignedRegisteredNpcId.Value);
@@ -250,7 +251,7 @@ public sealed class CraftStationAuthoringService
                 var station = hitInfo.collider.GetComponentInParent<CraftingStation>();
                 if (station != null)
                 {
-                    furnitureRoot = station.gameObject;
+                    furnitureRoot = CraftStationRuntimeBindingResolver.ResolveFurnitureRoot(station);
                     craftingStation = station;
                     return true;
                 }

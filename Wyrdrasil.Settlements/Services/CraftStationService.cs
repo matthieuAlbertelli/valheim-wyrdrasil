@@ -3,7 +3,9 @@ using System.Linq;
 using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Core.Services;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Components;
+using Wyrdrasil.Settlements.Services.CraftStations;
 using Wyrdrasil.Settlements.Tool;
 
 namespace Wyrdrasil.Settlements.Services;
@@ -120,51 +122,87 @@ public sealed class CraftStationService
         return true;
     }
 
-    public bool TryResolveCraftStationFromSave(RegisteredCraftStationSaveData saveData, out RegisteredCraftStationData craftStationData)
+    public bool TryResolveCraftStationFromSave(RegisteredCraftStationSaveData saveData, out RegisteredCraftStationData craftStationData, bool logFailure = true)
     {
-        var referencePosition = saveData.ReferenceWorldPosition.ToVector3();
-        var allStations = Object.FindObjectsByType<CraftingStation>(FindObjectsSortMode.None);
-
-        var exactCandidates = allStations
-            .Select(station => new
-            {
-                Station = station,
-                PersistentId = BuildPersistentFurnitureId(station),
-                Distance = Vector3.Distance(GetReferencePosition(station), referencePosition)
-            })
-            .Where(candidate => candidate.PersistentId == saveData.PersistentFurnitureId)
-            .OrderBy(candidate => candidate.Distance)
-            .ToList();
-
-        if (exactCandidates.Count > 0)
+        if (TryFindRuntimeCraftStationForSave(saveData, out var runtimeStation, out var persistentId, out var distance, out var isExactMatch))
         {
-            var exactMatch = exactCandidates[0];
-            if (exactMatch.Distance <= ResolveStationDistance)
+            craftStationData = BuildResolvedCraftStation(saveData, runtimeStation, persistentId);
+            if (isExactMatch)
             {
-                craftStationData = BuildResolvedCraftStation(saveData, exactMatch.Station, exactMatch.PersistentId);
-                _log.LogInfo($"[CraftStation][Resolve] Restored station #{craftStationData.Id} with exact persistent match '{exactMatch.PersistentId}'.");
-                return true;
+                _log.LogInfo($"[CraftStation][Resolve] Restored station #{craftStationData.Id} with exact persistent match '{persistentId}'.");
             }
-        }
-
-        var fallbackStation = allStations
-            .OrderBy(station => Vector3.Distance(GetReferencePosition(station), referencePosition))
-            .FirstOrDefault();
-
-        if (fallbackStation != null)
-        {
-            var fallbackDistance = Vector3.Distance(GetReferencePosition(fallbackStation), referencePosition);
-            if (fallbackDistance <= ResolveStationDistance)
+            else
             {
-                craftStationData = BuildResolvedCraftStation(saveData, fallbackStation, BuildPersistentFurnitureId(fallbackStation));
-                _log.LogWarning($"[CraftStation][Resolve] Restored station #{craftStationData.Id} with fallback nearest-station resolution. distance={fallbackDistance:0.00}");
-                return true;
+                _log.LogWarning($"[CraftStation][Resolve] Restored station #{craftStationData.Id} with fallback nearest-station resolution. distance={distance:0.00}");
             }
+
+            return true;
         }
 
         craftStationData = null!;
-        _log.LogWarning($"[CraftStation][Resolve] Unable to resolve craft station #{saveData.Id} ('{saveData.DisplayName}') near {referencePosition}.");
+        if (logFailure)
+        {
+            var referencePosition = saveData.ReferenceWorldPosition.ToVector3();
+            _log.LogWarning($"[CraftStation][Resolve] Unable to resolve craft station #{saveData.Id} ('{saveData.DisplayName}') near {referencePosition}.");
+        }
+
         return false;
+    }
+
+    public bool CanResolveCraftStationFromSave(RegisteredCraftStationSaveData saveData)
+    {
+        return TryFindRuntimeCraftStationForSave(saveData, out _, out _, out _, out _);
+    }
+
+    public IReadOnlyList<int> PruneMissingRuntimeCraftStationsNear(Vector3 observerPosition, float maxDistance)
+    {
+        var deletedStationIds = new List<int>();
+        foreach (var station in _craftStations.ToList())
+        {
+            if (Vector3.Distance(station.ReferenceWorldPosition, observerPosition) > maxDistance)
+            {
+                continue;
+            }
+
+            if (station.HasAliveRuntimeObject)
+            {
+                continue;
+            }
+
+            var saveData = new RegisteredCraftStationSaveData
+            {
+                Id = station.Id,
+                BuildingId = station.BuildingId,
+                ZoneId = station.ZoneId,
+                DisplayName = station.DisplayName,
+                PersistentFurnitureId = station.PersistentFurnitureId,
+                AnchorLocalPosition = Float3SaveData.FromVector3(station.AnchorPoseLocal.LocalPosition),
+                AnchorLocalForward = Float3SaveData.FromVector3(station.AnchorPoseLocal.LocalForward),
+                InteractionProfileId = station.InteractionProfileId,
+                ReferenceWorldPosition = Float3SaveData.FromVector3(station.ReferenceWorldPosition),
+                AssignedRegisteredNpcId = station.AssignedRegisteredNpcId
+            };
+
+            if (TryResolveCraftStationFromSave(saveData, out var refreshedStation, logFailure: false))
+            {
+                station.UpdateRuntimeBinding(
+                    refreshedStation.FurnitureRoot!,
+                    refreshedStation.CraftingStationComponent!,
+                    refreshedStation.ReferenceWorldPosition);
+                EnsureMarker(station);
+                EnsureAnchorIndicator(station);
+                UpdateMarker(station);
+                UpdateAnchorIndicator(station);
+                continue;
+            }
+
+            if (DeleteCraftStation(station.Id))
+            {
+                deletedStationIds.Add(station.Id);
+            }
+        }
+
+        return deletedStationIds;
     }
 
     public void DesignateCraftStationAtCrosshair()
@@ -228,7 +266,7 @@ public sealed class CraftStationService
             profile.DefaultLocalAnchorForward,
             profile.ProfileId);
 
-        data.UpdateRuntimeBinding(furnitureRoot, craftingStation);
+        data.UpdateRuntimeBinding(furnitureRoot, craftingStation, referenceWorldPosition);
         _craftStations.Add(data);
         EnsureMarker(data);
         EnsureAnchorIndicator(data);
@@ -520,6 +558,64 @@ public sealed class CraftStationService
         return gameObject;
     }
 
+    private static bool TryFindRuntimeCraftStationForSave(
+        RegisteredCraftStationSaveData saveData,
+        out CraftingStation runtimeStation,
+        out string persistentId,
+        out float distance,
+        out bool isExactMatch)
+    {
+        var referencePosition = saveData.ReferenceWorldPosition.ToVector3();
+        var allStations = Object.FindObjectsByType<CraftingStation>(FindObjectsSortMode.None);
+
+        var exactCandidates = allStations
+            .Select(station => new
+            {
+                Station = station,
+                PersistentId = BuildPersistentFurnitureId(station),
+                Distance = Vector3.Distance(GetReferencePosition(station), referencePosition)
+            })
+            .Where(candidate => candidate.PersistentId == saveData.PersistentFurnitureId)
+            .OrderBy(candidate => candidate.Distance)
+            .ToList();
+
+        if (exactCandidates.Count > 0)
+        {
+            var exactMatch = exactCandidates[0];
+            if (exactMatch.Distance <= ResolveStationDistance)
+            {
+                runtimeStation = exactMatch.Station;
+                persistentId = exactMatch.PersistentId;
+                distance = exactMatch.Distance;
+                isExactMatch = true;
+                return true;
+            }
+        }
+
+        var fallbackStation = allStations
+            .OrderBy(station => Vector3.Distance(GetReferencePosition(station), referencePosition))
+            .FirstOrDefault();
+
+        if (fallbackStation != null)
+        {
+            var fallbackDistance = Vector3.Distance(GetReferencePosition(fallbackStation), referencePosition);
+            if (fallbackDistance <= ResolveStationDistance)
+            {
+                runtimeStation = fallbackStation;
+                persistentId = BuildPersistentFurnitureId(fallbackStation);
+                distance = fallbackDistance;
+                isExactMatch = false;
+                return true;
+            }
+        }
+
+        runtimeStation = null!;
+        persistentId = string.Empty;
+        distance = 0f;
+        isExactMatch = false;
+        return false;
+    }
+
     private RegisteredCraftStationData BuildResolvedCraftStation(RegisteredCraftStationSaveData saveData, CraftingStation runtimeStation, string persistentId)
     {
         var profile = ResolveProfileForRestoredStation(saveData, runtimeStation.gameObject.name);
@@ -534,7 +630,8 @@ public sealed class CraftStationService
             saveData.AnchorLocalForward.ToVector3(),
             profile.ProfileId);
 
-        craftStationData.UpdateRuntimeBinding(runtimeStation.gameObject, runtimeStation);
+        var furnitureRoot = CraftStationRuntimeBindingResolver.ResolveFurnitureRoot(runtimeStation);
+        craftStationData.UpdateRuntimeBinding(furnitureRoot, runtimeStation, GetReferencePosition(runtimeStation));
         if (saveData.AssignedRegisteredNpcId.HasValue)
         {
             craftStationData.AssignRegisteredNpc(saveData.AssignedRegisteredNpcId.Value);
@@ -569,7 +666,9 @@ public sealed class CraftStationService
 
     private RegisteredCraftStationData? FindCraftStationByFurniture(GameObject furnitureRoot)
     {
-        return _craftStations.FirstOrDefault(candidate => candidate.FurnitureRoot != null && candidate.FurnitureRoot == furnitureRoot);
+        return _craftStations.FirstOrDefault(candidate =>
+            candidate.FurnitureRoot != null &&
+            CraftStationRuntimeBindingResolver.RefersToSameFurniture(candidate.FurnitureRoot, furnitureRoot));
     }
 
     private static bool TryGetCraftStationAtCrosshair(out GameObject furnitureRoot, out CraftingStation craftingStation)
@@ -583,7 +682,7 @@ public sealed class CraftStationService
                 var station = hitInfo.collider.GetComponentInParent<CraftingStation>();
                 if (station != null)
                 {
-                    furnitureRoot = station.gameObject;
+                    furnitureRoot = CraftStationRuntimeBindingResolver.ResolveFurnitureRoot(station);
                     craftingStation = station;
                     return true;
                 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using BepInEx.Logging;
+using UnityEngine;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Tool;
@@ -234,6 +235,44 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
         _craftStationService.LoadCraftStations(resolvedCraftStations, saveData.NextCraftStationId);
     }
 
+    public IReadOnlyList<int> PruneUnresolvedCraftStationsNear(Vector3 observerPosition, float maxDistance)
+    {
+        if (_pendingCraftStationResolutions.Count == 0)
+        {
+            return Array.Empty<int>();
+        }
+
+        var prunedCraftStationIds = new List<int>();
+        var stillPendingCraftStations = new List<RegisteredCraftStationSaveData>();
+        foreach (var pendingCraftStation in _pendingCraftStationResolutions)
+        {
+            var referencePosition = pendingCraftStation.ReferenceWorldPosition.ToVector3();
+            if (Vector3.Distance(referencePosition, observerPosition) > maxDistance)
+            {
+                stillPendingCraftStations.Add(pendingCraftStation);
+                continue;
+            }
+
+            if (_craftStationService.CanResolveCraftStationFromSave(pendingCraftStation))
+            {
+                stillPendingCraftStations.Add(pendingCraftStation);
+                continue;
+            }
+
+            prunedCraftStationIds.Add(pendingCraftStation.Id);
+        }
+
+        if (prunedCraftStationIds.Count == 0)
+        {
+            return Array.Empty<int>();
+        }
+
+        _pendingCraftStationResolutions.Clear();
+        _pendingCraftStationResolutions.AddRange(stillPendingCraftStations);
+        _log.LogInfo($"[CraftStation][Integrity] Pruned {prunedCraftStationIds.Count} unresolved craft station designation(s) near the local player: {string.Join(", ", prunedCraftStationIds)}.");
+        return prunedCraftStationIds;
+    }
+
     public bool RetryDeferredResolutions()
     {
         var resolvedAny = false;
@@ -305,7 +344,7 @@ public sealed class SettlementsPersistenceParticipant : IWorldPersistencePartici
             var stillPendingCraftStations = new List<RegisteredCraftStationSaveData>();
             foreach (var pendingCraftStation in _pendingCraftStationResolutions)
             {
-                if (_craftStationService.TryResolveCraftStationFromSave(pendingCraftStation, out var craftStationData))
+                if (_craftStationService.TryResolveCraftStationFromSave(pendingCraftStation, out var craftStationData, logFailure: false))
                 {
                     resolvedCraftStationData.Add(craftStationData);
                 }

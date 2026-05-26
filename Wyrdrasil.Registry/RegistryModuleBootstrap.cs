@@ -33,6 +33,7 @@ public static class RegistryModuleBootstrap
         }
 
         WyrdrasilRegistryPlayerToolUpdateHoverPatchInstaller.Apply(harmony, log);
+        WyrdrasilWearNTearHighlightPatch.Apply(harmony, log);
     }
 
     private static bool HasHarmonyPatchAttribute(Type type)
@@ -66,6 +67,7 @@ public static class RegistryModuleBootstrap
             constructionBootstrap.ConstructionProjectGhostService,
             constructionBootstrap.ConstructionProjectService,
             runtimeBootstrap.ConstructionLinkVisualService,
+            runtimeBootstrap.CraftStationIntegrityService,
             runtimeBootstrap.RegistryPlayerToolItemService,
             runtimeBootstrap.RegistryPlayerToolRuntimeService,
             runtimeBootstrap.RegistryToolController);

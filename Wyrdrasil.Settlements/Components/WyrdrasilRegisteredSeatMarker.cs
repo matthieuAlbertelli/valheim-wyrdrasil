@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Wyrdrasil.Core.Tool;
 
 namespace Wyrdrasil.Settlements.Components;
 
@@ -115,7 +116,7 @@ public sealed class WyrdrasilRegisteredSeatMarker : MonoBehaviour
                 var glowColor = _isPendingForceAssignTarget
                     ? new Color(1f, 0.2f, 0.2f, 1f)
                     : _isAssigned
-                        ? new Color(0.25f, 1f, 0.35f, 1f)
+                        ? WyrdrasilVisualizationPalette.AssignedPurple
                         : new Color(0.2f, 0.95f, 1f, 1f);
 
                 if (material.HasProperty("_Color"))
