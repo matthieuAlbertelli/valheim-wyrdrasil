@@ -17,6 +17,8 @@ public sealed class ConstructionModuleBootstrap
         BlueprintCatalogService blueprintCatalogService,
         ConstructionBlueprintCaptureService constructionBlueprintCaptureService,
         ConstructionPlacementService constructionPlacementService,
+        ConstructionProjectPlacementCacheService constructionProjectPlacementCacheService,
+        ConstructionWorldPieceIndexService constructionWorldPieceIndexService,
         ConstructionPlacementPreviewService constructionPlacementPreviewService,
         ConstructionOrderService constructionOrderService,
         ConstructionWorkPostGenerationService constructionWorkPostGenerationService,
@@ -42,6 +44,8 @@ public sealed class ConstructionModuleBootstrap
         BlueprintCatalogService = blueprintCatalogService;
         ConstructionBlueprintCaptureService = constructionBlueprintCaptureService;
         ConstructionPlacementService = constructionPlacementService;
+        ConstructionProjectPlacementCacheService = constructionProjectPlacementCacheService;
+        ConstructionWorldPieceIndexService = constructionWorldPieceIndexService;
         ConstructionPlacementPreviewService = constructionPlacementPreviewService;
         ConstructionOrderService = constructionOrderService;
         ConstructionWorkPostGenerationService = constructionWorkPostGenerationService;
@@ -68,6 +72,8 @@ public sealed class ConstructionModuleBootstrap
     public BlueprintCatalogService BlueprintCatalogService { get; }
     public ConstructionBlueprintCaptureService ConstructionBlueprintCaptureService { get; }
     public ConstructionPlacementService ConstructionPlacementService { get; }
+    public ConstructionProjectPlacementCacheService ConstructionProjectPlacementCacheService { get; }
+    public ConstructionWorldPieceIndexService ConstructionWorldPieceIndexService { get; }
     public ConstructionPlacementPreviewService ConstructionPlacementPreviewService { get; }
     public ConstructionOrderService ConstructionOrderService { get; }
     public ConstructionWorkPostGenerationService ConstructionWorkPostGenerationService { get; }
@@ -95,6 +101,8 @@ public sealed class ConstructionModuleBootstrap
         var blueprintCatalogService = new BlueprintCatalogService();
         var constructionBlueprintCaptureService = new ConstructionBlueprintCaptureService();
         var constructionPlacementService = new ConstructionPlacementService(debugLogService);
+        var constructionProjectPlacementCacheService = new ConstructionProjectPlacementCacheService(constructionPlacementService);
+        var constructionWorldPieceIndexService = new ConstructionWorldPieceIndexService();
         var constructionOrderService = new ConstructionOrderService();
         var constructionWorkPostGenerationService = new ConstructionWorkPostGenerationService();
         var constructionProjectService = new ConstructionProjectService(debugLogService, constructionWorkPostGenerationService);
@@ -113,12 +121,15 @@ public sealed class ConstructionModuleBootstrap
             constructionProjectService);
         var constructionProjectIntegrityService = new ConstructionProjectIntegrityService(
             blueprintCatalogService,
+            constructionProjectPlacementCacheService,
+            constructionWorldPieceIndexService,
             constructionProjectService,
             debugLogService);
         var constructionGameTimeService = new ConstructionGameTimeService();
         var constructionPieceBuildService = new ConstructionPieceBuildService(
             blueprintCatalogService,
-            constructionPlacementService,
+            constructionProjectPlacementCacheService,
+            constructionWorldPieceIndexService,
             constructionProjectService,
             constructionPieceBuildOrderService,
             debugLogService);
@@ -154,6 +165,8 @@ public sealed class ConstructionModuleBootstrap
             blueprintCatalogService,
             constructionBlueprintCaptureService,
             constructionPlacementService,
+            constructionProjectPlacementCacheService,
+            constructionWorldPieceIndexService,
             constructionPlacementPreviewService,
             constructionOrderService,
             constructionWorkPostGenerationService,

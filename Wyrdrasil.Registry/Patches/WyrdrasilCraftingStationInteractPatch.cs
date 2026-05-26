@@ -1,4 +1,4 @@
-﻿using HarmonyLib;
+using HarmonyLib;
 using UnityEngine;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Diagnostics;
@@ -10,7 +10,7 @@ public static class WyrdrasilCraftingStationInteractPatch
 {
     private static void Prefix(CraftingStation __instance, Humanoid user, bool repeat, bool alt)
     {
-        if (user == null || user != Player.m_localPlayer)
+        if (!WyrdrasilCraftDebug.IsEnabled || user == null || user != Player.m_localPlayer)
         {
             return;
         }
@@ -34,7 +34,7 @@ public static class WyrdrasilCraftingStationInteractPatch
 
     private static void Postfix(CraftingStation __instance, Humanoid user, bool repeat, bool alt, bool __result)
     {
-        if (user == null || user != Player.m_localPlayer)
+        if (!WyrdrasilCraftDebug.IsEnabled || user == null || user != Player.m_localPlayer)
         {
             return;
         }

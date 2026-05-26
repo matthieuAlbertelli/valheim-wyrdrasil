@@ -10,24 +10,27 @@ namespace Wyrdrasil.Construction.Services;
 public sealed class ConstructionProjectIntegrityService
 {
     private const float CheckIntervalSeconds = 1.0f;
-    private const int MaxBuiltPieceChecksPerProjectTick = 32;
-    private const int MaxWorldObjectLookupsPerIntegrityTick = 1;
-    private const int MaxMissingPieceIdsInLog = 8;
+    private const int MaxPieceChecksPerProjectTick = 32;
+    private const int MaxPieceIdsInLog = 8;
 
     private readonly BlueprintCatalogService _blueprintCatalogService;
+    private readonly ConstructionProjectPlacementCacheService _projectPlacementCacheService;
+    private readonly ConstructionWorldPieceIndexService _worldPieceIndexService;
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionDebugLogService _debugLogService;
     private readonly Dictionary<int, int> _nextPieceProgressIndexByProjectId = new();
-    private readonly Dictionary<string, GameObject> _worldObjectCacheByName = new();
-    private int _remainingWorldObjectLookupsThisTick;
     private float _nextCheckTime;
 
     public ConstructionProjectIntegrityService(
         BlueprintCatalogService blueprintCatalogService,
+        ConstructionProjectPlacementCacheService projectPlacementCacheService,
+        ConstructionWorldPieceIndexService worldPieceIndexService,
         ConstructionProjectService constructionProjectService,
         ConstructionDebugLogService debugLogService)
     {
         _blueprintCatalogService = blueprintCatalogService;
+        _projectPlacementCacheService = projectPlacementCacheService;
+        _worldPieceIndexService = worldPieceIndexService;
         _constructionProjectService = constructionProjectService;
         _debugLogService = debugLogService;
     }
@@ -42,7 +45,6 @@ public sealed class ConstructionProjectIntegrityService
             }
 
             _nextCheckTime = Time.time + CheckIntervalSeconds;
-            _remainingWorldObjectLookupsThisTick = MaxWorldObjectLookupsPerIntegrityTick;
 
             foreach (var project in _constructionProjectService.Projects.ToList())
             {
@@ -67,13 +69,20 @@ public sealed class ConstructionProjectIntegrityService
                 return;
             }
 
-            var pieceById = blueprint.Pieces.ToDictionary(candidate => candidate.PieceId);
+            if (!_projectPlacementCacheService.TryGetResolvedPlacements(project, blueprint, out var cachedPlacements, out var failureReason))
+            {
+                _debugLogService.Warning("Integrity", $"Could not resolve placements for construction project {project.Id}: {failureReason}");
+                return;
+            }
+
+            var worldPieceIndex = _worldPieceIndexService.GetOrBuildProjectIndex(project, cachedPlacements.Placements);
             var checkedPieceCount = 0;
             var changedMissingPieceIds = new List<int>();
+            var adoptedPieceIds = new List<int>();
             var startIndex = GetStartIndex(project);
             var index = startIndex;
 
-            while (checkedPieceCount < project.Progress.Pieces.Count && checkedPieceCount < MaxBuiltPieceChecksPerProjectTick)
+            while (checkedPieceCount < project.Progress.Pieces.Count && checkedPieceCount < MaxPieceChecksPerProjectTick)
             {
                 if (index >= project.Progress.Pieces.Count)
                 {
@@ -84,43 +93,51 @@ public sealed class ConstructionProjectIntegrityService
                 index++;
                 checkedPieceCount++;
 
+                if (!cachedPlacements.PlacementsByPieceId.TryGetValue(pieceProgress.PieceId, out var placement))
+                {
+                    continue;
+                }
+
+                if (worldPieceIndex.TryFindMatchingPiece(placement, out var match))
+                {
+                    if (pieceProgress.State != ConstructionPieceBuildState.Built)
+                    {
+                        using (WyrdrasilProfiler.Sample("Construction.Integrity.AdoptExistingPiece"))
+                        {
+                            if (!_worldPieceIndexService.AdoptExistingPiece(project, placement, match))
+                            {
+                                continue;
+                            }
+
+                            if (_constructionProjectService.TryMarkPieceBuilt(
+                                    project.Id,
+                                    pieceProgress.PieceId,
+                                    match.WorldObjectName,
+                                    ConstructionPieceStabilityLevel.Acceptable,
+                                    out _,
+                                    out _))
+                            {
+                                adoptedPieceIds.Add(pieceProgress.PieceId);
+                            }
+                        }
+                    }
+
+                    continue;
+                }
+
                 if (pieceProgress.State != ConstructionPieceBuildState.Built)
                 {
                     continue;
                 }
 
-                if (!pieceById.TryGetValue(pieceProgress.PieceId, out var piece))
+                if (_constructionProjectService.TryMarkPieceMissing(project.Id, pieceProgress.PieceId, out var changed) && changed)
                 {
-                    continue;
-                }
-
-                var expectedName = string.IsNullOrWhiteSpace(pieceProgress.LinkedWorldObjectName)
-                    ? _constructionProjectService.GetExpectedBuiltPieceObjectName(project.Id, piece.PieceId, piece.PrefabName)
-                    : pieceProgress.LinkedWorldObjectName;
-
-                if (string.IsNullOrWhiteSpace(expectedName))
-                {
-                    continue;
-                }
-
-                if (TryWorldObjectStillExists(expectedName, out var exists, out var deferred) && exists)
-                {
-                    continue;
-                }
-
-                if (deferred)
-                {
-                    continue;
-                }
-
-                if (_constructionProjectService.TryMarkPieceMissing(project.Id, piece.PieceId, out var changed) && changed)
-                {
-                    changedMissingPieceIds.Add(piece.PieceId);
+                    changedMissingPieceIds.Add(pieceProgress.PieceId);
                 }
             }
 
             _nextPieceProgressIndexByProjectId[project.Id] = index >= project.Progress.Pieces.Count ? 0 : index;
-            LogMissingPiecesIfNeeded(project.Id, changedMissingPieceIds);
+            LogPieceChangesIfNeeded(project.Id, changedMissingPieceIds, adoptedPieceIds);
         }
     }
 
@@ -139,55 +156,27 @@ public sealed class ConstructionProjectIntegrityService
         return startIndex;
     }
 
-    private bool TryWorldObjectStillExists(string expectedName, out bool exists, out bool deferred)
+    private void LogPieceChangesIfNeeded(
+        int projectId,
+        IReadOnlyList<int> changedMissingPieceIds,
+        IReadOnlyList<int> adoptedPieceIds)
     {
-        deferred = false;
-
-        if (_worldObjectCacheByName.TryGetValue(expectedName, out var cachedObject))
+        if (changedMissingPieceIds.Count > 0)
         {
-            if (cachedObject != null)
-            {
-                exists = true;
-                return true;
-            }
-
-            _worldObjectCacheByName.Remove(expectedName);
+            var visibleIds = string.Join(", ", changedMissingPieceIds.Take(MaxPieceIdsInLog));
+            var suffix = changedMissingPieceIds.Count > MaxPieceIdsInLog ? ", ..." : string.Empty;
+            _debugLogService.Info(
+                "Integrity",
+                $"Project {projectId} detected {changedMissingPieceIds.Count} missing built piece(s) from the native piece graph. Returned to construction queue: {visibleIds}{suffix}.");
         }
 
-        if (_remainingWorldObjectLookupsThisTick <= 0)
+        if (adoptedPieceIds.Count > 0)
         {
-            exists = false;
-            deferred = true;
-            return false;
+            var visibleIds = string.Join(", ", adoptedPieceIds.Take(MaxPieceIdsInLog));
+            var suffix = adoptedPieceIds.Count > MaxPieceIdsInLog ? ", ..." : string.Empty;
+            _debugLogService.Info(
+                "Integrity",
+                $"Project {projectId} adopted {adoptedPieceIds.Count} existing native piece(s) matching the blueprint: {visibleIds}{suffix}.");
         }
-
-        _remainingWorldObjectLookupsThisTick--;
-        using (WyrdrasilProfiler.Sample("Construction.Integrity.FindWorldObject"))
-        {
-            var foundObject = GameObject.Find(expectedName);
-            if (foundObject != null)
-            {
-                _worldObjectCacheByName[expectedName] = foundObject;
-                exists = true;
-                return true;
-            }
-        }
-
-        exists = false;
-        return true;
-    }
-
-    private void LogMissingPiecesIfNeeded(int projectId, IReadOnlyList<int> changedMissingPieceIds)
-    {
-        if (changedMissingPieceIds.Count == 0)
-        {
-            return;
-        }
-
-        var visibleIds = string.Join(", ", changedMissingPieceIds.Take(MaxMissingPieceIdsInLog));
-        var suffix = changedMissingPieceIds.Count > MaxMissingPieceIdsInLog ? ", ..." : string.Empty;
-        _debugLogService.Info(
-            "Integrity",
-            $"Project {projectId} detected {changedMissingPieceIds.Count} missing built piece(s) during this integrity tick. Returned to construction queue: {visibleIds}{suffix}.");
     }
 }

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using Object = UnityEngine.Object;
 using Wyrdrasil.Construction.Diagnostics;
@@ -10,21 +9,23 @@ namespace Wyrdrasil.Construction.Services;
 public sealed class ConstructionPieceBuildService
 {
     private readonly BlueprintCatalogService _blueprintCatalogService;
-    private readonly ConstructionPlacementService _constructionPlacementService;
+    private readonly ConstructionProjectPlacementCacheService _projectPlacementCacheService;
+    private readonly ConstructionWorldPieceIndexService _worldPieceIndexService;
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly ConstructionPieceBuildOrderService _constructionPieceBuildOrderService;
     private readonly ConstructionDebugLogService _debugLogService;
-    private readonly Dictionary<int, CachedProjectPlacements> _placementCacheByProjectId = new();
 
     public ConstructionPieceBuildService(
         BlueprintCatalogService blueprintCatalogService,
-        ConstructionPlacementService constructionPlacementService,
+        ConstructionProjectPlacementCacheService projectPlacementCacheService,
+        ConstructionWorldPieceIndexService worldPieceIndexService,
         ConstructionProjectService constructionProjectService,
         ConstructionPieceBuildOrderService constructionPieceBuildOrderService,
         ConstructionDebugLogService debugLogService)
     {
         _blueprintCatalogService = blueprintCatalogService;
-        _constructionPlacementService = constructionPlacementService;
+        _projectPlacementCacheService = projectPlacementCacheService;
+        _worldPieceIndexService = worldPieceIndexService;
         _constructionProjectService = constructionProjectService;
         _constructionPieceBuildOrderService = constructionPieceBuildOrderService;
         _debugLogService = debugLogService;
@@ -68,10 +69,12 @@ public sealed class ConstructionPieceBuildService
                     return false;
                 }
 
-                if (!TryGetResolvedPlacements(project, blueprint, out var cachedPlacements, out failureReason))
+                if (!_projectPlacementCacheService.TryGetResolvedPlacements(project, blueprint, out var cachedPlacements, out failureReason))
                 {
                     return false;
                 }
+
+                var worldPieceIndex = _worldPieceIndexService.GetOrBuildProjectIndex(project, cachedPlacements.Placements);
 
                 using (WyrdrasilProfiler.Sample("Construction.Build.SelectNextBuildablePiece"))
                 {
@@ -81,11 +84,43 @@ public sealed class ConstructionPieceBuildService
                             cachedPlacements.Placements,
                             cachedPlacements.PlacementsByPieceId,
                             cachedPlacements.LowestLocalY,
+                            worldPieceIndex,
                             out var placement,
                             out var probeResult,
                             out failureReason))
                     {
                         return false;
+                    }
+
+                    pieceId = placement.PieceId;
+                    if (worldPieceIndex.TryFindMatchingPiece(placement, out var existingMatch))
+                    {
+                        using (WyrdrasilProfiler.Sample("Construction.Build.AdoptExistingPiece"))
+                        {
+                            if (!_worldPieceIndexService.AdoptExistingPiece(project, placement, existingMatch))
+                            {
+                                failureReason = $"Existing piece {pieceId} for construction project {projectId} is already claimed by another construction project.";
+                                return false;
+                            }
+
+                            if (!_constructionProjectService.TryMarkPieceBuilt(
+                                    projectId,
+                                    pieceId,
+                                    existingMatch.WorldObjectName,
+                                    probeResult.Level,
+                                    out builtPieceCount,
+                                    out isCompleted))
+                            {
+                                failureReason = $"Could not adopt existing piece {pieceId} for construction project {projectId}.";
+                                return false;
+                            }
+                        }
+
+                        failureReason = string.Empty;
+                        _debugLogService.Verbose(
+                            "Build",
+                            $"Adopted existing world piece '{existingMatch.WorldObjectName}' as construction project {projectId} piece {pieceId}. Stability={probeResult.Level}. Reason={probeResult.Reason}");
+                        return true;
                     }
 
                     GameObject instance;
@@ -96,8 +131,8 @@ public sealed class ConstructionPieceBuildService
 
                     var worldObjectName = _constructionProjectService.GetExpectedBuiltPieceObjectName(projectId, placement.PieceId, placement.PrefabName);
                     instance.name = worldObjectName;
+                    _worldPieceIndexService.RegisterBuiltPiece(project, placement, instance);
 
-                    pieceId = placement.PieceId;
                     using (WyrdrasilProfiler.Sample("Construction.Build.MarkPieceBuilt"))
                     {
                         if (!_constructionProjectService.TryMarkPieceBuilt(
@@ -126,127 +161,5 @@ public sealed class ConstructionPieceBuildService
     public bool TryBuildNextPiece(int projectId, out int pieceId, out string failureReason)
     {
         return TryBuildNextPiece(projectId, out pieceId, out _, out _, out failureReason);
-    }
-
-    private bool TryGetResolvedPlacements(
-        ConstructionProjectData project,
-        StructureBlueprintData blueprint,
-        out CachedProjectPlacements cachedPlacements,
-        out string failureReason)
-    {
-        using (WyrdrasilProfiler.Sample("Construction.Build.ResolveBlueprintPlacements"))
-        {
-            if (_placementCacheByProjectId.TryGetValue(project.Id, out cachedPlacements) &&
-                cachedPlacements.Matches(project, blueprint))
-            {
-                failureReason = string.Empty;
-                return true;
-            }
-
-            if (!_constructionPlacementService.TryResolveBlueprintPlacements(
-                    blueprint,
-                    project.OriginPosition,
-                    project.OriginRotation,
-                    out var placements,
-                    out failureReason))
-            {
-                _placementCacheByProjectId.Remove(project.Id);
-                cachedPlacements = CachedProjectPlacements.Empty;
-                return false;
-            }
-
-            cachedPlacements = CachedProjectPlacements.Create(project, blueprint, placements);
-            _placementCacheByProjectId[project.Id] = cachedPlacements;
-            failureReason = string.Empty;
-            return true;
-        }
-    }
-
-    private sealed class CachedProjectPlacements
-    {
-        public static readonly CachedProjectPlacements Empty = new(
-            0,
-            string.Empty,
-            0,
-            Vector3.zero,
-            Quaternion.identity,
-            new List<ConstructionResolvedPiecePlacement>(),
-            new Dictionary<int, ConstructionResolvedPiecePlacement>(),
-            0f);
-
-        private readonly int _projectId;
-        private readonly string _blueprintId;
-        private readonly int _blueprintPieceCount;
-        private readonly Vector3 _originPosition;
-        private readonly Quaternion _originRotation;
-
-        private CachedProjectPlacements(
-            int projectId,
-            string blueprintId,
-            int blueprintPieceCount,
-            Vector3 originPosition,
-            Quaternion originRotation,
-            IReadOnlyList<ConstructionResolvedPiecePlacement> placements,
-            IReadOnlyDictionary<int, ConstructionResolvedPiecePlacement> placementsByPieceId,
-            float lowestLocalY)
-        {
-            _projectId = projectId;
-            _blueprintId = blueprintId;
-            _blueprintPieceCount = blueprintPieceCount;
-            _originPosition = originPosition;
-            _originRotation = originRotation;
-            Placements = placements;
-            PlacementsByPieceId = placementsByPieceId;
-            LowestLocalY = lowestLocalY;
-        }
-
-        public IReadOnlyList<ConstructionResolvedPiecePlacement> Placements { get; }
-        public IReadOnlyDictionary<int, ConstructionResolvedPiecePlacement> PlacementsByPieceId { get; }
-        public float LowestLocalY { get; }
-
-        public static CachedProjectPlacements Create(
-            ConstructionProjectData project,
-            StructureBlueprintData blueprint,
-            IReadOnlyList<ConstructionResolvedPiecePlacement> placements)
-        {
-            var placementsByPieceId = new Dictionary<int, ConstructionResolvedPiecePlacement>();
-            foreach (var placement in placements)
-            {
-                placementsByPieceId[placement.PieceId] = placement;
-            }
-
-            var lowestLocalY = 0f;
-            if (blueprint.Pieces.Count > 0)
-            {
-                lowestLocalY = blueprint.Pieces[0].LocalPosition.y;
-                for (var index = 1; index < blueprint.Pieces.Count; index++)
-                {
-                    var y = blueprint.Pieces[index].LocalPosition.y;
-                    if (y < lowestLocalY)
-                    {
-                        lowestLocalY = y;
-                    }
-                }
-            }
-
-            return new CachedProjectPlacements(
-                project.Id,
-                project.BlueprintId,
-                blueprint.Pieces.Count,
-                project.OriginPosition,
-                project.OriginRotation,
-                new List<ConstructionResolvedPiecePlacement>(placements),
-                placementsByPieceId,
-                lowestLocalY);
-        }
-
-        public bool Matches(ConstructionProjectData project, StructureBlueprintData blueprint)
-        {
-            return _projectId == project.Id &&
-                   _blueprintId == project.BlueprintId &&
-                   _blueprintPieceCount == blueprint.Pieces.Count &&
-                   _originPosition == project.OriginPosition &&
-                   _originRotation == project.OriginRotation;
-        }
     }
 }

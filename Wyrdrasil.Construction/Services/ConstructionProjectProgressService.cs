@@ -42,25 +42,32 @@ public sealed class ConstructionProjectProgressService
     {
         using (WyrdrasilProfiler.Sample("Construction.Progress.Update"))
         {
-            var deltaGameHours = ConsumeDeltaGameHours();
-            if (deltaGameHours <= 0f)
-            {
-                MaybeReportProfiler();
-                return;
-            }
-
-            var activeProjects = GetActiveProjects();
-            if (activeProjects.Count == 0)
-            {
-                _nextBuildProjectIndex = 0;
-                MaybeReportProfiler();
-                return;
-            }
-
-            AccumulateWorkerProgress(activeProjects, deltaGameHours);
-            BuildReadyPiecesWithinFrameBudget(activeProjects);
-            MaybeReportProfiler();
+            UpdateProgress();
         }
+
+        // Keep profiler reporting outside the measured construction update scope.
+        // Writing a BepInEx log line can itself stall the main thread and would otherwise
+        // show up as a false Construction.Progress.Update spike.
+        MaybeReportProfiler();
+    }
+
+    private void UpdateProgress()
+    {
+        var deltaGameHours = ConsumeDeltaGameHours();
+        if (deltaGameHours <= 0f)
+        {
+            return;
+        }
+
+        var activeProjects = GetActiveProjects();
+        if (activeProjects.Count == 0)
+        {
+            _nextBuildProjectIndex = 0;
+            return;
+        }
+
+        AccumulateWorkerProgress(activeProjects, deltaGameHours);
+        BuildReadyPiecesWithinFrameBudget(activeProjects);
     }
 
     private float ConsumeDeltaGameHours()

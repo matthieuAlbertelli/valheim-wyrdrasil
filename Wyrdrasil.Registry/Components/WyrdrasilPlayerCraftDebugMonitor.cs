@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using Wyrdrasil.Registry.Diagnostics;
 
 namespace Wyrdrasil.Registry.Components;
@@ -15,7 +15,7 @@ public sealed class WyrdrasilPlayerCraftDebugMonitor : MonoBehaviour
 
     public static WyrdrasilPlayerCraftDebugMonitor? EnsureAttached(Player? player)
     {
-        if (player == null)
+        if (!WyrdrasilCraftDebug.IsEnabled || player == null)
         {
             return null;
         }
@@ -31,6 +31,11 @@ public sealed class WyrdrasilPlayerCraftDebugMonitor : MonoBehaviour
 
     public void BeginTrace(string label, int frames)
     {
+        if (!WyrdrasilCraftDebug.IsEnabled)
+        {
+            return;
+        }
+
         _traceLabel = label;
         _traceFramesRemaining = Mathf.Max(_traceFramesRemaining, frames);
         _traceTickCounter = 0;
@@ -52,6 +57,12 @@ public sealed class WyrdrasilPlayerCraftDebugMonitor : MonoBehaviour
 
     private void Update()
     {
+        if (!WyrdrasilCraftDebug.IsEnabled)
+        {
+            Destroy(this);
+            return;
+        }
+
         if (!TryGetLocalPlayer(out var player) || player.gameObject != gameObject)
         {
             Destroy(this);

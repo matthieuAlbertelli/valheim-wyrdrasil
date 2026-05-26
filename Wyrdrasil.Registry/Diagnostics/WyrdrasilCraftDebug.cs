@@ -1,13 +1,16 @@
-﻿using System.Linq;
+using System;
+using System.Linq;
 using UnityEngine;
 
 namespace Wyrdrasil.Registry.Diagnostics;
 
 public static class WyrdrasilCraftDebug
 {
-    public static bool Enabled = true;
+    public static bool Enabled = false;
 
-    public static void Log(Object? source, string message)
+    public static bool IsEnabled => Enabled;
+
+    public static void Log(UnityEngine.Object? source, string message)
     {
         if (!Enabled)
         {
@@ -16,6 +19,16 @@ public static class WyrdrasilCraftDebug
 
         var sourceName = source == null ? "null" : source.name;
         Debug.Log($"[Wyrdrasil.Registry][CraftDebug][frame={Time.frameCount}] {sourceName} :: {message}");
+    }
+
+    public static void LogLazy(UnityEngine.Object? source, Func<string> messageFactory)
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        Log(source, messageFactory());
     }
 
     public static void LogAnimatorSnapshot(Player? player, string reason, bool detailed = false)

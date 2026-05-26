@@ -1,12 +1,15 @@
+using System;
 using UnityEngine;
 
 namespace Wyrdrasil.Registry.Diagnostics;
 
 public static class WyrdrasilSeatDebug
 {
-    public static bool Enabled = true;
+    public static bool Enabled = false;
 
-    public static void Log(Object? source, string message)
+    public static bool IsEnabled => Enabled;
+
+    public static void Log(UnityEngine.Object? source, string message)
     {
         if (!Enabled)
         {
@@ -15,5 +18,15 @@ public static class WyrdrasilSeatDebug
 
         var sourceName = source == null ? "null" : source.name;
         Debug.Log($"[Wyrdrasil.Registry][SeatDebug][frame={Time.frameCount}] {sourceName} :: {message}");
+    }
+
+    public static void LogLazy(UnityEngine.Object? source, Func<string> messageFactory)
+    {
+        if (!Enabled)
+        {
+            return;
+        }
+
+        Log(source, messageFactory());
     }
 }

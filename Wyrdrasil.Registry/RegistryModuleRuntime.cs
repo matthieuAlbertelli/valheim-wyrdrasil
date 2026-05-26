@@ -1,6 +1,7 @@
 using Wyrdrasil.Construction.Services;
 using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Controllers;
+using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Registry.PlayerTool;
 using Wyrdrasil.Registry.Services;
 
@@ -51,7 +52,11 @@ public sealed class RegistryModuleRuntime
 
     public void Update()
     {
-        WyrdrasilPlayerCraftDebugMonitor.EnsureAttached(Player.m_localPlayer);
+        if (WyrdrasilCraftDebug.IsEnabled)
+        {
+            WyrdrasilPlayerCraftDebugMonitor.EnsureAttached(Player.m_localPlayer);
+        }
+
         _registryPlayerToolItemService.Update();
         _registryPlayerToolRuntimeService.Update();
         _persistenceService.Update();

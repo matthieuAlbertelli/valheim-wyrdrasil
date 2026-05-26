@@ -42,12 +42,17 @@ public sealed class ConstructionPieceBuildOrderService
             lowestLocalY = blueprint.Pieces.Min(candidate => candidate.LocalPosition.y);
         }
 
+        var worldPieceIndex = ConstructionWorldPieceIndexService.ProjectWorldPieceIndex.Create(
+            project.Id,
+            new List<ConstructionWorldPieceIndexService.ConstructionWorldPieceNode>());
+
         return TrySelectNextBuildablePiece(
             project,
             blueprint,
             placements,
             placementsByPieceId,
             lowestLocalY,
+            worldPieceIndex,
             out selectedPlacement,
             out selectedProbeResult,
             out failureReason);
@@ -59,6 +64,7 @@ public sealed class ConstructionPieceBuildOrderService
         IReadOnlyList<ConstructionResolvedPiecePlacement> placements,
         IReadOnlyDictionary<int, ConstructionResolvedPiecePlacement> placementsByPieceId,
         float lowestLocalY,
+        ConstructionWorldPieceIndexService.ProjectWorldPieceIndex worldPieceIndex,
         out ConstructionResolvedPiecePlacement selectedPlacement,
         out ConstructionStabilityProbeResult selectedProbeResult,
         out string failureReason)
@@ -114,7 +120,18 @@ public sealed class ConstructionPieceBuildOrderService
                 continue;
             }
 
-            if (!IsOnConstructionFrontier(piece, placement, lowestLocalY, builtPieceIds, builtFrontierIndex))
+            if (worldPieceIndex.IsPlacementClaimedByOtherProjectPiece(placement))
+            {
+                SetPieceStateIfChanged(
+                    project,
+                    progress,
+                    ConstructionPieceBuildState.Blocked,
+                    ConstructionPieceStabilityLevel.Unsupported);
+                continue;
+            }
+
+            var hasNativeSupport = worldPieceIndex.HasNativeConnectionNear(placement, builtPieceIds, placementsByPieceId);
+            if (!IsOnConstructionFrontier(piece, placement, lowestLocalY, builtPieceIds, builtFrontierIndex, hasNativeSupport))
             {
                 SetPieceStateIfChanged(
                     project,
@@ -124,7 +141,14 @@ public sealed class ConstructionPieceBuildOrderService
                 continue;
             }
 
-            var probeResult = _stabilityProbeService.EvaluateCandidate(project, blueprint, piece, placement, builtPieceIds, lowestLocalY);
+            var probeResult = _stabilityProbeService.EvaluateCandidate(
+                project,
+                blueprint,
+                piece,
+                placement,
+                builtPieceIds,
+                lowestLocalY,
+                hasNativeSupport);
             SetPieceStateIfChanged(
                 project,
                 progress,
@@ -192,11 +216,12 @@ public sealed class ConstructionPieceBuildOrderService
         ConstructionResolvedPiecePlacement placement,
         float lowestLocalY,
         ISet<int> builtPieceIds,
-        BuiltFrontierIndex builtFrontierIndex)
+        BuiltFrontierIndex builtFrontierIndex,
+        bool hasNativeSupport)
     {
         if (builtPieceIds.Count == 0)
         {
-            return _stabilityProbeService.IsGroundRoot(piece, placement, lowestLocalY);
+            return _stabilityProbeService.IsGroundRoot(piece, placement, lowestLocalY) || hasNativeSupport;
         }
 
         if (piece.DependencyPieceIds.Any(builtPieceIds.Contains))
@@ -204,7 +229,7 @@ public sealed class ConstructionPieceBuildOrderService
             return true;
         }
 
-        return builtFrontierIndex.HasBuiltPieceWithinRadius(placement.WorldPosition, FrontierContactRadiusSquared);
+        return builtFrontierIndex.HasBuiltPieceWithinRadius(placement.WorldPosition, FrontierContactRadiusSquared) || hasNativeSupport;
     }
 
     private static bool IsBetterCandidate(BuildableCandidate candidate, BuildableCandidate selected)

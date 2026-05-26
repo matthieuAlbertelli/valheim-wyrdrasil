@@ -149,7 +149,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         if (!_workbenchAnimatorProbeLogged)
         {
             _workbenchAnimatorProbeLogged = true;
-            WyrdrasilSeatDebug.Log(this, $"WorkbenchAnimatorProbe parameters=[{DescribeAnimatorParameters()}] clips=[{DescribeAnimatorClips()}]");
+            WyrdrasilSeatDebug.LogLazy(this, () => $"WorkbenchAnimatorProbe parameters=[{DescribeAnimatorParameters()}] clips=[{DescribeAnimatorClips()}]");
         }
 
         if (IsInWorkbenchPose())
@@ -185,7 +185,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
             _workbenchPoseRequested = true;
         }
 
-        WyrdrasilSeatDebug.Log(this, $"TryEnterWorkbenchPose attempted={attempted} forced={forced} animator={DescribeAnimatorState()}");
+        WyrdrasilSeatDebug.LogLazy(this, () => $"TryEnterWorkbenchPose attempted={attempted} forced={forced} animator={DescribeAnimatorState()}");
         return attempted || forced;
     }
 
@@ -205,7 +205,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
 
         m_animator.Update(0f);
 
-        WyrdrasilSeatDebug.Log(this, $"TryExitWorkbenchPose reset=True played={played} animator={DescribeAnimatorState()}");
+        WyrdrasilSeatDebug.LogLazy(this, () => $"TryExitWorkbenchPose reset=True played={played} animator={DescribeAnimatorState()}");
     }
 
     public bool IsInWorkbenchPose()
@@ -255,7 +255,7 @@ public sealed class WyrdrasilVikingNpc : Humanoid
         if (!_workbenchReferenceProbeLogged)
         {
             _workbenchReferenceProbeLogged = true;
-            WyrdrasilSeatDebug.Log(this, $"WorkbenchReference transform={referenceTransform.name} root={transform.name} animator={(m_animator != null ? m_animator.transform.name : "<none>")}");
+            WyrdrasilSeatDebug.LogLazy(this, () => $"WorkbenchReference transform={referenceTransform.name} root={transform.name} animator={(m_animator != null ? m_animator.transform.name : "<none>")}");
         }
 
         return referenceTransform;

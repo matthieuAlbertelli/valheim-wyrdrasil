@@ -7,9 +7,9 @@ namespace Wyrdrasil.Construction.Services;
 
 /// <summary>
 /// Central oracle used by construction projects to decide whether a blueprint piece is safe to build now.
-/// This first implementation deliberately stays conservative and native-aware: it uses the real world scene
-/// around the candidate instead of trusting the blueprint order, while keeping the API isolated so a deeper
-/// WearNTear/hammer-ghost probe can replace this implementation later without changing project logic.
+/// It remains conservative, but now accepts a native world-piece graph signal so manual player supports and
+/// already-present Valheim build pieces can participate in construction order without falling back to global
+/// object-name searches.
 /// </summary>
 public sealed class ConstructionPieceStabilityProbeService
 {
@@ -27,7 +27,7 @@ public sealed class ConstructionPieceStabilityProbeService
             ? piece.LocalPosition.y
             : blueprint.Pieces.Min(candidate => candidate.LocalPosition.y);
 
-        return EvaluateCandidate(project, blueprint, piece, placement, builtPieceIds, lowestBlueprintY);
+        return EvaluateCandidate(project, blueprint, piece, placement, builtPieceIds, lowestBlueprintY, false);
     }
 
     public ConstructionStabilityProbeResult EvaluateCandidate(
@@ -37,6 +37,18 @@ public sealed class ConstructionPieceStabilityProbeService
         ConstructionResolvedPiecePlacement placement,
         ISet<int> builtPieceIds,
         float lowestBlueprintY)
+    {
+        return EvaluateCandidate(project, blueprint, piece, placement, builtPieceIds, lowestBlueprintY, false);
+    }
+
+    public ConstructionStabilityProbeResult EvaluateCandidate(
+        ConstructionProjectData project,
+        StructureBlueprintData blueprint,
+        BlueprintPieceData piece,
+        ConstructionResolvedPiecePlacement placement,
+        ISet<int> builtPieceIds,
+        float lowestBlueprintY,
+        bool hasNativeWorldSupport)
     {
         if (IsGroundRoot(piece, placement, lowestBlueprintY))
         {
@@ -54,7 +66,17 @@ public sealed class ConstructionPieceStabilityProbeService
             {
                 Level = ConstructionPieceStabilityLevel.Strong,
                 IsBuildable = true,
-                Reason = "Candidate is connected to an already built dependency."
+                Reason = "Candidate is connected to an already built blueprint dependency."
+            };
+        }
+
+        if (hasNativeWorldSupport)
+        {
+            return new ConstructionStabilityProbeResult
+            {
+                Level = ConstructionPieceStabilityLevel.Acceptable,
+                IsBuildable = true,
+                Reason = "Candidate is connected to the native Valheim build-piece graph near the project."
             };
         }
 
@@ -72,7 +94,7 @@ public sealed class ConstructionPieceStabilityProbeService
         {
             Level = ConstructionPieceStabilityLevel.Unsupported,
             IsBuildable = false,
-            Reason = "Candidate has no grounded support and no built dependency yet."
+            Reason = "Candidate has no grounded support, no built dependency and no native world support yet."
         };
     }
 
