@@ -4,6 +4,7 @@ using Wyrdrasil.Construction.Bootstrap;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.PlayerTool;
+using Wyrdrasil.Registry.PlayerTool.Assignments;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Services.Interactions;
 using Wyrdrasil.Registry.Services.Interactions.Modes;
@@ -129,12 +130,25 @@ public sealed class RegistryRuntimeBootstrap
             settlements.AuthoringApi,
             constructionBootstrap.ConstructionPlacementPreviewService,
             constructionDebugSessionService);
+        var registryPlayerToolAssignmentService = new RegistryPlayerToolAssignmentService(
+            log,
+            residents.Services.ResidentService,
+            registryPlayerToolPieceTableService,
+            new IRegistryPlayerToolAssignmentTargetHandler[]
+            {
+                new RegistryPlayerToolBedAssignmentTargetHandler(
+                    settlements.AuthoringApi,
+                    residents.Services.ResidentAssignmentService),
+                new RegistryPlayerToolCraftStationAssignmentTargetHandler(
+                    settlements.AuthoringApi,
+                    residents.Services.ResidentAssignmentService)
+            });
         var registryPlayerToolGameplayActionService = new RegistryPlayerToolGameplayActionService(
             log,
             settlements.AuthoringApi,
             deletionService,
             residents.Services.ResidentService,
-            residents.Services.ResidentAssignmentService,
+            registryPlayerToolAssignmentService,
             constructionBootstrap.AuthoringApi,
             constructionDebugSessionService,
             constructionPreviewInteractionService);

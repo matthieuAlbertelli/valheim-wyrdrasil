@@ -178,16 +178,29 @@ public sealed class BedService
 
     public void DesignateBedAtCrosshair()
     {
+        if (!TryGetOrDesignateBedAtCrosshair(out _, out var failureReason))
+        {
+            _log.LogWarning($"Cannot designate bed: {failureReason}");
+        }
+    }
+
+    public bool TryGetOrDesignateBedAtCrosshair(out RegisteredBedData bedData, out string failureReason)
+    {
         if (!TryGetBedAtCrosshair(out var furnitureRoot, out var bedComponent))
         {
-            _log.LogWarning("Cannot designate bed: the targeted object is not a valid Valheim bed piece.");
-            return;
+            bedData = null!;
+            failureReason = "targeted object is not a valid Valheim bed piece.";
+            return false;
         }
 
-        if (FindBedByFurniture(furnitureRoot) != null)
+        var existingBed = FindBedByFurniture(furnitureRoot);
+        if (existingBed != null)
         {
-            _log.LogWarning("Cannot designate bed: this furniture is already registered as a bed.");
-            return;
+            EnsureMarker(existingBed);
+            UpdateMarker(existingBed);
+            bedData = existingBed;
+            failureReason = string.Empty;
+            return true;
         }
 
         var referencePosition = GetBedReferencePosition(bedComponent);
@@ -196,8 +209,9 @@ public sealed class BedService
         var shouldAssociateZone = zone != null && _anchorPolicyService.ShouldAssociateBedWithZone(zone.ZoneType);
         if (zone == null && !_anchorPolicyService.CanDesignateBedStandalone())
         {
-            _log.LogWarning("Cannot designate bed: this bed requires a functional zone, but no zone was found.");
-            return;
+            bedData = null!;
+            failureReason = "this bed requires a functional zone, but no zone was found.";
+            return false;
         }
 
         var buildingId = zone != null
@@ -209,7 +223,7 @@ public sealed class BedService
             : (int?)null;
 
         var persistentFurnitureId = BuildPersistentFurnitureId(bedComponent);
-        var bedData = new RegisteredBedData(
+        bedData = new RegisteredBedData(
             _nextBedId++,
             buildingId,
             zoneId,
@@ -221,6 +235,7 @@ public sealed class BedService
         _beds.Add(bedData);
         _bedRoots[bedData.Id] = furnitureRoot;
         EnsureMarker(bedData);
+        UpdateMarker(bedData);
 
         if (zoneId.HasValue)
         {
@@ -230,6 +245,9 @@ public sealed class BedService
         {
             _log.LogInfo($"Designated standalone bed #{bedData.Id} on bed '{bedData.DisplayName}' in building #{buildingId} with persistentId='{persistentFurnitureId}'.");
         }
+
+        failureReason = string.Empty;
+        return true;
     }
 
     public bool TryGetBedAtCrosshair(out RegisteredBedData bedData)

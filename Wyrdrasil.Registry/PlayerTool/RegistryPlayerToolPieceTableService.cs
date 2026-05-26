@@ -33,6 +33,28 @@ public sealed class RegistryPlayerToolPieceTableService
         _blueprintThumbnailService = blueprintThumbnailService;
     }
 
+
+    public void UpdateActionDescription(string actionPiecePrefabName, string description)
+    {
+        if (string.IsNullOrWhiteSpace(actionPiecePrefabName))
+        {
+            return;
+        }
+
+        if (!_actionPiecePrefabsByName.TryGetValue(actionPiecePrefabName, out var actionPiecePrefab) || actionPiecePrefab == null)
+        {
+            return;
+        }
+
+        var piece = actionPiecePrefab.GetComponent<Piece>();
+        if (piece == null)
+        {
+            return;
+        }
+
+        SetFieldIfPresent(piece, "m_description", description ?? string.Empty);
+    }
+
     public PieceTable? GetOrCreate(ZNetScene zNetScene, PieceTable? sourcePieceTable)
     {
         var actionDefinitions = RegistryPlayerToolActionDefinitions.BuildAll(_constructionAuthoringApi);

@@ -95,14 +95,14 @@ public static class RegistryPlayerToolActionRouter
                 SaveIfPersistent(_gameplayActionService.DesignateBedAtCrosshair(), "Marquer lit");
                 return true;
 
-            case RegistryPlayerToolConstants.AssignBedActionPiecePrefabName:
+            case RegistryPlayerToolConstants.AssignActionPiecePrefabName:
                 if (_gameplayActionService == null)
                 {
                     _log?.LogWarning("Registry player action router is not configured; bed assignment action was consumed but not executed.");
                     return true;
                 }
 
-                SaveIfPersistent(_gameplayActionService.AssignBedAtCrosshair(), "Assigner lit");
+                SaveIfPersistent(_gameplayActionService.AssignAtCrosshair(), "Assigner");
                 return true;
 
             case RegistryPlayerToolConstants.DefineBuildingActionPiecePrefabName:
@@ -158,8 +158,8 @@ public static class RegistryPlayerToolActionRouter
                 SaveIfPersistent(_gameplayActionService.RemoveDesignatedBedAtCrosshair(), "Retirer lit marqué");
                 return true;
 
-            case RegistryPlayerToolConstants.AssignBedActionPiecePrefabName:
-                _gameplayActionService.ClearPendingSubject();
+            case RegistryPlayerToolConstants.AssignActionPiecePrefabName:
+                _gameplayActionService.HandleAssignSecondaryInput();
                 return true;
 
             case RegistryPlayerToolConstants.CreateTavernZoneActionPiecePrefabName:

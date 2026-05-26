@@ -39,6 +39,7 @@ public interface ISettlementsAuthoringApi
     bool TryGetCraftStationAtCrosshair(out RegisteredCraftStationData craftStationData);
     void DesignateSeatAtCrosshair();
     void DesignateBedAtCrosshair();
+    bool TryGetOrDesignateBedAtCrosshair(out RegisteredBedData bedData, out string failureReason);
     void DesignateCraftStationAtCrosshair();
     bool TryGetOrDesignateCraftStationAtCrosshair(out RegisteredCraftStationData craftStationData, out string failureReason);
 }

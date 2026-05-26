@@ -76,6 +76,14 @@ public static class RegistryPlayerToolActionDefinitions
             StringComparison.OrdinalIgnoreCase);
     }
 
+    public static bool IsAssignActionPieceName(string piecePrefabName)
+    {
+        return string.Equals(
+            piecePrefabName,
+            RegistryPlayerToolConstants.AssignActionPiecePrefabName,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool IsBlueprintPlanActionPieceName(string piecePrefabName)
     {
         return !string.IsNullOrWhiteSpace(piecePrefabName) &&
@@ -148,9 +156,9 @@ public static class RegistryPlayerToolActionDefinitions
             categoryIndex));
 
         actions.Add(new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.AssignBedActionPiecePrefabName,
-            RegistryPlayerToolConstants.AssignBedActionDisplayName,
-            RegistryPlayerToolConstants.AssignBedActionDescription,
+            RegistryPlayerToolConstants.AssignActionPiecePrefabName,
+            RegistryPlayerToolConstants.AssignActionDisplayName,
+            RegistryPlayerToolConstants.AssignActionDescription,
             categoryIndex));
 
         actions.Add(new RegistryPlayerToolActionDefinition(

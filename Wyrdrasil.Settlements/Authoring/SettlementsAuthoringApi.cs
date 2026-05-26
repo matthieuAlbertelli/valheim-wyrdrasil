@@ -66,6 +66,8 @@ public sealed class SettlementsAuthoringApi : ISettlementsAuthoringApi
     public bool TryGetCraftStationAtCrosshair(out RegisteredCraftStationData craftStationData) => _craftStationService.TryGetCraftStationAtCrosshair(out craftStationData);
     public void DesignateSeatAtCrosshair() => _seatService.DesignateSeatAtCrosshair();
     public void DesignateBedAtCrosshair() => _bedService.DesignateBedAtCrosshair();
+    public bool TryGetOrDesignateBedAtCrosshair(out RegisteredBedData bedData, out string failureReason) =>
+        _bedService.TryGetOrDesignateBedAtCrosshair(out bedData, out failureReason);
     public void DesignateCraftStationAtCrosshair() => _craftStationService.DesignateCraftStationAtCrosshair();
     public bool TryGetOrDesignateCraftStationAtCrosshair(out RegisteredCraftStationData craftStationData, out string failureReason) =>
         _craftStationService.TryGetOrDesignateCraftStationAtCrosshair(out craftStationData, out failureReason);

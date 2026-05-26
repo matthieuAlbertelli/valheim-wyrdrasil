@@ -5,6 +5,7 @@ using UnityEngine;
 using Wyrdrasil.Construction.Authoring;
 using Wyrdrasil.Registry.Services;
 using Wyrdrasil.Registry.Services.Interactions;
+using Wyrdrasil.Registry.PlayerTool.Assignments;
 using Wyrdrasil.Settlements.Authoring;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Tool;
@@ -17,19 +18,18 @@ public sealed class RegistryPlayerToolGameplayActionService
     private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly RegistryDeletionService _deletionService;
     private readonly RegistryResidentService _residentService;
-    private readonly ResidentAssignmentService _assignmentService;
+    private readonly RegistryPlayerToolAssignmentService _playerToolAssignmentService;
     private readonly IConstructionAuthoringApi _constructionAuthoringApi;
     private readonly ConstructionDebugSessionService _constructionDebugSessionService;
     private readonly RegistryConstructionPreviewInteractionService _constructionPreviewInteractionService;
 
-    private int? _pendingAssignBedResidentId;
 
     public RegistryPlayerToolGameplayActionService(
         ManualLogSource log,
         ISettlementsAuthoringApi settlementsAuthoringApi,
         RegistryDeletionService deletionService,
         RegistryResidentService residentService,
-        ResidentAssignmentService assignmentService,
+        RegistryPlayerToolAssignmentService playerToolAssignmentService,
         IConstructionAuthoringApi constructionAuthoringApi,
         ConstructionDebugSessionService constructionDebugSessionService,
         RegistryConstructionPreviewInteractionService constructionPreviewInteractionService)
@@ -38,7 +38,7 @@ public sealed class RegistryPlayerToolGameplayActionService
         _settlementsAuthoringApi = settlementsAuthoringApi;
         _deletionService = deletionService;
         _residentService = residentService;
-        _assignmentService = assignmentService;
+        _playerToolAssignmentService = playerToolAssignmentService;
         _constructionAuthoringApi = constructionAuthoringApi;
         _constructionDebugSessionService = constructionDebugSessionService;
         _constructionPreviewInteractionService = constructionPreviewInteractionService;
@@ -67,7 +67,7 @@ public sealed class RegistryPlayerToolGameplayActionService
             return false;
         }
 
-        ClearPendingAssignBedResident();
+        _playerToolAssignmentService.ClearSelectedResidentSilently();
         ShowPlayerMessage($"Registre : {resident.DisplayName} disparaît du village.");
         _log.LogInfo($"Registry player secondary action completed: killed registered resident #{resident.Id} ('{resident.DisplayName}').");
         return true;
@@ -167,50 +167,19 @@ public sealed class RegistryPlayerToolGameplayActionService
         return true;
     }
 
-    public bool AssignBedAtCrosshair()
+    public void RefreshAssignActionDescription()
     {
-        if (_residentService.TryGetTargetedRegisteredResident(out var targetedResident))
-        {
-            SetPendingAssignBedResident(targetedResident);
-            ShowPlayerMessage($"Registre : {targetedResident.DisplayName} sélectionné. Visez un lit marqué.");
-            _log.LogInfo($"Registry player bed assignment selected resident #{targetedResident.Id} ('{targetedResident.DisplayName}').");
-            return false;
-        }
+        _playerToolAssignmentService.RefreshActionDescription();
+    }
 
-        if (RegistryPlayerToolWorldTargeting.TryGetTargetCharacter(out _))
-        {
-            ShowPlayerMessage("Registre : ce viking n'est pas enregistré.");
-            _log.LogWarning("Registry player bed assignment blocked: an unregistered viking is targeted, so the construction behind it is ignored.");
-            return false;
-        }
+    public bool AssignAtCrosshair()
+    {
+        return _playerToolAssignmentService.HandlePrimaryActionAtCrosshair();
+    }
 
-        if (!_pendingAssignBedResidentId.HasValue ||
-            !_residentService.TryGetResidentById(_pendingAssignBedResidentId.Value, out var pendingResident))
-        {
-            ClearPendingAssignBedResident();
-            ShowPlayerMessage("Registre : visez d'abord un viking enregistré.");
-            _log.LogWarning("Registry player bed assignment failed: no pending resident is selected.");
-            return false;
-        }
-
-        if (!_settlementsAuthoringApi.TryGetBedAtCrosshair(out var bedData))
-        {
-            ShowPlayerMessage("Registre : visez un lit marqué.");
-            _log.LogWarning($"Registry player bed assignment failed for resident #{pendingResident.Id}: no designated bed targeted.");
-            return false;
-        }
-
-        if (!_assignmentService.TryForceAssignToBed(pendingResident, bedData))
-        {
-            ShowPlayerMessage("Registre : impossible d'assigner ce lit.");
-            _log.LogWarning($"Registry player bed assignment rejected: resident #{pendingResident.Id} -> bed #{bedData.Id}.");
-            return false;
-        }
-
-        ClearPendingAssignBedResident();
-        ShowPlayerMessage($"Registre : {pendingResident.DisplayName} dort maintenant dans le lit #{bedData.Id}.");
-        _log.LogInfo($"Registry player bed assignment completed: resident #{pendingResident.Id} -> bed #{bedData.Id}.");
-        return true;
+    public void HandleAssignSecondaryInput()
+    {
+        _playerToolAssignmentService.HandleSecondaryActionAtCrosshair();
     }
 
 
@@ -294,19 +263,12 @@ public sealed class RegistryPlayerToolGameplayActionService
 
     public void ClearPendingSubject()
     {
-        if (!_pendingAssignBedResidentId.HasValue)
-        {
-            ShowPlayerMessage("Registre : aucune sélection à annuler.");
-            return;
-        }
-
-        ClearPendingAssignBedResident();
-        ShowPlayerMessage("Registre : sélection annulée.");
+        _playerToolAssignmentService.HandleSecondaryActionAtCrosshair();
     }
 
     public void ClearPendingSubjectSilently()
     {
-        ClearPendingAssignBedResident();
+        _playerToolAssignmentService.ClearSelectedResidentSilently();
     }
 
     private void ShowCurrentTavernAuthoringState(string fallbackMessage)
@@ -343,18 +305,6 @@ public sealed class RegistryPlayerToolGameplayActionService
         ShowPlayerMessage(snapshot.CanCloseFootprint
             ? "Registre : contour du bâtiment prêt. Validez près du premier point, puis ajustez la hauteur."
             : $"Registre : point de bâtiment ajouté ({snapshot.PointCount}).");
-    }
-
-    private void SetPendingAssignBedResident(RegisteredNpcData resident)
-    {
-        _pendingAssignBedResidentId = resident.Id;
-        _residentService.SetPendingForceAssignResidentVisual(resident.Id);
-    }
-
-    private void ClearPendingAssignBedResident()
-    {
-        _pendingAssignBedResidentId = null;
-        _residentService.SetPendingForceAssignResidentVisual(null);
     }
 
     private void ShowPlayerMessage(string message)

@@ -113,7 +113,11 @@ public sealed class RegistryPlayerToolRuntimeService
             _lastPreviewStartedFromActionPieceName = string.Empty;
         }
 
-        if (selectedActionPieceName != RegistryPlayerToolConstants.AssignBedActionPiecePrefabName)
+        if (selectedActionPieceName == RegistryPlayerToolConstants.AssignActionPiecePrefabName)
+        {
+            _gameplayActionService.RefreshAssignActionDescription();
+        }
+        else
         {
             _gameplayActionService.ClearPendingSubjectSilently();
         }

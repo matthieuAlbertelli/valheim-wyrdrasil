@@ -24,9 +24,13 @@ public static class RegistryPlayerToolConstants
     public const string DesignateBedActionDisplayName = "Marquer lit";
     public const string DesignateBedActionDescription = "Enregistre le lit visé comme lit assignable.";
 
-    public const string AssignBedActionPiecePrefabName = "Wyrdrasil_Action_AssignBed";
-    public const string AssignBedActionDisplayName = "Assigner lit";
-    public const string AssignBedActionDescription = "Visez un viking enregistré, puis un lit marqué.";
+    public const string AssignActionPiecePrefabName = "Wyrdrasil_Action_Assign";
+    public const string AssignActionDisplayName = "Assigner";
+    public const string AssignActionDescription = "Visez un viking enregistré, puis un lit, un établi, une forge ou tout autre objet assignable.";
+
+    public const string AssignBedActionPiecePrefabName = AssignActionPiecePrefabName;
+    public const string AssignBedActionDisplayName = AssignActionDisplayName;
+    public const string AssignBedActionDescription = AssignActionDescription;
 
     public const string SpawnAndRegisterVikingActionPiecePrefabName = "Wyrdrasil_Action_SpawnAndRegisterViking";
     public const string SpawnAndRegisterVikingActionDisplayName = "Appeler viking";
