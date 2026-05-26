@@ -27,6 +27,17 @@ public sealed class ConstructionPieceStabilityProbeService
             ? piece.LocalPosition.y
             : blueprint.Pieces.Min(candidate => candidate.LocalPosition.y);
 
+        return EvaluateCandidate(project, blueprint, piece, placement, builtPieceIds, lowestBlueprintY);
+    }
+
+    public ConstructionStabilityProbeResult EvaluateCandidate(
+        ConstructionProjectData project,
+        StructureBlueprintData blueprint,
+        BlueprintPieceData piece,
+        ConstructionResolvedPiecePlacement placement,
+        ISet<int> builtPieceIds,
+        float lowestBlueprintY)
+    {
         if (IsGroundRoot(piece, placement, lowestBlueprintY))
         {
             return new ConstructionStabilityProbeResult
