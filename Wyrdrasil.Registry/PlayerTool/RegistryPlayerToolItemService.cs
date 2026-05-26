@@ -19,6 +19,7 @@ public sealed class RegistryPlayerToolItemService
     private ObjectDB? _registeredObjectDb;
     private ZNetScene? _registeredZNetScene;
     private bool _registeredInNamedPrefabs;
+    private float _nextLocalPlayerItemRepairTime;
 
     public RegistryPlayerToolItemService(
         ManualLogSource log,
@@ -58,6 +59,34 @@ public sealed class RegistryPlayerToolItemService
             RefreshObjectDbItemHashes(objectDb);
             _registeredObjectDb = objectDb;
         }
+
+        RepairLocalPlayerRegistryToolItemsIfNeeded();
+    }
+
+
+    private void RepairLocalPlayerRegistryToolItemsIfNeeded()
+    {
+        var player = Player.m_localPlayer;
+        if (player == null)
+        {
+            return;
+        }
+
+        var now = Time.unscaledTime;
+        if (now < _nextLocalPlayerItemRepairTime)
+        {
+            return;
+        }
+
+        _nextLocalPlayerItemRepairTime = now + 1f;
+
+        var repairedCount = RegistryPlayerToolItemDataRepair.RepairPlayerItems(player);
+        if (repairedCount <= 0)
+        {
+            return;
+        }
+
+        _log.LogInfo($"Repaired {repairedCount} Registry tool item instance(s) in the local player inventory/equipment.");
     }
 
     private bool TryGetOrCreateRuntimeItemPrefab(

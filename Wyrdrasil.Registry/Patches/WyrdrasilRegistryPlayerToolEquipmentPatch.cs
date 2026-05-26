@@ -27,4 +27,26 @@ internal static class WyrdrasilRegistryPlayerToolEquipmentPatch
     {
         RegistryPlayerToolItemDataRepair.RepairItemData(item);
     }
+
+    [HarmonyPrefix]
+    [HarmonyPatch(typeof(ItemDrop), nameof(ItemDrop.Pickup))]
+    private static void CanonicalizeRegistryToolBeforePickup(ItemDrop __instance, out bool __state)
+    {
+        __state = RegistryPlayerToolItemDataRepair.LooksLikeRegistryTool(__instance);
+        RegistryPlayerToolItemDataRepair.RepairItemDrop(__instance);
+    }
+
+    [HarmonyPostfix]
+    [HarmonyPatch(typeof(ItemDrop), nameof(ItemDrop.Pickup))]
+    private static void CanonicalizeRegistryToolAfterPickup()
+    {
+        // ItemDrop.Pickup can clone or rewrite ItemData while moving the world item into
+        // the inventory. A silent post-pickup pass keeps freshly spawned registry tools
+        // canonical before the periodic legacy repair pass can observe them.
+        //
+        // This scans only the local player's inventory/equipment and RepairPlayerItems is
+        // a no-op for non-registry items, so running it after any pickup is simpler and
+        // more robust than depending on fragile pre-pickup ItemData state.
+        RegistryPlayerToolItemDataRepair.RepairPlayerItems(Player.m_localPlayer);
+    }
 }

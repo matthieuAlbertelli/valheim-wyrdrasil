@@ -52,5 +52,9 @@ public sealed class RegistryPlayerToolItemDropPrefabBinder : MonoBehaviour
         }
 
         itemDrop.m_itemData.m_dropPrefab = runtimePrefab;
+
+        // Canonicalize spawned world instances before the player can pick them up.
+        // This keeps the normal fresh-spawn path out of the periodic legacy repair pass.
+        RegistryPlayerToolItemDataRepair.RepairItemDrop(itemDrop, runtimePrefab);
     }
 }
