@@ -27,7 +27,7 @@ public sealed class RegistryHudRenderer
         var panelRect = new Rect(20f, 180f, 880f, panelHeight);
 
         GUI.Box(panelRect, GUIContent.none);
-        GUI.Label(new Rect(35f, 190f, 320f, 24f), "Registre des Âmes", _titleStyle!);
+        GUI.Label(new Rect(35f, 190f, 320f, 24f), "Anneau de Jötunkonung", _titleStyle!);
         GUI.Label(new Rect(35f, 218f, 360f, 20f), "Mode Registre actif", _textStyle!);
         GUI.Label(new Rect(35f, 242f, 760f, 20f), $"Interaction active : {hudState.InteractionModeName}", _textStyle!);
         GUI.Label(new Rect(35f, 266f, 680f, 20f), hudState.WorldClockLabel, _textStyle!);

@@ -30,12 +30,13 @@ internal static class WyrdrasilRegistryObjectDbGetItemPrefabPatch
 
     private static bool Prefix(ObjectDB __instance, string __0, ref GameObject __result)
     {
-        if (!string.Equals(__0, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase))
+        if (!IsRegistryToolPrefabName(__0))
         {
             return true;
         }
 
-        var existing = FindNamedPrefab(__instance.m_items, RegistryPlayerToolConstants.ItemPrefabName);
+        var existing = FindNamedPrefab(__instance.m_items, RegistryPlayerToolConstants.ItemPrefabName) ??
+                       FindNamedPrefab(__instance.m_items, RegistryPlayerToolConstants.LegacyItemPrefabName);
         if (existing != null)
         {
             __result = existing;
@@ -94,6 +95,11 @@ internal static class WyrdrasilRegistryObjectDbGetItemPrefabPatch
         var sharedData = itemDrop.m_itemData.m_shared;
         sharedData.m_name = RegistryPlayerToolConstants.DisplayName;
         sharedData.m_description = RegistryPlayerToolConstants.Description;
+        sharedData.m_itemType = ItemDrop.ItemData.ItemType.Tool;
+        sharedData.m_maxStackSize = 1;
+        sharedData.m_weight = 2f;
+        sharedData.m_maxDurability = 200f;
+        sharedData.m_useDurability = true;
 
         // At character selection time the Wyrdrasil PieceTable may not exist yet. Keep the source
         // hammer table temporarily; the full item service swaps this to WyrdrasilRegistryPieceTable
@@ -139,6 +145,12 @@ internal static class WyrdrasilRegistryObjectDbGetItemPrefabPatch
         _hiddenRoot = new GameObject("Wyrdrasil.Registry.PlayerTool.EarlyObjectDbPrefabs");
         _hiddenRoot.SetActive(false);
         Object.DontDestroyOnLoad(_hiddenRoot);
+    }
+
+    private static bool IsRegistryToolPrefabName(string prefabName)
+    {
+        return string.Equals(prefabName, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(prefabName, RegistryPlayerToolConstants.LegacyItemPrefabName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static GameObject? FindNamedPrefab(IEnumerable<GameObject?> prefabs, string prefabName)

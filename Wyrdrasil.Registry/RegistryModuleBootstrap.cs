@@ -4,6 +4,7 @@ using HarmonyLib;
 using Wyrdrasil.Construction.Bootstrap;
 using Wyrdrasil.Registry.Bootstrap;
 using Wyrdrasil.Registry.Patches;
+using Wyrdrasil.Registry.PlayerTool.Visual;
 using Wyrdrasil.Routines;
 
 namespace Wyrdrasil.Registry;
@@ -41,7 +42,11 @@ public static class RegistryModuleBootstrap
         return type.GetCustomAttributes(typeof(HarmonyPatch), false).Length > 0;
     }
 
-    public static RegistryModuleRuntime Create(ManualLogSource log, Harmony harmony)
+    public static RegistryModuleRuntime Create(
+        ManualLogSource log,
+        Harmony harmony,
+        string pluginLocation,
+        RegistryPlayerToolVisualConfig playerToolVisualConfig)
     {
         ApplyHarmony(log, harmony);
         RoutinesModuleBootstrap.ApplyHarmony(harmony);
@@ -53,6 +58,8 @@ public static class RegistryModuleBootstrap
 
         var runtimeBootstrap = RegistryRuntimeBootstrap.Create(
             log,
+            pluginLocation,
+            playerToolVisualConfig,
             modeService,
             settlementsBootstrap,
             residentsBootstrap,
@@ -70,6 +77,7 @@ public static class RegistryModuleBootstrap
             runtimeBootstrap.CraftStationIntegrityService,
             runtimeBootstrap.RegistryPlayerToolItemService,
             runtimeBootstrap.RegistryPlayerToolRuntimeService,
+            runtimeBootstrap.RegistryPlayerToolCommandMessageService,
             runtimeBootstrap.RegistryToolController);
     }
 }

@@ -4,6 +4,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using BepInEx.Logging;
+using Wyrdrasil.Registry.PlayerTool.Localization;
+using Wyrdrasil.Registry.PlayerTool.Recipes;
+using Wyrdrasil.Registry.PlayerTool.Visual;
 using UnityEngine;
 using Object = UnityEngine.Object;
 
@@ -13,6 +16,9 @@ public sealed class RegistryPlayerToolItemService
 {
     private readonly ManualLogSource _log;
     private readonly RegistryPlayerToolPieceTableService _pieceTableService;
+    private readonly RegistryPlayerToolVisualBundleService _visualBundleService;
+    private readonly RegistryPlayerToolRecipeService _recipeService;
+    private readonly RegistryPlayerToolLocalizationService _localizationService;
 
     private GameObject? _hiddenRoot;
     private GameObject? _runtimeItemPrefab;
@@ -23,10 +29,16 @@ public sealed class RegistryPlayerToolItemService
 
     public RegistryPlayerToolItemService(
         ManualLogSource log,
-        RegistryPlayerToolPieceTableService pieceTableService)
+        RegistryPlayerToolPieceTableService pieceTableService,
+        RegistryPlayerToolVisualBundleService visualBundleService,
+        RegistryPlayerToolRecipeService recipeService,
+        RegistryPlayerToolLocalizationService localizationService)
     {
         _log = log;
         _pieceTableService = pieceTableService;
+        _visualBundleService = visualBundleService;
+        _recipeService = recipeService;
+        _localizationService = localizationService;
     }
 
     public void Update()
@@ -38,6 +50,8 @@ public sealed class RegistryPlayerToolItemService
         {
             return;
         }
+
+        _localizationService.EnsureRegistered();
 
         if (!TryGetOrCreateRuntimeItemPrefab(zNetScene, out var runtimeItemPrefab))
         {
@@ -59,6 +73,8 @@ public sealed class RegistryPlayerToolItemService
             RefreshObjectDbItemHashes(objectDb);
             _registeredObjectDb = objectDb;
         }
+
+        _recipeService.EnsureRegistered(objectDb, zNetScene, runtimeItemPrefab);
 
         RepairLocalPlayerRegistryToolItemsIfNeeded();
     }
@@ -152,6 +168,12 @@ public sealed class RegistryPlayerToolItemService
             return false;
         }
 
+        if (!_visualBundleService.IsVisualAvailable)
+        {
+            runtimeItemPrefab = null!;
+            return false;
+        }
+
         EnsureHiddenRoot();
 
         var instance = Object.Instantiate(sourcePrefab, _hiddenRoot!.transform, false);
@@ -162,6 +184,13 @@ public sealed class RegistryPlayerToolItemService
         // clones activeSelf from the prefab object. If this template is inactive, the spawned item
         // can exist but remain invisible/inactive in the world.
         instance.SetActive(true);
+
+        if (!_visualBundleService.TryApplyVisual(instance))
+        {
+            Object.Destroy(instance);
+            runtimeItemPrefab = null!;
+            return false;
+        }
 
         if (!EnsureItemDataIsConfigured(instance, pieceTable))
         {
@@ -262,12 +291,12 @@ public sealed class RegistryPlayerToolItemService
             return false;
         }
 
-        if (string.Equals(sharedData.m_name, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase))
+        if (IsRegistryToolNameOrLegacy(sharedData.m_name))
         {
             return true;
         }
 
-        if (string.Equals(sharedData.m_description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase))
+        if (IsRegistryToolDescriptionOrLegacy(sharedData.m_description))
         {
             return true;
         }
@@ -279,8 +308,28 @@ public sealed class RegistryPlayerToolItemService
         }
 
         var dropPrefab = itemData.m_dropPrefab;
-        return dropPrefab != null &&
-               string.Equals(dropPrefab.name, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase);
+        return dropPrefab != null && IsRegistryToolPrefabName(dropPrefab.name);
+    }
+
+
+    private static bool IsRegistryToolNameOrLegacy(string? itemName)
+    {
+        return string.Equals(itemName, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(itemName, RegistryPlayerToolConstants.LocalizedDisplayName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(itemName, RegistryPlayerToolConstants.LegacyDisplayName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRegistryToolDescriptionOrLegacy(string? description)
+    {
+        return string.Equals(description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(description, RegistryPlayerToolConstants.LocalizedDescription, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(description, RegistryPlayerToolConstants.LegacyDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRegistryToolPrefabName(string? prefabName)
+    {
+        return string.Equals(prefabName, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(prefabName, RegistryPlayerToolConstants.LegacyItemPrefabName, StringComparison.OrdinalIgnoreCase);
     }
 
 
@@ -311,7 +360,20 @@ public sealed class RegistryPlayerToolItemService
         var sharedData = itemDrop.m_itemData.m_shared;
         sharedData.m_name = RegistryPlayerToolConstants.DisplayName;
         sharedData.m_description = RegistryPlayerToolConstants.Description;
+        sharedData.m_itemType = ItemDrop.ItemData.ItemType.Tool;
+        sharedData.m_maxStackSize = 1;
+        sharedData.m_weight = 2f;
+        sharedData.m_maxDurability = 200f;
+        sharedData.m_useDurability = true;
+
+        // Keep the Wyrdrasil action PieceTable, not the vanilla Hammer table.
+        // Setting this to null would break the existing in-world tool UX.
         sharedData.m_buildPieces = pieceTable;
+
+        if (_visualBundleService.TryGetIcon(out var icon))
+        {
+            sharedData.m_icons = new[] { icon };
+        }
 
         EnsureDropPrefabBinder(itemPrefab, itemDrop);
 

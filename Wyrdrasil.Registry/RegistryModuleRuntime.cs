@@ -3,6 +3,7 @@ using Wyrdrasil.Registry.Components;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.Diagnostics;
 using Wyrdrasil.Registry.PlayerTool;
+using Wyrdrasil.Registry.PlayerTool.Commanding;
 using Wyrdrasil.Registry.Services;
 
 namespace Wyrdrasil.Registry;
@@ -20,6 +21,7 @@ public sealed class RegistryModuleRuntime
     private readonly RegistryCraftStationIntegrityService _craftStationIntegrityService;
     private readonly RegistryPlayerToolItemService _registryPlayerToolItemService;
     private readonly RegistryPlayerToolRuntimeService _registryPlayerToolRuntimeService;
+    private readonly RegistryPlayerToolCommandMessageService _registryPlayerToolCommandMessageService;
     private readonly RegistryToolController _registryToolController;
 
     public RegistryModuleRuntime(
@@ -34,6 +36,7 @@ public sealed class RegistryModuleRuntime
         RegistryCraftStationIntegrityService craftStationIntegrityService,
         RegistryPlayerToolItemService registryPlayerToolItemService,
         RegistryPlayerToolRuntimeService registryPlayerToolRuntimeService,
+        RegistryPlayerToolCommandMessageService registryPlayerToolCommandMessageService,
         RegistryToolController registryToolController)
     {
         _persistenceService = persistenceService;
@@ -47,6 +50,7 @@ public sealed class RegistryModuleRuntime
         _craftStationIntegrityService = craftStationIntegrityService;
         _registryPlayerToolItemService = registryPlayerToolItemService;
         _registryPlayerToolRuntimeService = registryPlayerToolRuntimeService;
+        _registryPlayerToolCommandMessageService = registryPlayerToolCommandMessageService;
         _registryToolController = registryToolController;
     }
 
@@ -58,6 +62,7 @@ public sealed class RegistryModuleRuntime
         }
 
         _registryPlayerToolItemService.Update();
+        _registryPlayerToolCommandMessageService.Update();
         _registryPlayerToolRuntimeService.Update();
         _persistenceService.Update();
         _craftStationIntegrityService.Update();

@@ -2,14 +2,32 @@ namespace Wyrdrasil.Registry.PlayerTool;
 
 public static class RegistryPlayerToolConstants
 {
-    public const string ItemPrefabName = "WyrdrasilRegistry";
+    public const string ItemPrefabName = "JotunkonungRing";
+    public const string LegacyItemPrefabName = "WyrdrasilRegistry";
     public const string PieceTableName = "WyrdrasilRegistryPieceTable";
     public const string HiddenRootName = "Wyrdrasil.Registry.PlayerTool.HiddenPrefabs";
 
     public const string SourceItemPrefabName = "Hammer";
 
-    public const string DisplayName = "Registre des Âmes";
-    public const string Description = "Révèle les liens invisibles du village.";
+    public const string DisplayName = "$item_jotunkonung_ring";
+    public const string Description = "$item_jotunkonung_ring_desc";
+    public const string LocalizedDisplayName = "Anneau de Jötunkonung";
+    public const string LocalizedDescription = "Un anneau de commandement forgé pour un roi des géants, adapté aux mains humaines. Permet d’édicter des ordres et d’organiser le village.";
+    public const string LegacyDisplayName = "Registre des Âmes";
+    public const string LegacyDescription = "Révèle les liens invisibles du village.";
+
+    public const string VisualAssetBundleName = "jotunkonungring";
+    public const string VisualPrefabName = "JotunkonungRingVisual";
+    public const string IconAssetName = "JotunkonungRingIcon";
+
+    public const string CommandMessage = "Commandement du village";
+
+    public const string RecipeName = "Recipe_JotunkonungRing";
+    public const string CraftingStationPrefabName = "piece_workbench";
+    public const int RecipeWorkbenchLevel = 3;
+    public const string RecipeBronzePrefabName = "Bronze";
+    public const string RecipeIronPrefabName = "Iron";
+    public const string RecipeLeatherScrapsPrefabName = "LeatherScraps";
 
     public const string InspectActionPiecePrefabName = "Wyrdrasil_Action_Inspect";
     public const string InspectActionPiecePrefabNamePrefix = "Wyrdrasil_Action_Inspect_Category_";

@@ -168,12 +168,12 @@ public static class RegistryPlayerToolSelectionService
             return false;
         }
 
-        if (string.Equals(sharedData.m_name, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase))
+        if (IsRegistryToolNameOrLegacy(sharedData.m_name))
         {
             return true;
         }
 
-        if (string.Equals(sharedData.m_description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase))
+        if (IsRegistryToolDescriptionOrLegacy(sharedData.m_description))
         {
             return true;
         }
@@ -185,9 +185,30 @@ public static class RegistryPlayerToolSelectionService
         }
 
         var dropPrefab = itemData.m_dropPrefab;
-        return dropPrefab != null &&
-               string.Equals(dropPrefab.name, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase);
+        return dropPrefab != null && IsRegistryToolPrefabName(dropPrefab.name);
     }
+
+
+    private static bool IsRegistryToolNameOrLegacy(string? itemName)
+    {
+        return string.Equals(itemName, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(itemName, RegistryPlayerToolConstants.LocalizedDisplayName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(itemName, RegistryPlayerToolConstants.LegacyDisplayName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRegistryToolDescriptionOrLegacy(string? description)
+    {
+        return string.Equals(description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(description, RegistryPlayerToolConstants.LocalizedDescription, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(description, RegistryPlayerToolConstants.LegacyDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRegistryToolPrefabName(string? prefabName)
+    {
+        return string.Equals(prefabName, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(prefabName, RegistryPlayerToolConstants.LegacyItemPrefabName, StringComparison.OrdinalIgnoreCase);
+    }
+
 
     private static bool TryGetGameObjectFieldValue(object target, string fieldName, out GameObject gameObject)
     {

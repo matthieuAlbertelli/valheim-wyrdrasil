@@ -4,6 +4,10 @@ using Wyrdrasil.Construction.Bootstrap;
 using Wyrdrasil.Core.Persistence;
 using Wyrdrasil.Registry.Controllers;
 using Wyrdrasil.Registry.PlayerTool;
+using Wyrdrasil.Registry.PlayerTool.Commanding;
+using Wyrdrasil.Registry.PlayerTool.Localization;
+using Wyrdrasil.Registry.PlayerTool.Recipes;
+using Wyrdrasil.Registry.PlayerTool.Visual;
 using Wyrdrasil.Registry.PlayerTool.Assignments;
 using Wyrdrasil.Registry.PlayerTool.Marking;
 using Wyrdrasil.Registry.PlayerTool.Inspection;
@@ -36,6 +40,7 @@ public sealed class RegistryRuntimeBootstrap
         RegistryInteractionModeRouter interactionModeRouter,
         RegistryPlayerToolItemService registryPlayerToolItemService,
         RegistryPlayerToolRuntimeService registryPlayerToolRuntimeService,
+        RegistryPlayerToolCommandMessageService registryPlayerToolCommandMessageService,
         RegistryToolController registryToolController)
     {
         DiagnosticsService = diagnosticsService;
@@ -54,6 +59,7 @@ public sealed class RegistryRuntimeBootstrap
         InteractionModeRouter = interactionModeRouter;
         RegistryPlayerToolItemService = registryPlayerToolItemService;
         RegistryPlayerToolRuntimeService = registryPlayerToolRuntimeService;
+        RegistryPlayerToolCommandMessageService = registryPlayerToolCommandMessageService;
         RegistryToolController = registryToolController;
     }
 
@@ -73,10 +79,13 @@ public sealed class RegistryRuntimeBootstrap
     public RegistryInteractionModeRouter InteractionModeRouter { get; }
     public RegistryPlayerToolItemService RegistryPlayerToolItemService { get; }
     public RegistryPlayerToolRuntimeService RegistryPlayerToolRuntimeService { get; }
+    public RegistryPlayerToolCommandMessageService RegistryPlayerToolCommandMessageService { get; }
     public RegistryToolController RegistryToolController { get; }
 
     internal static RegistryRuntimeBootstrap Create(
         ManualLogSource log,
+        string pluginLocation,
+        RegistryPlayerToolVisualConfig visualConfig,
         Wyrdrasil.Core.Services.RegistryModeService modeService,
         RegistrySettlementsBootstrap settlements,
         RegistryResidentsBootstrap residents,
@@ -129,6 +138,14 @@ public sealed class RegistryRuntimeBootstrap
 
         var selectionService = new ToolSelectionService(modeService.State);
         var constructionDebugSessionService = new ConstructionDebugSessionService();
+        var registryPlayerToolVisualBundleService = new RegistryPlayerToolVisualBundleService(
+            log,
+            pluginLocation,
+            visualConfig);
+        var registryPlayerToolRecipeService = new RegistryPlayerToolRecipeService(log);
+        var registryPlayerToolLocalizationService = new RegistryPlayerToolLocalizationService(log);
+        var registryPlayerToolCommandMessageService = new RegistryPlayerToolCommandMessageService();
+
         var registryPlayerToolBlueprintThumbnailService = new RegistryPlayerToolBlueprintThumbnailService(
             log,
             constructionBootstrap.AuthoringApi);
@@ -214,7 +231,12 @@ public sealed class RegistryRuntimeBootstrap
             registryPlayerToolInspectionRevealService,
             constructionPreviewInteractionService,
             registryPlayerToolSaveService);
-        var registryPlayerToolItemService = new RegistryPlayerToolItemService(log, registryPlayerToolPieceTableService);
+        var registryPlayerToolItemService = new RegistryPlayerToolItemService(
+            log,
+            registryPlayerToolPieceTableService,
+            registryPlayerToolVisualBundleService,
+            registryPlayerToolRecipeService,
+            registryPlayerToolLocalizationService);
         var actionRegistry = RegistryActionRegistryFactory.CreateDefault(
             log,
             settlements.AuthoringApi,
@@ -308,6 +330,7 @@ public sealed class RegistryRuntimeBootstrap
             interactionModeRouter,
             registryPlayerToolItemService,
             registryPlayerToolRuntimeService,
+            registryPlayerToolCommandMessageService,
             registryToolController);
     }
 }

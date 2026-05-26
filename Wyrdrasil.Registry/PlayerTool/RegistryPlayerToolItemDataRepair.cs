@@ -165,7 +165,8 @@ public static class RegistryPlayerToolItemDataRepair
         var objectDb = ObjectDB.instance;
         if (objectDb != null)
         {
-            var objectDbPrefab = FindNamedPrefab(objectDb.m_items, RegistryPlayerToolConstants.ItemPrefabName);
+            var objectDbPrefab = FindNamedPrefab(objectDb.m_items, RegistryPlayerToolConstants.ItemPrefabName) ??
+                                 FindNamedPrefab(objectDb.m_items, RegistryPlayerToolConstants.LegacyItemPrefabName);
             if (objectDbPrefab != null)
             {
                 return objectDbPrefab;
@@ -178,7 +179,8 @@ public static class RegistryPlayerToolItemDataRepair
             return null;
         }
 
-        var zNetScenePrefab = FindNamedPrefab(zNetScene.m_prefabs, RegistryPlayerToolConstants.ItemPrefabName);
+        var zNetScenePrefab = FindNamedPrefab(zNetScene.m_prefabs, RegistryPlayerToolConstants.ItemPrefabName) ??
+                             FindNamedPrefab(zNetScene.m_prefabs, RegistryPlayerToolConstants.LegacyItemPrefabName);
         if (zNetScenePrefab != null)
         {
             return zNetScenePrefab;
@@ -214,12 +216,12 @@ public static class RegistryPlayerToolItemDataRepair
         var sharedData = itemData.m_shared;
         if (sharedData != null)
         {
-            if (string.Equals(sharedData.m_name, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase))
+            if (IsRegistryToolNameOrLegacy(sharedData.m_name))
             {
                 return true;
             }
 
-            if (string.Equals(sharedData.m_description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase))
+            if (IsRegistryToolDescriptionOrLegacy(sharedData.m_description))
             {
                 return true;
             }
@@ -232,9 +234,24 @@ public static class RegistryPlayerToolItemDataRepair
         }
 
         var dropPrefab = itemData.m_dropPrefab;
-        return dropPrefab != null &&
-               string.Equals(dropPrefab.name, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase);
+        return dropPrefab != null && IsRegistryToolObjectName(dropPrefab.name);
     }
+
+
+    private static bool IsRegistryToolNameOrLegacy(string? itemName)
+    {
+        return string.Equals(itemName, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(itemName, RegistryPlayerToolConstants.LocalizedDisplayName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(itemName, RegistryPlayerToolConstants.LegacyDisplayName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsRegistryToolDescriptionOrLegacy(string? description)
+    {
+        return string.Equals(description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(description, RegistryPlayerToolConstants.LocalizedDescription, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(description, RegistryPlayerToolConstants.LegacyDescription, StringComparison.OrdinalIgnoreCase);
+    }
+
 
     private static bool IsRegistryToolObjectName(string? objectName)
     {
@@ -249,7 +266,8 @@ public static class RegistryPlayerToolItemDataRepair
             normalizedName = normalizedName.Substring(0, normalizedName.Length - "(Clone)".Length).Trim();
         }
 
-        return string.Equals(normalizedName, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase);
+        return string.Equals(normalizedName, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(normalizedName, RegistryPlayerToolConstants.LegacyItemPrefabName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static IEnumerable<ItemDrop.ItemData> EnumerateInventoryItems(object inventory)

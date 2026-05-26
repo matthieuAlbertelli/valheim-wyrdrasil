@@ -28,6 +28,10 @@
       <HintPath>$(ManagedDir)\UnityEngine.CoreModule.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="UnityEngine.AssetBundleModule">
+      <HintPath>$(ManagedDir)\UnityEngine.AssetBundleModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="UnityEngine.InputLegacyModule">
       <HintPath>$(ManagedDir)\UnityEngine.InputLegacyModule.dll</HintPath>
       <Private>false</Private>
@@ -72,6 +76,10 @@
                          Condition="Exists('$(TargetDir)$(AssemblyName).pdb')" />
       <PluginDeployFiles Include="@(ReferenceCopyLocalPaths)"
                          Condition="'%(ReferenceCopyLocalPaths.Extension)' == '.dll' or '%(ReferenceCopyLocalPaths.Extension)' == '.pdb'" />
+      <JotunkonungRingAssetDeployFiles Include="Assets\jotunkonungring"
+                                       Condition="Exists('Assets\jotunkonungring')" />
+      <JotunkonungRingAssetDeployFiles Include="jotunkonungring"
+                                       Condition="Exists('jotunkonungring')" />
     </ItemGroup>
 
     <Message Importance="high" Text="================ Wyrdrasil Deploy ================" />
@@ -81,6 +89,11 @@
     <Copy SourceFiles="@(PluginDeployFiles)"
           DestinationFolder="$(PluginDeployDir)"
           SkipUnchangedFiles="true" />
+
+    <Copy SourceFiles="@(JotunkonungRingAssetDeployFiles)"
+          DestinationFolder="$(PluginDeployDir)\Assets"
+          SkipUnchangedFiles="true"
+          Condition="'@(JotunkonungRingAssetDeployFiles)' != ''" />
 
     <Message Importance="high" Text="==================================================" />
   </Target>

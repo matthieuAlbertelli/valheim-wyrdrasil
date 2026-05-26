@@ -1,5 +1,6 @@
 using BepInEx;
 using HarmonyLib;
+using Wyrdrasil.Registry.PlayerTool.Visual;
 
 namespace Wyrdrasil.Registry;
 
@@ -16,7 +17,12 @@ public class Plugin : BaseUnityPlugin
     private void Awake()
     {
         _harmony = new Harmony(PluginGuid);
-        _moduleRuntime = RegistryModuleBootstrap.Create(Logger, _harmony);
+        var playerToolVisualConfig = RegistryPlayerToolVisualConfig.Bind(Config);
+        _moduleRuntime = RegistryModuleBootstrap.Create(
+            Logger,
+            _harmony,
+            Info.Location,
+            playerToolVisualConfig);
         Logger.LogInfo($"{PluginName} {PluginVersion} loaded.");
     }
 
