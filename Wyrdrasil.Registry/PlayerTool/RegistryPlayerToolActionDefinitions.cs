@@ -8,50 +8,7 @@ namespace Wyrdrasil.Registry.PlayerTool;
 
 public static class RegistryPlayerToolActionDefinitions
 {
-    public static readonly IReadOnlyList<RegistryPlayerToolActionDefinition> StaticActions = new[]
-    {
-        new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.InspectActionPiecePrefabName,
-            RegistryPlayerToolConstants.InspectActionDisplayName,
-            RegistryPlayerToolConstants.InspectActionDescription,
-            categoryIndex: 0),
-
-        new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.CreateTavernZoneActionPiecePrefabName,
-            RegistryPlayerToolConstants.CreateTavernZoneActionDisplayName,
-            RegistryPlayerToolConstants.CreateTavernZoneActionDescription,
-            categoryIndex: 1),
-
-        new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.DesignateBedActionPiecePrefabName,
-            RegistryPlayerToolConstants.DesignateBedActionDisplayName,
-            RegistryPlayerToolConstants.DesignateBedActionDescription,
-            categoryIndex: 2),
-
-        new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.SpawnAndRegisterVikingActionPiecePrefabName,
-            RegistryPlayerToolConstants.SpawnAndRegisterVikingActionDisplayName,
-            RegistryPlayerToolConstants.SpawnAndRegisterVikingActionDescription,
-            categoryIndex: 3),
-
-        new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.AssignBedActionPiecePrefabName,
-            RegistryPlayerToolConstants.AssignBedActionDisplayName,
-            RegistryPlayerToolConstants.AssignBedActionDescription,
-            categoryIndex: 3),
-
-        new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.DefineBuildingActionPiecePrefabName,
-            RegistryPlayerToolConstants.DefineBuildingActionDisplayName,
-            RegistryPlayerToolConstants.DefineBuildingActionDescription,
-            categoryIndex: RegistryPlayerToolConstants.PlansCategoryIndex),
-
-        new RegistryPlayerToolActionDefinition(
-            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionPiecePrefabName,
-            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionDisplayName,
-            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionDescription,
-            categoryIndex: RegistryPlayerToolConstants.PlansCategoryIndex)
-    };
+    public static readonly IReadOnlyList<RegistryPlayerToolActionDefinition> StaticActions = BuildStaticActions();
 
     public static IReadOnlyList<RegistryPlayerToolActionDefinition> All => StaticActions;
 
@@ -99,6 +56,26 @@ public static class RegistryPlayerToolActionDefinitions
             string.Equals(action.PiecePrefabName, piecePrefabName, StringComparison.OrdinalIgnoreCase));
     }
 
+    public static bool IsInspectActionPieceName(string piecePrefabName)
+    {
+        if (string.IsNullOrWhiteSpace(piecePrefabName))
+        {
+            return false;
+        }
+
+        if (string.Equals(
+                piecePrefabName,
+                RegistryPlayerToolConstants.InspectActionPiecePrefabName,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return piecePrefabName.StartsWith(
+            RegistryPlayerToolConstants.InspectActionPiecePrefabNamePrefix,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool IsBlueprintPlanActionPieceName(string piecePrefabName)
     {
         return !string.IsNullOrWhiteSpace(piecePrefabName) &&
@@ -111,6 +88,82 @@ public static class RegistryPlayerToolActionDefinitions
     {
         return RegistryPlayerToolConstants.BlueprintPlanActionPiecePrefabNamePrefix +
                GetStableHashCode(blueprintId ?? string.Empty).ToString("X8");
+    }
+
+    private static IReadOnlyList<RegistryPlayerToolActionDefinition> BuildStaticActions()
+    {
+        var actions = new List<RegistryPlayerToolActionDefinition>();
+        var categoryCount = Math.Max(1, RegistryPlayerToolConstants.PlayerToolCategoryLabels.Length);
+
+        for (var categoryIndex = 0; categoryIndex < categoryCount; categoryIndex++)
+        {
+            actions.Add(CreateInspectAction(categoryIndex));
+
+            if (categoryIndex == RegistryPlayerToolConstants.ActionsCategoryIndex)
+            {
+                AddMainActions(actions, categoryIndex);
+            }
+        }
+
+        return actions;
+    }
+
+    private static RegistryPlayerToolActionDefinition CreateInspectAction(int categoryIndex)
+    {
+        return new RegistryPlayerToolActionDefinition(
+            CreateInspectActionPiecePrefabName(categoryIndex),
+            RegistryPlayerToolConstants.InspectActionDisplayName,
+            RegistryPlayerToolConstants.InspectActionDescription,
+            categoryIndex);
+    }
+
+    private static string CreateInspectActionPiecePrefabName(int categoryIndex)
+    {
+        if (categoryIndex == RegistryPlayerToolConstants.ActionsCategoryIndex)
+        {
+            return RegistryPlayerToolConstants.InspectActionPiecePrefabName;
+        }
+
+        return RegistryPlayerToolConstants.InspectActionPiecePrefabNamePrefix + categoryIndex;
+    }
+
+    private static void AddMainActions(ICollection<RegistryPlayerToolActionDefinition> actions, int categoryIndex)
+    {
+        actions.Add(new RegistryPlayerToolActionDefinition(
+            RegistryPlayerToolConstants.CreateTavernZoneActionPiecePrefabName,
+            RegistryPlayerToolConstants.CreateTavernZoneActionDisplayName,
+            RegistryPlayerToolConstants.CreateTavernZoneActionDescription,
+            categoryIndex));
+
+        actions.Add(new RegistryPlayerToolActionDefinition(
+            RegistryPlayerToolConstants.DesignateBedActionPiecePrefabName,
+            RegistryPlayerToolConstants.DesignateBedActionDisplayName,
+            RegistryPlayerToolConstants.DesignateBedActionDescription,
+            categoryIndex));
+
+        actions.Add(new RegistryPlayerToolActionDefinition(
+            RegistryPlayerToolConstants.SpawnAndRegisterVikingActionPiecePrefabName,
+            RegistryPlayerToolConstants.SpawnAndRegisterVikingActionDisplayName,
+            RegistryPlayerToolConstants.SpawnAndRegisterVikingActionDescription,
+            categoryIndex));
+
+        actions.Add(new RegistryPlayerToolActionDefinition(
+            RegistryPlayerToolConstants.AssignBedActionPiecePrefabName,
+            RegistryPlayerToolConstants.AssignBedActionDisplayName,
+            RegistryPlayerToolConstants.AssignBedActionDescription,
+            categoryIndex));
+
+        actions.Add(new RegistryPlayerToolActionDefinition(
+            RegistryPlayerToolConstants.DefineBuildingActionPiecePrefabName,
+            RegistryPlayerToolConstants.DefineBuildingActionDisplayName,
+            RegistryPlayerToolConstants.DefineBuildingActionDescription,
+            categoryIndex));
+
+        actions.Add(new RegistryPlayerToolActionDefinition(
+            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionPiecePrefabName,
+            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionDisplayName,
+            RegistryPlayerToolConstants.CaptureBuildingBlueprintActionDescription,
+            categoryIndex));
     }
 
     private static uint GetStableHashCode(string value)

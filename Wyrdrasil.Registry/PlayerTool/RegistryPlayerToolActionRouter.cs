@@ -51,18 +51,20 @@ public static class RegistryPlayerToolActionRouter
             return true;
         }
 
+        if (RegistryPlayerToolActionDefinitions.IsInspectActionPieceName(selectedActionPieceName))
+        {
+            if (_inspectionService == null)
+            {
+                _log?.LogWarning("Registry player action router is not configured; inspect action was consumed but not executed.");
+                return true;
+            }
+
+            _inspectionService.InspectCrosshairTarget();
+            return true;
+        }
+
         switch (selectedActionPieceName)
         {
-            case RegistryPlayerToolConstants.InspectActionPiecePrefabName:
-                if (_inspectionService == null)
-                {
-                    _log?.LogWarning("Registry player action router is not configured; inspect action was consumed but not executed.");
-                    return true;
-                }
-
-                _inspectionService.InspectCrosshairTarget();
-                return true;
-
             case RegistryPlayerToolConstants.SpawnAndRegisterVikingActionPiecePrefabName:
                 if (_gameplayActionService == null)
                 {

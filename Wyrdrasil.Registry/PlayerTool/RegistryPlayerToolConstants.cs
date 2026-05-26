@@ -12,6 +12,7 @@ public static class RegistryPlayerToolConstants
     public const string Description = "Révèle les liens invisibles du village.";
 
     public const string InspectActionPiecePrefabName = "Wyrdrasil_Action_Inspect";
+    public const string InspectActionPiecePrefabNamePrefix = "Wyrdrasil_Action_Inspect_Category_";
     public const string InspectActionDisplayName = "Inspecter";
     public const string InspectActionDescription = "Révèle les informations Wyrdrasil de la cible visée.";
 
@@ -39,7 +40,8 @@ public static class RegistryPlayerToolConstants
     public const string CaptureBuildingBlueprintActionDisplayName = "Enregistrer bâtiment";
     public const string CaptureBuildingBlueprintActionDescription = "Capture le bâtiment visé comme modèle de construction.";
 
-    public const int PlansCategoryIndex = 4;
+    public const int ActionsCategoryIndex = 0;
+    public const int PlansCategoryIndex = 1;
     public const string BlueprintPlanActionPiecePrefabNamePrefix = "Wyrdrasil_Blueprint_";
 
     public const string BlueprintThumbnailHiddenRootName = "Wyrdrasil.Registry.PlayerTool.ThumbnailRenderer";
@@ -49,10 +51,7 @@ public static class RegistryPlayerToolConstants
 
     public static readonly string[] PlayerToolCategoryLabels =
     {
-        "Registre",
-        "Lieux",
-        "Postes",
-        "Âmes",
+        "Actions",
         "Plans"
     };
 }
