@@ -32,6 +32,7 @@ public sealed class ConstructionProjectGhostService
     private readonly ConstructionProjectService _constructionProjectService;
     private readonly Dictionary<string, GhostPiece> _ghostPiecesByKey = new();
     private readonly Dictionary<string, Material> _materialsByKey = new();
+    private bool _inspectionRevealVisible;
     private float _nextRefreshTime;
 
     public ConstructionProjectGhostService(
@@ -50,7 +51,7 @@ public sealed class ConstructionProjectGhostService
 
     public void Update()
     {
-        if (!_registryModeService.IsRegistryModeEnabled)
+        if (!ShouldShowProjectGhosts())
         {
             Reset();
             return;
@@ -63,6 +64,22 @@ public sealed class ConstructionProjectGhostService
 
         _nextRefreshTime = Time.time + 0.35f;
         RefreshAllProjectGhosts();
+    }
+
+    public void SetInspectionRevealVisible(bool visible)
+    {
+        if (_inspectionRevealVisible == visible)
+        {
+            return;
+        }
+
+        _inspectionRevealVisible = visible;
+        _nextRefreshTime = 0f;
+
+        if (!ShouldShowProjectGhosts())
+        {
+            Reset();
+        }
     }
 
     public void Reset()
@@ -86,6 +103,11 @@ public sealed class ConstructionProjectGhostService
         }
 
         _materialsByKey.Clear();
+    }
+
+    private bool ShouldShowProjectGhosts()
+    {
+        return _registryModeService.IsRegistryModeEnabled || _inspectionRevealVisible;
     }
 
     private void RefreshAllProjectGhosts()

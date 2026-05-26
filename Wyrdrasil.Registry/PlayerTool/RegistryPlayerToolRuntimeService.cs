@@ -9,6 +9,7 @@ public sealed class RegistryPlayerToolRuntimeService
     private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly RegistryPlayerToolGameplayActionService _gameplayActionService;
     private readonly RegistryPlayerToolTargetFeedbackService _targetFeedbackService;
+    private readonly RegistryPlayerToolInspectionRevealService _inspectionRevealService;
     private readonly RegistryConstructionPreviewInteractionService _constructionPreviewInteractionService;
     private readonly RegistryPlayerToolSaveService _saveService;
 
@@ -19,12 +20,14 @@ public sealed class RegistryPlayerToolRuntimeService
         ISettlementsAuthoringApi settlementsAuthoringApi,
         RegistryPlayerToolGameplayActionService gameplayActionService,
         RegistryPlayerToolTargetFeedbackService targetFeedbackService,
+        RegistryPlayerToolInspectionRevealService inspectionRevealService,
         RegistryConstructionPreviewInteractionService constructionPreviewInteractionService,
         RegistryPlayerToolSaveService saveService)
     {
         _settlementsAuthoringApi = settlementsAuthoringApi;
         _gameplayActionService = gameplayActionService;
         _targetFeedbackService = targetFeedbackService;
+        _inspectionRevealService = inspectionRevealService;
         _constructionPreviewInteractionService = constructionPreviewInteractionService;
         _saveService = saveService;
     }
@@ -32,6 +35,7 @@ public sealed class RegistryPlayerToolRuntimeService
     public void Update()
     {
         _targetFeedbackService.Update();
+        _inspectionRevealService.Update();
 
         var player = Player.m_localPlayer;
         if (!RegistryPlayerToolSelectionService.IsRegistryToolEquipped(player))
@@ -44,6 +48,7 @@ public sealed class RegistryPlayerToolRuntimeService
         {
             _lastObservedActionPieceName = string.Empty;
             _lastPreviewStartedFromActionPieceName = string.Empty;
+            _inspectionRevealService.SetRevealVisible(false);
             _gameplayActionService.ClearPendingSubjectSilently();
             if (_constructionPreviewInteractionService.IsPreviewActive)
             {
@@ -69,10 +74,21 @@ public sealed class RegistryPlayerToolRuntimeService
 
         if (_constructionPreviewInteractionService.IsPreviewActive)
         {
+            _inspectionRevealService.SetRevealVisible(false);
             DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
             UpdateConstructionPreviewRuntime();
             return;
         }
+
+        if (RegistryPlayerToolActionDefinitions.IsInspectActionPieceName(selectedActionPieceName))
+        {
+            _lastPreviewStartedFromActionPieceName = string.Empty;
+            _gameplayActionService.ClearPendingSubjectSilently();
+            _inspectionRevealService.SetRevealVisible(true);
+            return;
+        }
+
+        _inspectionRevealService.SetRevealVisible(false);
 
         if (RegistryPlayerToolActionDefinitions.IsBlueprintPlanActionPieceName(selectedActionPieceName))
         {
@@ -130,6 +146,7 @@ public sealed class RegistryPlayerToolRuntimeService
     {
         _lastObservedActionPieceName = string.Empty;
         _lastPreviewStartedFromActionPieceName = string.Empty;
+        _inspectionRevealService.SetRevealVisible(false);
         CancelPlayerWorldInteractionState(cancelPreview, clearPendingSubject: true);
     }
 

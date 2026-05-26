@@ -12,6 +12,7 @@ public sealed class ConstructionProjectMarkerService
     private readonly Dictionary<int, GameObject> _markersByProjectId = new();
     private Material? _markerMaterial;
     private int? _hoveredProjectId;
+    private bool _inspectionRevealVisible;
 
     public ConstructionProjectMarkerService(ConstructionProjectService constructionProjectService)
     {
@@ -95,6 +96,24 @@ public sealed class ConstructionProjectMarkerService
     {
         _hoveredProjectId = projectId;
     }
+
+    public void SetInspectionRevealVisible(bool visible)
+    {
+        if (_inspectionRevealVisible == visible)
+        {
+            return;
+        }
+
+        _inspectionRevealVisible = visible;
+        foreach (var pair in _markersByProjectId)
+        {
+            if (pair.Value != null)
+            {
+                ApplyMarkerVisual(pair.Key, pair.Value);
+            }
+        }
+    }
+
     public void Reset()
     {
         foreach (var marker in _markersByProjectId.Values)
@@ -139,12 +158,16 @@ public sealed class ConstructionProjectMarkerService
     private void ApplyMarkerVisual(int projectId, GameObject root)
     {
         var isHovered = _hoveredProjectId.HasValue && _hoveredProjectId.Value == projectId;
-        var baseColor = isHovered
-            ? new Color(1f, 0.95f, 0.35f, 0.95f)
-            : new Color(1f, 0.55f, 0.15f, 0.90f);
-        var emissionColor = isHovered
-            ? new Color(0.6f, 0.45f, 0.05f, 1f)
-            : new Color(0.45f, 0.18f, 0.02f, 1f);
+        var baseColor = _inspectionRevealVisible
+            ? new Color(1f, 0.95f, 0.25f, 0.98f)
+            : isHovered
+                ? new Color(1f, 0.95f, 0.35f, 0.95f)
+                : new Color(1f, 0.55f, 0.15f, 0.90f);
+        var emissionColor = _inspectionRevealVisible
+            ? new Color(0.8f, 0.65f, 0.08f, 1f)
+            : isHovered
+                ? new Color(0.6f, 0.45f, 0.05f, 1f)
+                : new Color(0.45f, 0.18f, 0.02f, 1f);
 
         foreach (var renderer in root.GetComponentsInChildren<Renderer>(true))
         {

@@ -146,10 +146,14 @@ public sealed class RegistryRuntimeBootstrap
             constructionPreviewInteractionService);
         var registryPlayerToolTargetFeedbackService = new RegistryPlayerToolTargetFeedbackService(
             residents.Services.ResidentService);
+        var registryPlayerToolInspectionRevealService = new RegistryPlayerToolInspectionRevealService(
+            constructionBootstrap.ConstructionProjectMarkerService,
+            constructionBootstrap.ConstructionProjectGhostService);
         var registryPlayerToolRuntimeService = new RegistryPlayerToolRuntimeService(
             settlements.AuthoringApi,
             registryPlayerToolGameplayActionService,
             registryPlayerToolTargetFeedbackService,
+            registryPlayerToolInspectionRevealService,
             constructionPreviewInteractionService,
             registryPlayerToolSaveService);
         var registryPlayerToolItemService = new RegistryPlayerToolItemService(log, registryPlayerToolPieceTableService);
