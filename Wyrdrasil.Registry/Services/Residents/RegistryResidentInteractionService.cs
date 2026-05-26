@@ -117,14 +117,14 @@ public sealed class RegistryResidentInteractionService
         if (_craftStationService.TryGetOrDesignateCraftStationAtCrosshair(out var craftStationData, out var craftStationFailureReason))
         {
             _log.LogInfo($"Force assign matched craft station #{craftStationData.Id} ('{craftStationData.DisplayName}').");
-            if (_assignmentService.TryForceAssignToCraftStation(pendingResident, craftStationData))
+            if (_assignmentService.TryForceAssignToCraftStation(pendingResident, craftStationData, out var assignmentFailureReason))
             {
                 _toolState.ClearPendingResidentForceAssign();
                 _log.LogInfo($"Force assign completed: resident #{pendingResident.Id} -> craft station #{craftStationData.Id}.");
             }
             else
             {
-                _log.LogWarning($"Force assign rejected for resident #{pendingResident.Id} on craft station #{craftStationData.Id}.");
+                _log.LogWarning($"Force assign rejected for resident #{pendingResident.Id} on craft station #{craftStationData.Id}: {assignmentFailureReason}");
             }
 
             return;

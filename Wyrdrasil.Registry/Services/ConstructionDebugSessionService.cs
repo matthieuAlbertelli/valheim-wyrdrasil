@@ -37,7 +37,9 @@ public sealed class ConstructionDebugSessionService
 
     public void BeginPendingCraftStationSelection(int projectId)
     {
-        PendingCraftStationProjectId = projectId > 0 ? projectId : 0;
+        var normalizedProjectId = projectId > 0 ? projectId : 0;
+        PendingCraftStationProjectId = normalizedProjectId;
+        PendingResidentProjectId = normalizedProjectId;
     }
 
     public bool TryGetPendingCraftStationProjectId(out int projectId)
@@ -53,7 +55,9 @@ public sealed class ConstructionDebugSessionService
 
     public void BeginPendingResidentSelection(int projectId)
     {
-        PendingResidentProjectId = projectId > 0 ? projectId : 0;
+        var normalizedProjectId = projectId > 0 ? projectId : 0;
+        PendingResidentProjectId = normalizedProjectId;
+        PendingCraftStationProjectId = normalizedProjectId;
     }
 
     public bool TryGetPendingResidentProjectId(out int projectId)

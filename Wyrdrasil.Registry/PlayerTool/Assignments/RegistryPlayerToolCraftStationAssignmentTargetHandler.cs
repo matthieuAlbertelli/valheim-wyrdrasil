@@ -45,10 +45,12 @@ public sealed class RegistryPlayerToolCraftStationAssignmentTargetHandler : IReg
             return false;
         }
 
-        if (!_assignmentService.TryForceAssignToCraftStation(resident, craftStationData))
+        if (!_assignmentService.TryForceAssignToCraftStation(resident, craftStationData, out var failureReason))
         {
-            playerMessage = "Registre : impossible d'assigner ce poste de travail.";
-            logMessage = $"Craft-station assignment rejected: resident #{resident.Id} -> station #{craftStationData.Id}.";
+            playerMessage = failureReason.Contains("reserved by construction project")
+                ? "Registre : ce poste de travail est réservé à un chantier."
+                : "Registre : impossible d'assigner ce poste de travail.";
+            logMessage = $"Craft-station assignment rejected: resident #{resident.Id} -> station #{craftStationData.Id}. {failureReason}";
             return false;
         }
 

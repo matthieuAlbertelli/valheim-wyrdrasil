@@ -172,7 +172,7 @@ public sealed class WyrdrasilRegisteredNpcMarker : MonoBehaviour
     private void ApplyPendingColor()
     {
         var color = _isPendingConstructionAssign
-            ? new Color(1f, 0.75f, 0.2f, 1f)
+            ? WyrdrasilVisualizationPalette.ConstructionOrange
             : new Color(1f, 0.95f, 0.35f, 1f);
 
         foreach (var dashRenderer in _pendingDashRenderers)

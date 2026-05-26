@@ -4,6 +4,7 @@ using UnityEngine;
 using Object = UnityEngine.Object;
 using Wyrdrasil.Construction.Models;
 using Wyrdrasil.Construction.Services;
+using Wyrdrasil.Core.Tool;
 using Wyrdrasil.Settlements.Runtime;
 using Wyrdrasil.Souls.Runtime;
 
@@ -163,21 +164,23 @@ public sealed class ConstructionLinkVisualService
             }
 
             var start = GetProjectLinkOrigin(project.Id, project.OriginPosition);
-            var workPost = project.WorkPosts.FirstOrDefault();
-            if (workPost != null && workPost.CraftStationId > 0 &&
-                TryGetCraftStationLinkPoint(workPost.CraftStationId, out var craftStationPoint))
+            foreach (var workPost in project.WorkPosts.OrderBy(candidate => candidate.Id))
             {
-                var key = $"ProjectWorkbench_{project.Id}";
-                desiredKeys.Add(key);
-                UpdateLink(key, start, craftStationPoint, new Color(1f, 0.8f, 0.2f, 0.95f));
-            }
+                if (workPost.CraftStationId > 0 &&
+                    TryGetCraftStationLinkPoint(workPost.CraftStationId, out var craftStationPoint))
+                {
+                    var key = $"ProjectWorkbench_{project.Id}_{workPost.Id}_{workPost.CraftStationId}";
+                    desiredKeys.Add(key);
+                    UpdateLink(key, start, craftStationPoint, WyrdrasilVisualizationPalette.ConstructionOrangeSoft);
+                }
 
-            if (workPost != null && workPost.AssignedResidentId.HasValue &&
-                TryGetResidentLinkPoint(workPost.AssignedResidentId.Value, out var residentPoint))
-            {
-                var key = $"ProjectResident_{project.Id}";
-                desiredKeys.Add(key);
-                UpdateLink(key, start, residentPoint, new Color(0.35f, 1f, 0.85f, 0.95f));
+                if (workPost.AssignedResidentId.HasValue &&
+                    TryGetResidentLinkPoint(workPost.AssignedResidentId.Value, out var residentPoint))
+                {
+                    var key = $"ProjectResident_{project.Id}_{workPost.Id}_{workPost.AssignedResidentId.Value}";
+                    desiredKeys.Add(key);
+                    UpdateLink(key, start, residentPoint, WyrdrasilVisualizationPalette.ConstructionOrangeSoft);
+                }
             }
         }
 
@@ -198,7 +201,7 @@ public sealed class ConstructionLinkVisualService
                 "HoverWorkbench",
                 GetProjectLinkOrigin(project.Id, project.OriginPosition),
                 craftStationPoint,
-                new Color(1f, 0.95f, 0.35f, 1f),
+                WyrdrasilVisualizationPalette.ConstructionOrange,
                 isPersistent: false);
             return;
         }
@@ -216,7 +219,7 @@ public sealed class ConstructionLinkVisualService
                 "HoverResident",
                 GetProjectLinkOrigin(project.Id, project.OriginPosition),
                 residentPoint,
-                new Color(1f, 0.75f, 0.2f, 1f),
+                WyrdrasilVisualizationPalette.ConstructionOrange,
                 isPersistent: false);
             return;
         }
@@ -231,15 +234,15 @@ public sealed class ConstructionLinkVisualService
 
     private bool TryGetCraftStationLinkPoint(int craftStationId, out Vector3 point)
     {
-        if (_settlementsRuntimeApi.TryResolveCraftStationAnchor(craftStationId, out var anchorWorldPosition, out _))
-        {
-            point = anchorWorldPosition + new Vector3(0f, 0.12f, 0f);
-            return true;
-        }
-
         if (_settlementsRuntimeApi.TryGetCraftStationById(craftStationId, out var craftStation))
         {
             point = craftStation.ReferenceWorldPosition + new Vector3(0f, 0.9f, 0f);
+            return true;
+        }
+
+        if (_settlementsRuntimeApi.TryResolveCraftStationAnchor(craftStationId, out var anchorWorldPosition, out _))
+        {
+            point = anchorWorldPosition + new Vector3(0f, 0.12f, 0f);
             return true;
         }
 

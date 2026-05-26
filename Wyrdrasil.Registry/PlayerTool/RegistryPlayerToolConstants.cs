@@ -30,7 +30,7 @@ public static class RegistryPlayerToolConstants
 
     public const string AssignActionPiecePrefabName = "Wyrdrasil_Action_Assign";
     public const string AssignActionDisplayName = "Assigner";
-    public const string AssignActionDescription = "Visez un viking enregistré, puis un lit, un établi, une forge ou tout autre objet assignable.";
+    public const string AssignActionDescription = "Visez un viking enregistré ou un chantier, puis un lit, un établi, une forge, un chantier ou tout autre objet assignable.";
 
     public const string AssignBedActionPiecePrefabName = AssignActionPiecePrefabName;
     public const string AssignBedActionDisplayName = AssignActionDisplayName;

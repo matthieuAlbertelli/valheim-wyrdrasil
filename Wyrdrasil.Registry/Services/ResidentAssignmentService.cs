@@ -268,8 +268,15 @@ public sealed class ResidentAssignmentService
 
     public bool TryAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData)
     {
+        return TryAssignToCraftStation(resident, craftStationData, out _);
+    }
+
+    public bool TryAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData, out string failureReason)
+    {
+        failureReason = string.Empty;
         if (_constructionRuntimeApi.TryGetProjectIdByCraftStation(craftStationData.Id, out var reservedProjectId))
         {
+            failureReason = $"Craft station #{craftStationData.Id} is reserved by construction project #{reservedProjectId}.";
             return false;
         }
 
@@ -286,6 +293,7 @@ public sealed class ResidentAssignmentService
 
         if (!_settlementsRuntimeApi.ForceAssignCraftStation(craftStationData.Id, resident.Id, out var previousResidentId, out var resolvedCraftStation) || resolvedCraftStation == null)
         {
+            failureReason = $"Craft station #{craftStationData.Id} could not be assigned by the settlements runtime.";
             return false;
         }
 
@@ -304,7 +312,12 @@ public sealed class ResidentAssignmentService
 
     public bool TryForceAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData)
     {
-        return TryAssignToCraftStation(resident, craftStationData);
+        return TryAssignToCraftStation(resident, craftStationData, out _);
+    }
+
+    public bool TryForceAssignToCraftStation(RegisteredNpcData resident, RegisteredCraftStationData craftStationData, out string failureReason)
+    {
+        return TryAssignToCraftStation(resident, craftStationData, out failureReason);
     }
 
     public bool TryAssignToConstructionProject(RegisteredNpcData resident, int projectId, out int workPostId, out string failureReason)

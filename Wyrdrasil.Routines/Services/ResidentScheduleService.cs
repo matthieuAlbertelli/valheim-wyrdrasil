@@ -9,6 +9,8 @@ public sealed class ResidentScheduleService
     private const int MealPriority = 150;
     private const int WanderPriority = 10;
 
+    private const int SunriseWorkStartMinute = 6 * 60;
+    private const int NightWorkEndMinute = 22 * 60;
     private const int NoonMealStartMinute = 12 * 60;
     private const int NoonMealEndMinute = 13 * 60;
     private const int EveningMealStartMinute = 18 * 60;
@@ -45,7 +47,7 @@ public sealed class ResidentScheduleService
             ResidentRoutineActivityType.WorkAtAssignedTarget,
             new[]
             {
-                new ResidentScheduleEntryData(ResidentRoutineActivityType.WorkAtAssignedTarget, 10 * 60, 22 * 60, WorkPriority)
+                new ResidentScheduleEntryData(ResidentRoutineActivityType.WorkAtAssignedTarget, SunriseWorkStartMinute, NightWorkEndMinute, WorkPriority)
             });
     }
 

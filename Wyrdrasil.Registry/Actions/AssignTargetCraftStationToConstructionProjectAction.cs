@@ -47,8 +47,7 @@ public sealed class AssignTargetCraftStationToConstructionProjectAction : IRegis
             return;
         }
 
-        context.ConstructionDebugSessionService.ClearPendingCraftStationSelection();
         context.ConstructionDebugSessionService.SetLatestProjectId(projectId);
-        context.Log.LogInfo($"Associated designated workbench #{craftStation.Id} with construction project #{projectId}, logical slot #{workPost.Id}.");
+        context.Log.LogInfo($"Associated designated workbench #{craftStation.Id} with construction project #{projectId}, work post #{workPost.Id}. Project remains selected for more associations.");
     }
 }

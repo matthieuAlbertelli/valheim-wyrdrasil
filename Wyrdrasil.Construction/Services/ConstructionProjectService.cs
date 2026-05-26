@@ -256,12 +256,30 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        var targetWorkPost = project.WorkPosts.FirstOrDefault();
+        var existingProjectPost = project.WorkPosts.FirstOrDefault(candidate => candidate.CraftStationId == craftStationId);
+        if (existingProjectPost != null)
+        {
+            workPost = existingProjectPost;
+            failureReason = string.Empty;
+            return true;
+        }
+
+        var targetWorkPost = project.WorkPosts
+            .OrderBy(candidate => candidate.Id)
+            .FirstOrDefault(candidate => candidate.CraftStationId <= 0);
+
         if (targetWorkPost == null)
         {
-            workPost = new ConstructionWorkPostData();
-            failureReason = $"Construction project {projectId} has no logical work slot.";
-            return false;
+            targetWorkPost = new ConstructionWorkPostData
+            {
+                Id = AllocateWorkPostId(),
+                ProjectId = project.Id,
+                CraftStationId = 0,
+                WorldPosition = project.OriginPosition,
+                WorldRotation = project.OriginRotation,
+                AssignedResidentId = null
+            };
+            project.WorkPosts.Add(targetWorkPost);
         }
 
         targetWorkPost.CraftStationId = craftStationId;
@@ -316,18 +334,10 @@ public sealed class ConstructionProjectService
             return false;
         }
 
-        var targetWorkPost = project.WorkPosts.FirstOrDefault();
-        if (targetWorkPost == null)
-        {
-            workPost = new ConstructionWorkPostData();
-            failureReason = $"Construction project {projectId} has no logical work slot.";
-            return false;
-        }
-
         var existingPost = FindAssignedWorkPost(residentId, out var existingProjectId);
         if (existingPost != null)
         {
-            if (existingProjectId == projectId)
+            if (existingProjectId == projectId && existingPost.CraftStationId > 0)
             {
                 workPost = existingPost;
                 failureReason = string.Empty;
@@ -338,17 +348,24 @@ public sealed class ConstructionProjectService
             _activeWorkPostIdsByResidentId.Remove(residentId);
         }
 
-        if (targetWorkPost.AssignedResidentId.HasValue && targetWorkPost.AssignedResidentId.Value != residentId)
+        var targetWorkPost = project.WorkPosts
+            .Where(candidate => candidate.CraftStationId > 0)
+            .OrderBy(candidate => candidate.Id)
+            .FirstOrDefault(candidate => !candidate.AssignedResidentId.HasValue || candidate.AssignedResidentId.Value == residentId);
+
+        if (targetWorkPost == null)
         {
             workPost = new ConstructionWorkPostData();
-            failureReason = $"Construction project {projectId} already has a resident assigned to its logical work slot.";
+            failureReason = project.WorkPosts.Any(candidate => candidate.CraftStationId > 0)
+                ? $"Construction project {projectId} has no free associated workbench. Associate another workbench before assigning another resident."
+                : $"Construction project {projectId} has no associated workbench. Associate a workbench before assigning residents.";
             return false;
         }
 
         targetWorkPost.AssignedResidentId = residentId;
         workPost = targetWorkPost;
         failureReason = string.Empty;
-        _debugLogService.Info("Project", $"Assigned resident #{residentId} to construction project {projectId}, work post #{targetWorkPost.Id}.");
+        _debugLogService.Info("Project", $"Assigned resident #{residentId} to construction project {projectId}, work post #{targetWorkPost.Id}, craft station #{targetWorkPost.CraftStationId}.");
         return true;
     }
 
@@ -634,10 +651,10 @@ public sealed class ConstructionProjectService
             report.Messages.Add("Project is missing a blueprint id.");
         }
 
-        if (project.WorkPosts.Count != 1)
+        if (project.WorkPosts.Count <= 0)
         {
             report.IsValid = false;
-            report.Messages.Add($"Project should expose 1 logical construction slot but currently exposes {project.WorkPosts.Count}.");
+            report.Messages.Add("Project should expose at least 1 logical construction slot.");
         }
 
         if (project.Progress.BuiltPieceCount > project.Progress.TotalPieceCount)

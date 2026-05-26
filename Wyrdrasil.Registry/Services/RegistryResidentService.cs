@@ -581,6 +581,18 @@ public sealed class RegistryResidentService
             return false;
         }
 
+        return TryAssignResidentToConstructionProject(resident, projectId, out workPostId, out failureReason);
+    }
+
+    public bool TryAssignResidentToConstructionProject(RegisteredNpcData resident, int projectId, out int workPostId, out string failureReason)
+    {
+        workPostId = 0;
+        if (resident == null)
+        {
+            failureReason = "Resident is null.";
+            return false;
+        }
+
         return _assignmentService.TryAssignToConstructionProject(resident, projectId, out workPostId, out failureReason);
     }
 

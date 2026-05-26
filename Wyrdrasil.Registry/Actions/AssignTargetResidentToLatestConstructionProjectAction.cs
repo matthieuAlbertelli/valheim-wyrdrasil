@@ -35,8 +35,7 @@ public sealed class AssignTargetResidentToLatestConstructionProjectAction : IReg
             return;
         }
 
-        context.ConstructionDebugSessionService.ClearPendingResidentSelection();
         context.ConstructionDebugSessionService.SetLatestProjectId(projectId);
-        context.Log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project #{projectId}, logical slot #{workPostId}.");
+        context.Log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project #{projectId}, work post #{workPostId}. Project remains selected for more associations.");
     }
 }

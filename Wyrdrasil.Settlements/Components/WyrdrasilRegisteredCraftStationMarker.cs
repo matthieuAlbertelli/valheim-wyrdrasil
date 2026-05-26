@@ -129,7 +129,7 @@ public sealed class WyrdrasilRegisteredCraftStationMarker : MonoBehaviour
     {
         if (_isPendingConstructionTarget)
         {
-            return new Color(1f, 0.95f, 0.35f, 1f);
+            return WyrdrasilVisualizationPalette.ConstructionOrange;
         }
 
         return _isAssigned

@@ -107,9 +107,8 @@ public sealed class AssignTargetCraftStationToConstructionProjectHandler : IRegi
             return;
         }
 
-        _constructionDebugSessionService.ClearPendingCraftStationSelection();
         _constructionDebugSessionService.SetLatestProjectId(projectId);
-        _log.LogInfo($"Associated designated workbench #{craftStation.Id} with construction project #{projectId}, logical slot #{workPost.Id}.");
+        _log.LogInfo($"Associated designated workbench #{craftStation.Id} with construction project #{projectId}, work post #{workPost.Id}. Project remains selected for more associations.");
     }
 }
 
@@ -160,9 +159,8 @@ public sealed class AssignTargetResidentToLatestConstructionProjectHandler : IRe
             return;
         }
 
-        _constructionDebugSessionService.ClearPendingResidentSelection();
         _constructionDebugSessionService.SetLatestProjectId(projectId);
-        _log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project #{projectId}, logical slot #{workPostId}.");
+        _log.LogInfo($"Assigned resident #{resident.Id} ('{resident.DisplayName}') to construction project #{projectId}, work post #{workPostId}. Project remains selected for more associations.");
     }
 }
 

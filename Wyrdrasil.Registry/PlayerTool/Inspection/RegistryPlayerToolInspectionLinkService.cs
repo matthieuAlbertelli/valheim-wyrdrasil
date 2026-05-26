@@ -63,6 +63,7 @@ public sealed class RegistryPlayerToolInspectionLinkService
         public float RadiusZ { get; }
         public GameObject? FurnitureRoot { get; }
         public bool UseFurnitureGlow { get; }
+        public Color LinkColor { get; }
 
         public LinkTarget(
             Vector3 point,
@@ -70,7 +71,8 @@ public sealed class RegistryPlayerToolInspectionLinkService
             float radiusX,
             float radiusZ,
             GameObject? furnitureRoot = null,
-            bool useFurnitureGlow = false)
+            bool useFurnitureGlow = false,
+            Color? linkColor = null)
         {
             Point = point;
             RingY = ringY;
@@ -78,6 +80,7 @@ public sealed class RegistryPlayerToolInspectionLinkService
             RadiusZ = radiusZ;
             FurnitureRoot = furnitureRoot;
             UseFurnitureGlow = useFurnitureGlow;
+            LinkColor = linkColor ?? WyrdrasilVisualizationPalette.AssignedPurple;
         }
     }
 
@@ -305,10 +308,16 @@ public sealed class RegistryPlayerToolInspectionLinkService
                 break;
 
             case OccupationTargetKind.ConstructionWorkPost:
-                if (_constructionRuntimeApi.TryGetWorkPost(target.TargetId, out var workPost))
+                if (_constructionRuntimeApi.TryGetWorkPost(target.TargetId, out var workPost) &&
+                    _constructionRuntimeApi.TryGetProject(workPost.ProjectId, out var project))
                 {
-                    var point = workPost.WorldPosition + Vector3.up * 0.55f;
-                    linkTarget = new LinkTarget(point, workPost.WorldPosition.y + 0.06f, 0.45f, 0.45f);
+                    var point = project.OriginPosition + Vector3.up * 3.8f;
+                    linkTarget = new LinkTarget(
+                        point,
+                        project.OriginPosition.y + 0.08f,
+                        0.95f,
+                        0.95f,
+                        linkColor: WyrdrasilVisualizationPalette.ConstructionOrange);
                     return true;
                 }
 
@@ -435,15 +444,16 @@ public sealed class RegistryPlayerToolInspectionLinkService
         }
 
         var alphaPulse = 0.48f + (Mathf.Sin(phase * 1.35f) * 0.10f);
+        var baseColor = target.LinkColor;
         var outerColor = new Color(
-            WyrdrasilVisualizationPalette.AssignedPurple.r,
-            WyrdrasilVisualizationPalette.AssignedPurple.g,
-            WyrdrasilVisualizationPalette.AssignedPurple.b,
+            baseColor.r,
+            baseColor.g,
+            baseColor.b,
             Mathf.Clamp(alphaPulse * 0.55f, 0.18f, 0.45f));
         var innerColor = new Color(
-            WyrdrasilVisualizationPalette.AssignedPurple.r,
-            WyrdrasilVisualizationPalette.AssignedPurple.g,
-            WyrdrasilVisualizationPalette.AssignedPurple.b,
+            baseColor.r,
+            baseColor.g,
+            baseColor.b,
             Mathf.Clamp(alphaPulse + 0.18f, 0.42f, 0.82f));
 
         link.OuterLine.startColor = outerColor;
@@ -601,7 +611,7 @@ public sealed class RegistryPlayerToolInspectionLinkService
         if (material.HasProperty("_EmissionColor"))
         {
             material.EnableKeyword("_EMISSION");
-            material.SetColor("_EmissionColor", WyrdrasilVisualizationPalette.AssignedPurple * 0.65f);
+            material.SetColor("_EmissionColor", color * 0.65f);
         }
 
         if (material.HasProperty("_SrcBlend"))

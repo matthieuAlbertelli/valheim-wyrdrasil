@@ -156,9 +156,20 @@ public sealed class RegistryRuntimeBootstrap
             log,
             registryPlayerToolPieceTableService,
             registryPlayerToolWorldObjectHandlers);
+        var constructionLinkVisualService = new ConstructionLinkVisualService(
+            constructionBootstrap.ConstructionProjectService,
+            constructionBootstrap.ConstructionProjectMarkerService,
+            settlements.RuntimeApi,
+            residents.RuntimeApi);
+
         var registryPlayerToolAssignmentService = new RegistryPlayerToolAssignmentService(
             log,
             residents.Services.ResidentService,
+            settlements.Services.CraftStationService,
+            constructionBootstrap.RuntimeApi,
+            constructionBootstrap.ConstructionProjectMarkerService,
+            constructionDebugSessionService,
+            constructionLinkVisualService,
             registryPlayerToolPieceTableService,
             new IRegistryPlayerToolAssignmentTargetHandler[]
             {
@@ -225,12 +236,6 @@ public sealed class RegistryRuntimeBootstrap
             constructionBootstrap.ConstructionPlacementPreviewService,
             constructionDebugSessionService,
             residents.RoutinesRuntimeApi);
-
-        var constructionLinkVisualService = new ConstructionLinkVisualService(
-            constructionBootstrap.ConstructionProjectService,
-            constructionBootstrap.ConstructionProjectMarkerService,
-            settlements.RuntimeApi,
-            residents.RuntimeApi);
 
         var selectionFeedbackService = new RegistrySelectionFeedbackService(
             settlements.Services.SlotService,
