@@ -1,4 +1,5 @@
 using UnityEngine;
+using Wyrdrasil.Registry.Services.Interactions;
 using Wyrdrasil.Settlements.Authoring;
 
 namespace Wyrdrasil.Registry.PlayerTool;
@@ -8,15 +9,24 @@ public sealed class RegistryPlayerToolRuntimeService
     private readonly ISettlementsAuthoringApi _settlementsAuthoringApi;
     private readonly RegistryPlayerToolGameplayActionService _gameplayActionService;
     private readonly RegistryPlayerToolTargetFeedbackService _targetFeedbackService;
+    private readonly RegistryConstructionPreviewInteractionService _constructionPreviewInteractionService;
+    private readonly RegistryPlayerToolSaveService _saveService;
+
+    private string _lastObservedActionPieceName = string.Empty;
+    private string _lastPreviewStartedFromActionPieceName = string.Empty;
 
     public RegistryPlayerToolRuntimeService(
         ISettlementsAuthoringApi settlementsAuthoringApi,
         RegistryPlayerToolGameplayActionService gameplayActionService,
-        RegistryPlayerToolTargetFeedbackService targetFeedbackService)
+        RegistryPlayerToolTargetFeedbackService targetFeedbackService,
+        RegistryConstructionPreviewInteractionService constructionPreviewInteractionService,
+        RegistryPlayerToolSaveService saveService)
     {
         _settlementsAuthoringApi = settlementsAuthoringApi;
         _gameplayActionService = gameplayActionService;
         _targetFeedbackService = targetFeedbackService;
+        _constructionPreviewInteractionService = constructionPreviewInteractionService;
+        _saveService = saveService;
     }
 
     public void Update()
@@ -24,11 +34,67 @@ public sealed class RegistryPlayerToolRuntimeService
         _targetFeedbackService.Update();
 
         var player = Player.m_localPlayer;
+        if (!RegistryPlayerToolSelectionService.IsRegistryToolEquipped(player))
+        {
+            ResetPlayerToolRuntimeState(cancelPreview: true);
+            return;
+        }
+
         if (!RegistryPlayerToolSelectionService.TryGetSelectedActionPieceName(player, out var selectedActionPieceName))
+        {
+            _lastObservedActionPieceName = string.Empty;
+            _lastPreviewStartedFromActionPieceName = string.Empty;
+            _gameplayActionService.ClearPendingSubjectSilently();
+            if (_constructionPreviewInteractionService.IsPreviewActive)
+            {
+                UpdateConstructionPreviewRuntime();
+            }
+            else
+            {
+                DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
+            }
+            return;
+        }
+
+        var selectionChanged = !string.Equals(
+            selectedActionPieceName,
+            _lastObservedActionPieceName,
+            System.StringComparison.OrdinalIgnoreCase);
+        _lastObservedActionPieceName = selectedActionPieceName;
+
+        if (selectionChanged)
+        {
+            CancelRuntimeStateOwnedByPreviousAction(selectedActionPieceName);
+        }
+
+        if (_constructionPreviewInteractionService.IsPreviewActive)
+        {
+            DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
+            UpdateConstructionPreviewRuntime();
+            return;
+        }
+
+        if (RegistryPlayerToolActionDefinitions.IsBlueprintPlanActionPieceName(selectedActionPieceName))
         {
             _gameplayActionService.ClearPendingSubjectSilently();
             DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
+
+            if (selectionChanged ||
+                !string.Equals(
+                    _lastPreviewStartedFromActionPieceName,
+                    selectedActionPieceName,
+                    System.StringComparison.OrdinalIgnoreCase))
+            {
+                _lastPreviewStartedFromActionPieceName = selectedActionPieceName;
+                _gameplayActionService.SelectBlueprintPlan(selectedActionPieceName);
+            }
+
             return;
+        }
+
+        if (selectionChanged)
+        {
+            _lastPreviewStartedFromActionPieceName = string.Empty;
         }
 
         if (selectedActionPieceName != RegistryPlayerToolConstants.AssignBedActionPiecePrefabName)
@@ -58,6 +124,61 @@ public sealed class RegistryPlayerToolRuntimeService
         }
 
         DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
+    }
+
+    private void ResetPlayerToolRuntimeState(bool cancelPreview)
+    {
+        _lastObservedActionPieceName = string.Empty;
+        _lastPreviewStartedFromActionPieceName = string.Empty;
+        CancelPlayerWorldInteractionState(cancelPreview, clearPendingSubject: true);
+    }
+
+    private void CancelRuntimeStateOwnedByPreviousAction(string selectedActionPieceName)
+    {
+        var previousPreviewBelongsToSelectedAction =
+            !string.IsNullOrWhiteSpace(_lastPreviewStartedFromActionPieceName) &&
+            string.Equals(
+                _lastPreviewStartedFromActionPieceName,
+                selectedActionPieceName,
+                System.StringComparison.OrdinalIgnoreCase);
+
+        if (_constructionPreviewInteractionService.IsPreviewActive && !previousPreviewBelongsToSelectedAction)
+        {
+            _lastPreviewStartedFromActionPieceName = string.Empty;
+            CancelPlayerWorldInteractionState(cancelPreview: true, clearPendingSubject: true);
+            return;
+        }
+
+        CancelPlayerWorldInteractionState(cancelPreview: false, clearPendingSubject: false);
+    }
+
+    private void CancelPlayerWorldInteractionState(bool cancelPreview, bool clearPendingSubject)
+    {
+        if (clearPendingSubject)
+        {
+            _gameplayActionService.ClearPendingSubjectSilently();
+        }
+
+        if (cancelPreview && _constructionPreviewInteractionService.IsPreviewActive)
+        {
+            _constructionPreviewInteractionService.CancelPreview();
+        }
+
+        DisableAllPlayerSpatialVisualsAndCancelAuthoringIfNeeded();
+    }
+
+    private void UpdateConstructionPreviewRuntime()
+    {
+        if (RegistryPlayerToolPlacementInterceptor.IsGameplayInputBlocked())
+        {
+            return;
+        }
+
+        _constructionPreviewInteractionService.Update(out var shouldSave);
+        if (shouldSave)
+        {
+            _saveService.SaveAfterPersistentPlayerAction("Lancer chantier");
+        }
     }
 
     private void UpdatePlayerZoneAuthoringRuntime()

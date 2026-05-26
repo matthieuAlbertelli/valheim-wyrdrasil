@@ -9,7 +9,20 @@ public static class RegistryPlayerToolSelectionService
 {
     public static bool IsRegistryToolActive(Player? player)
     {
-        return TryGetPlayerBuildPieces(player, out var pieceTable) && IsRegistryPieceTable(pieceTable);
+        return IsRegistryToolEquipped(player) &&
+               TryGetPlayerBuildPieces(player, out var pieceTable) &&
+               IsRegistryPieceTable(pieceTable);
+    }
+
+    public static bool IsRegistryToolEquipped(Player? player)
+    {
+        if (player == null)
+        {
+            return false;
+        }
+
+        return TryGetItemDataFieldValue(player, "m_rightItem", out var rightItem) && LooksLikeRegistryTool(rightItem) ||
+               TryGetItemDataFieldValue(player, "m_leftItem", out var leftItem) && LooksLikeRegistryTool(leftItem);
     }
 
     public static bool IsSelectedAction(Player? player, string actionPiecePrefabName)
@@ -22,7 +35,9 @@ public static class RegistryPlayerToolSelectionService
     {
         actionPieceName = string.Empty;
 
-        if (!TryGetPlayerBuildPieces(player, out var pieceTable) || !IsRegistryPieceTable(pieceTable))
+        if (!IsRegistryToolEquipped(player) ||
+            !TryGetPlayerBuildPieces(player, out var pieceTable) ||
+            !IsRegistryPieceTable(pieceTable))
         {
             return false;
         }
@@ -123,6 +138,55 @@ public static class RegistryPlayerToolSelectionService
         }
 
         return false;
+    }
+
+    private static bool TryGetItemDataFieldValue(object target, string fieldName, out ItemDrop.ItemData itemData)
+    {
+        itemData = null!;
+
+        for (var type = target.GetType(); type != null; type = type.BaseType)
+        {
+            var field = type.GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+
+            if (field?.GetValue(target) is ItemDrop.ItemData value && value != null)
+            {
+                itemData = value;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeRegistryTool(ItemDrop.ItemData itemData)
+    {
+        var sharedData = itemData.m_shared;
+        if (sharedData == null)
+        {
+            return false;
+        }
+
+        if (string.Equals(sharedData.m_name, RegistryPlayerToolConstants.DisplayName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (string.Equals(sharedData.m_description, RegistryPlayerToolConstants.Description, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (sharedData.m_buildPieces != null &&
+            string.Equals(sharedData.m_buildPieces.name, RegistryPlayerToolConstants.PieceTableName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        var dropPrefab = itemData.m_dropPrefab;
+        return dropPrefab != null &&
+               string.Equals(dropPrefab.name, RegistryPlayerToolConstants.ItemPrefabName, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool TryGetGameObjectFieldValue(object target, string fieldName, out GameObject gameObject)

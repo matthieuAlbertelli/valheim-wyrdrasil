@@ -4,6 +4,7 @@ using BepInEx.Logging;
 using UnityEngine;
 using Wyrdrasil.Construction.Authoring;
 using Wyrdrasil.Registry.Services;
+using Wyrdrasil.Registry.Services.Interactions;
 using Wyrdrasil.Settlements.Authoring;
 using Wyrdrasil.Settlements.Tool;
 using Wyrdrasil.Souls.Tool;
@@ -19,6 +20,7 @@ public sealed class RegistryPlayerToolGameplayActionService
     private readonly ResidentAssignmentService _assignmentService;
     private readonly IConstructionAuthoringApi _constructionAuthoringApi;
     private readonly ConstructionDebugSessionService _constructionDebugSessionService;
+    private readonly RegistryConstructionPreviewInteractionService _constructionPreviewInteractionService;
 
     private int? _pendingAssignBedResidentId;
 
@@ -29,7 +31,8 @@ public sealed class RegistryPlayerToolGameplayActionService
         RegistryResidentService residentService,
         ResidentAssignmentService assignmentService,
         IConstructionAuthoringApi constructionAuthoringApi,
-        ConstructionDebugSessionService constructionDebugSessionService)
+        ConstructionDebugSessionService constructionDebugSessionService,
+        RegistryConstructionPreviewInteractionService constructionPreviewInteractionService)
     {
         _log = log;
         _settlementsAuthoringApi = settlementsAuthoringApi;
@@ -38,6 +41,7 @@ public sealed class RegistryPlayerToolGameplayActionService
         _assignmentService = assignmentService;
         _constructionAuthoringApi = constructionAuthoringApi;
         _constructionDebugSessionService = constructionDebugSessionService;
+        _constructionPreviewInteractionService = constructionPreviewInteractionService;
     }
 
     public bool SpawnAndRegisterViking()
@@ -275,8 +279,16 @@ public sealed class RegistryPlayerToolGameplayActionService
         }
 
         _constructionDebugSessionService.SetLatestBlueprintId(blueprint.Id);
-        ShowPlayerMessage($"Registre : modèle '{blueprint.DisplayName}' sélectionné.");
-        _log.LogInfo($"Registry player blueprint selected: '{blueprint.DisplayName}' ({blueprint.Id}) with {blueprint.Pieces.Count} pieces.");
+
+        if (!_constructionPreviewInteractionService.TryBeginPreview(blueprint.Id, out var failureReason))
+        {
+            ShowPlayerMessage("Registre : impossible de prévisualiser ce plan.");
+            _log.LogWarning($"Registry player blueprint preview failed for '{blueprint.DisplayName}' ({blueprint.Id}): {failureReason}");
+            return false;
+        }
+
+        ShowPlayerMessage($"Registre : placez le chantier '{blueprint.DisplayName}'.");
+        _log.LogInfo($"Registry player blueprint selected for placement: '{blueprint.DisplayName}' ({blueprint.Id}) with {blueprint.Pieces.Count} pieces.");
         return false;
     }
 

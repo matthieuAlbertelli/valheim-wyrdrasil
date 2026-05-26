@@ -61,6 +61,12 @@ public static class RegistryPlayerToolPlacementInterceptor
             return true;
         }
 
+        if (RegistryPlayerToolActionRouter.IsConstructionPreviewActive)
+        {
+            _lastConsumedFrame = Time.frameCount;
+            return true;
+        }
+
         if (primaryDown)
         {
             RegistryPlayerToolActionRouter.TryExecuteSelectedPrimaryAction(player);
@@ -109,7 +115,7 @@ public static class RegistryPlayerToolPlacementInterceptor
         return true;
     }
 
-    private static bool IsGameplayInputBlocked()
+    public static bool IsGameplayInputBlocked()
     {
         if (Time.timeScale <= 0f)
         {

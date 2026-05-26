@@ -124,6 +124,11 @@ public sealed class RegistryRuntimeBootstrap
             registryPlayerToolBlueprintThumbnailService);
         var registryPlayerToolInspectionService = new RegistryPlayerToolInspectionService(log);
         var registryPlayerToolSaveService = new RegistryPlayerToolSaveService(log, persistenceService);
+        var constructionPreviewInteractionService = new RegistryConstructionPreviewInteractionService(
+            log,
+            settlements.AuthoringApi,
+            constructionBootstrap.ConstructionPlacementPreviewService,
+            constructionDebugSessionService);
         var registryPlayerToolGameplayActionService = new RegistryPlayerToolGameplayActionService(
             log,
             settlements.AuthoringApi,
@@ -131,18 +136,22 @@ public sealed class RegistryRuntimeBootstrap
             residents.Services.ResidentService,
             residents.Services.ResidentAssignmentService,
             constructionBootstrap.AuthoringApi,
-            constructionDebugSessionService);
+            constructionDebugSessionService,
+            constructionPreviewInteractionService);
         RegistryPlayerToolActionRouter.Configure(
             log,
             registryPlayerToolInspectionService,
             registryPlayerToolGameplayActionService,
-            registryPlayerToolSaveService);
+            registryPlayerToolSaveService,
+            constructionPreviewInteractionService);
         var registryPlayerToolTargetFeedbackService = new RegistryPlayerToolTargetFeedbackService(
             residents.Services.ResidentService);
         var registryPlayerToolRuntimeService = new RegistryPlayerToolRuntimeService(
             settlements.AuthoringApi,
             registryPlayerToolGameplayActionService,
-            registryPlayerToolTargetFeedbackService);
+            registryPlayerToolTargetFeedbackService,
+            constructionPreviewInteractionService,
+            registryPlayerToolSaveService);
         var registryPlayerToolItemService = new RegistryPlayerToolItemService(log, registryPlayerToolPieceTableService);
         var actionRegistry = RegistryActionRegistryFactory.CreateDefault(
             log,
@@ -186,12 +195,6 @@ public sealed class RegistryRuntimeBootstrap
             settlements.AuthoringApi,
             constructionLinkVisualService,
             selectionFeedbackService);
-
-        var constructionPreviewInteractionService = new RegistryConstructionPreviewInteractionService(
-            log,
-            settlements.AuthoringApi,
-            constructionBootstrap.ConstructionPlacementPreviewService,
-            constructionDebugSessionService);
 
         var zoneAuthoringInteractionService = new RegistryZoneAuthoringInteractionService(settlements.AuthoringApi);
         var interactionSessionCoordinator = new RegistryInteractionSessionCoordinator(

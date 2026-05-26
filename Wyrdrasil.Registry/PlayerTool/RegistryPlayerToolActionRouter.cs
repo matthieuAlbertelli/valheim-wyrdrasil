@@ -1,4 +1,5 @@
 using BepInEx.Logging;
+using Wyrdrasil.Registry.Services.Interactions;
 
 namespace Wyrdrasil.Registry.PlayerTool;
 
@@ -8,21 +9,31 @@ public static class RegistryPlayerToolActionRouter
     private static RegistryPlayerToolInspectionService? _inspectionService;
     private static RegistryPlayerToolGameplayActionService? _gameplayActionService;
     private static RegistryPlayerToolSaveService? _saveService;
+    private static RegistryConstructionPreviewInteractionService? _constructionPreviewInteractionService;
 
     public static void Configure(
         ManualLogSource log,
         RegistryPlayerToolInspectionService inspectionService,
         RegistryPlayerToolGameplayActionService gameplayActionService,
-        RegistryPlayerToolSaveService saveService)
+        RegistryPlayerToolSaveService saveService,
+        RegistryConstructionPreviewInteractionService constructionPreviewInteractionService)
     {
         _log = log;
         _inspectionService = inspectionService;
         _gameplayActionService = gameplayActionService;
         _saveService = saveService;
+        _constructionPreviewInteractionService = constructionPreviewInteractionService;
     }
+
+    public static bool IsConstructionPreviewActive => _constructionPreviewInteractionService?.IsPreviewActive == true;
 
     public static bool TryExecuteSelectedPrimaryAction(Player? player)
     {
+        if (IsConstructionPreviewActive)
+        {
+            return true;
+        }
+
         if (!RegistryPlayerToolSelectionService.TryGetSelectedActionPieceName(player, out var selectedActionPieceName))
         {
             return false;
@@ -119,6 +130,11 @@ public static class RegistryPlayerToolActionRouter
 
     public static bool TryExecuteSelectedSecondaryAction(Player? player)
     {
+        if (IsConstructionPreviewActive)
+        {
+            return true;
+        }
+
         if (!RegistryPlayerToolSelectionService.TryGetSelectedActionPieceName(player, out var selectedActionPieceName))
         {
             return false;

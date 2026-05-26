@@ -31,6 +31,38 @@ public sealed class RegistryConstructionPreviewInteractionService
 
     public string ControlsLabel => _constructionPlacementPreviewService.ControlsLabel;
 
+    public bool TryBeginPreview(string blueprintId, out string failureReason)
+    {
+        var player = Player.m_localPlayer;
+        if (player == null)
+        {
+            failureReason = "No local player for construction placement preview.";
+            return false;
+        }
+
+        Vector3 originPosition;
+        if (_settlementsAuthoringApi.TryGetPlacementPoint(out var placementPoint))
+        {
+            originPosition = placementPoint;
+        }
+        else
+        {
+            originPosition = player.transform.position + (player.transform.forward * 4f);
+        }
+
+        if (!_constructionPlacementPreviewService.TryBeginPreview(
+                blueprintId,
+                originPosition,
+                Quaternion.identity,
+                out failureReason))
+        {
+            return false;
+        }
+
+        _log.LogInfo($"Started construction placement preview for blueprint '{blueprintId}'.");
+        return true;
+    }
+
     public void CancelPreview()
     {
         _constructionPlacementPreviewService.CancelPreview();
